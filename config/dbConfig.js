@@ -8,10 +8,10 @@ const getDatabaseUrl = () => {
     const env = process.env.NODE_ENV;
 
     if (env === 'production') {
-        return process.env.AI4PHARMA_LIVE_DATABASE_URL;
+        return process.env.LIVE_DATABASE_URL;
     } else {
         types.setTypeParser(1114, val => new Date(val + 'Z'));
-        return process.env.AI4PHARMA_DEVELOPMENT_DATABASE_URL;
+        return process.env.STAGING_DATABASE_URL;
 
     }
 };
