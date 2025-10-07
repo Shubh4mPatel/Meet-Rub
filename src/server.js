@@ -1,25 +1,27 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const morgan = require('morgan');
-const routes = require('./routes');
-const dotenv = require('dotenv');
-const AppError = require('./utils/appError');
-const cookieParser = require('cookie-parser');
-const admin = require('firebase-admin');
-const socketConfig = require('./socket/socketConfig');
-const http = require('http');
-const socketIo = require('socket.io');
-const socketHandler = require('./socket/socketHandler');
-const { startCronJobs, stopCronJobs } = require('./cron/subsciptionChecker');
-require('./cron/dataRequestCron');
-const { logger } = require('./utils/logger');
-const { manageLogFiles } = require('./cron/logmanager');
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const morgan = require("morgan");
+const routes = require("./routes");
+const dotenv = require("dotenv");
+const AppError = require("./utils/appError");
+const cookieParser = require("cookie-parser");
+const admin = require("firebase-admin");
+const socketConfig = require("./socket/socketConfig");
+const http = require("http");
+const socketIo = require("socket.io");
+const socketHandler = require("./socket/socketHandler");
+const { startCronJobs, stopCronJobs } = require("./cron/subsciptionChecker");
+require("./cron/dataRequestCron");
+const { logger } = require("./utils/logger");
+const { manageLogFiles } = require("./cron/logmanager");
 dotenv.config();
 
 // Parse allowed origins
-const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
+const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((origin) =>
+  origin.trim()
+);
 
 // Rate limiting
 // const limiter = rateLimit({
@@ -30,18 +32,6 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map(origin => orig
 //   legacyHeaders: false,
 // });
 
-const serviceAccount = {
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-};
-
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    projectId: process.env.FIREBASE_PROJECT_ID,
-  });
-}
 // Merged CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
@@ -56,27 +46,27 @@ const corsOptions = {
     }
   },
   credentials: true, // Required for cookies/auth
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
-    'Origin',
-    'X-Requested-With',
-    'Content-Type',
-    'Accept',
-    'Authorization',
-    'Cache-Control',
-    'X-Access-Token',
-    'X-Report',
-    'X-PDF',
-    'custom-real-ip',
-    'X-header-user',
-    'x-razorpay-signature',
-    'X-User-Has-Subscription',
-    'orangemobileaccesstoken',
-    'X-User-Visited-Profile',
-    "deviceMobile"
+    "Origin",
+    "X-Requested-With",
+    "Content-Type",
+    "Accept",
+    "Authorization",
+    "Cache-Control",
+    // 'X-Access-Token',        // CUSTOM - remove
+    // 'X-Report',              // CUSTOM - remove
+    // 'X-PDF',                 // CUSTOM - remove
+    // 'custom-real-ip',        // CUSTOM - remove
+    // 'X-header-user',         // CUSTOM - remove
+    // 'x-razorpay-signature',  // CUSTOM - remove (payment gateway specific)
+    // 'X-User-Has-Subscription', // CUSTOM - remove
+    // 'orangemobileaccesstoken', // CUSTOM - remove
+    // 'X-User-Visited-Profile',  // CUSTOM - remove
+    // 'deviceMobile'         // CUSTOM - remove
   ],
-  exposedHeaders: ['Set-Cookie'],
-  optionsSuccessStatus: 200 // For legacy browser support
+  exposedHeaders: ["Set-Cookie"],
+  optionsSuccessStatus: 200, // For legacy browser support
 };
 
 const app = express();
@@ -87,9 +77,8 @@ const io = socketIo(serverWithSocket, socketConfig);
 const socketHelpers = socketHandler(io);
 
 // Make io and socket helpers available to routes
-app.set('io', io);
-app.set('socketHelpers', socketHelpers);
-
+app.set("io", io);
+app.set("socketHelpers", socketHelpers);
 
 app.use(cors(corsOptions));
 // app.use(helmet());
@@ -105,10 +94,10 @@ app.use(helmet());
 app.use(express.json());
 app.use(cookieParser());
 
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
+if (process.env.NODE_ENV === "development") {
+  app.use(morgan("dev"));
 } else {
-  app.use(morgan('combined'));
+  app.use(morgan("combined"));
 }
 
 // Body parser middleware
@@ -116,16 +105,16 @@ if (process.env.NODE_ENV === 'development') {
 // app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint
-app.get('/api/v1/health', (req, res) => {
+app.get("/api/v1/health", (req, res) => {
   res.status(200).json({
-    status: 'ok',
+    status: "ok",
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
   });
 });
 
 // API routes
-app.use('/api/v1', routes);
+app.use("/api/v1", routes);
 
 // 404 handler - should be after all valid routes
 app.use((req, res, next) => {
@@ -134,24 +123,25 @@ app.use((req, res, next) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  const { statusCode = 500, message = 'Something went wrong!' } = err;
+  const { statusCode = 500, message = "Something went wrong!" } = err;
 
   // Log error in production
-  if (process.env.NODE_ENV === 'production') {
-    logger.error('Error:', {
+  if (process.env.NODE_ENV === "production") {
+    logger.error("Error:", {
       message: err.message,
       stack: err.stack,
       url: req.originalUrl,
       method: req.method,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 
   res.status(statusCode).json({
-    status: 'error',
-    message: process.env.NODE_ENV === 'production' && statusCode === 500
-      ? 'Internal server error'
-      : message
+    status: "error",
+    message:
+      process.env.NODE_ENV === "production" && statusCode === 500
+        ? "Internal server error"
+        : message,
   });
 });
 
@@ -161,43 +151,47 @@ const HOST = process.env.HOST;
 
 let server;
 
-if(process.env.NODE_ENV !== 'development'){
+if (process.env.NODE_ENV !== "development") {
   server = serverWithSocket.listen(PORT, HOST, () => {
     manageLogFiles();
     startCronJobs(io);
-  logger.info(`Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`);
-});
-} else{
+    logger.info(
+      `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
+    );
+  });
+} else {
   server = serverWithSocket.listen(PORT, () => {
     manageLogFiles();
     startCronJobs(io);
-  logger.info(`Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`);
-});
+    logger.info(
+      `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
+    );
+  });
 }
 
 // Graceful shutdown (after server is defined)
 const gracefulShutdown = (signal) => {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
-   stopCronJobs();
+  stopCronJobs();
   server.close(() => {
-    logger.info('Process terminated');
+    logger.info("Process terminated");
     process.exit(0);
   });
 };
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  logger.error('Unhandled Promise Rejection:', err);
+process.on("unhandledRejection", (err) => {
+  logger.error("Unhandled Promise Rejection:", err);
   server.close(() => {
     process.exit(1);
   });
 });
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception:', err);
+process.on("uncaughtException", (err) => {
+  logger.error("Uncaught Exception:", err);
   process.exit(1);
 });

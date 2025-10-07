@@ -22,17 +22,17 @@ const otpSendApi = async (req, res, next) => {
 
     } else if (type === "email-verification") {
 
-      const emailDomain = email.split("@")[1];
-      const blockedDomainRes = await query(
-        "SELECT * FROM blocked_domains WHERE domain_name = $1",
-        [emailDomain]
-      );
+      // const emailDomain = email.split("@")[1];
+      // const blockedDomainRes = await query(
+      //   "SELECT * FROM blocked_domains WHERE domain_name = $1",
+      //   [emailDomain]
+      // );
 
-      if (blockedDomainRes.rows.length > 0) {
-        return res.status(400).json({
-          error: "Please use a valid email address. Disposable or temporary email domains are not supported.",
-        });
-      }
+      // if (blockedDomainRes.rows.length > 0) {
+      //   return res.status(400).json({
+      //     error: "Please use a valid email address. Disposable or temporary email domains are not supported.",
+      //   });
+      // }
       userRes = await query("SELECT * FROM user_data WHERE email = $1", [email]);
 
       if (userRes.rows.length > 0) {

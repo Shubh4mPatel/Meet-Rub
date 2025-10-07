@@ -4,12 +4,9 @@ function setTokenCookies(req, res, next) {
     const ACCESS_TOKEN_DURATION_WEB = 15 * 60 * 1000;  // 15 minutes
     const REFRESH_TOKEN_DURATION_WEB = 4 * 60 * 60 * 1000; // 4 hours
 
-    // Mobile durations (use browser’s ~400 day cap instead of 10 years)
-    const MOBILE_MAX_AGE = 400 * 24 * 60 * 60 * 1000; // ~400 days
-
     if (res.locals.accessToken) {
-        res.cookie('orangeAccessToken', res.locals.accessToken, {
-            maxAge: res.locals.isMobile ? MOBILE_MAX_AGE : ACCESS_TOKEN_DURATION_WEB,
+        res.cookie('AccessToken', res.locals.accessToken, {
+            maxAge: ACCESS_TOKEN_DURATION_WEB,
             httpOnly: isProduction ? true : false,
             secure: isHttps,
             sameSite: 'lax',
@@ -18,15 +15,14 @@ function setTokenCookies(req, res, next) {
     }
 
     if (res.locals.refreshToken) {
-        res.cookie('orangeRefreshToken', res.locals.refreshToken, {
-            maxAge: res.locals.isMobile ? MOBILE_MAX_AGE : REFRESH_TOKEN_DURATION_WEB,
+        res.cookie('RefreshToken', res.locals.refreshToken, {
+            maxAge: REFRESH_TOKEN_DURATION_WEB,
             httpOnly: isProduction ? true : false,
             secure: isHttps,
             sameSite: 'lax',
             path: '/',
         });
     }
-
 
     next();
 }

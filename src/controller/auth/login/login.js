@@ -6,31 +6,31 @@ const { addApiToRedis } = require('../../../utils/queueSender');
 const { logger } = require('../../../utils/logger');
 
 // Fetch geolocation details
-async function getGeoLocationDetails(ipAddress) {
-    try {
-        const response = await fetch(`https://api.ip2location.io/?ip=${ipAddress}&key=${process.env.NEXT_IP_2_LOCATION_API_KEY}`);
-        return await response.json();
-    } catch (err) {
-        logger.error("IP2Location API failed:", err);
-        return {};
-    }
-}
+// async function getGeoLocationDetails(ipAddress) {
+//     try {
+//         const response = await fetch(`https://api.ip2location.io/?ip=${ipAddress}&key=${process.env.NEXT_IP_2_LOCATION_API_KEY}`);
+//         return await response.json();
+//     } catch (err) {
+//         logger.error("IP2Location API failed:", err);
+//         return {};
+//     }
+// }
 
-// Log login attempt
-async function logLoginAttempt(userId, ipAddress) {
-    try {
-        const { country_code, country_name, region_name, city_name, latitude, longitude, zip_code, time_zone, asn, as } = await getGeoLocationDetails(ipAddress);
+// // Log login attempt
+// async function logLoginAttempt(userId, ipAddress) {
+//     try {
+//         const { country_code, country_name, region_name, city_name, latitude, longitude, zip_code, time_zone, asn, as } = await getGeoLocationDetails(ipAddress);
 
-        await query(
-            `INSERT INTO user_login_log 
-             (user_id, ip_address, country_code, country_name, region_name, city_name, latitude, longitude, zip_code, time_zone, asn, as_name) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-            [userId, ipAddress, country_code, country_name, region_name, city_name, latitude, longitude, zip_code, time_zone, asn, as]
-        );
-    } catch (error) {
-        logger.error("Error logging login attempt:", error);
-    }
-}
+//         await query(
+//             `INSERT INTO user_login_log 
+//              (user_id, ip_address, country_code, country_name, region_name, city_name, latitude, longitude, zip_code, time_zone, asn, as_name) 
+//              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+//             [userId, ipAddress, country_code, country_name, region_name, city_name, latitude, longitude, zip_code, time_zone, asn, as]
+//         );
+//     } catch (error) {
+//         logger.error("Error logging login attempt:", error);
+//     }
+// }
 
 // Generate tokens
 function generateTokens(user, role, isMobile = false) {
@@ -43,14 +43,17 @@ function generateTokens(user, role, isMobile = false) {
         role: role.name,
         show_test_plan: user.show_test_plan
     };
+    const accessTokenOptions = { expiresIn: "15m" }; // 15 min for web
 
-    const accessTokenOptions = isMobile
-        ? { expiresIn: "10y" } // 10 years for mobile
-        : { expiresIn: "15m" }; // 15 min for web
+    // const accessTokenOptions = isMobile
+    //     ? { expiresIn: "10y" } // 10 years for mobile
+    //     : { expiresIn: "15m" }; // 15 min for web
 
-    const refreshTokenOptions = isMobile
-        ? { expiresIn: "10y" } // 10 years for mobile
-        : { expiresIn: "4h" }; // 4 hours for web
+    // const refreshTokenOptions = isMobile
+    //     ? { expiresIn: "10y" } // 10 years for mobile
+    //     : { expiresIn: "4h" }; // 4 hours for web
+
+    const refreshTokenOptions ={ expiresIn: "4h" }; // 4 hours for web
 
     const accessToken = jwt.sign(payload, process.env.JWT_SECRET, accessTokenOptions);
     const refreshToken = jwt.sign({ user_id: user.id }, process.env.JWT_SECRET, refreshTokenOptions);
@@ -60,14 +63,14 @@ function generateTokens(user, role, isMobile = false) {
 
 // Login controller
 const loginUser = async (req, res, next) => {
-    const clientRealIp = req.headers['custom-real-ip'] ||
-        req.headers['x-forwarded-for']?.split(',')[0] ||
-        '127.0.0.1';
+    // const clientRealIp = req.headers['custom-real-ip'] ||
+    //     req.headers['x-forwarded-for']?.split(',')[0] ||
+    //     '127.0.0.1';
 
     // ✅ Fix: headers are always strings
-    const isMobile = (req.headers['orangemobileaccesstoken'] || '').toString().toLowerCase() === 'true';
+    // const isMobile = (req.headers['orangemobileaccesstoken'] || '').toString().toLowerCase() === 'true';
 
-    logger.info("Client IP:", clientRealIp, "Is Mobile:", isMobile);
+    // logger.info("Client IP:", clientRealIp, "Is Mobile:", isMobile);
 
     let { email, password } = req.body;
     email = email?.trim();
@@ -85,42 +88,42 @@ const loginUser = async (req, res, next) => {
             return res.status(401).json({ error: "Invalid email or password" });
         }
 
-        if (user.is_blocked) {
-            logger.error(`Your account has been temporarily disabled. Contact help@ai4pharma.ai ${email}`);
-            return res.status(403).json({
-                error: "Your account has been temporarily disabled. Contact help@ai4pharma.ai"
-            });
-        }
+        // if (user.is_blocked) {
+        //     logger.error(`Your account has been temporarily disabled. Contact help@ai4pharma.ai ${email}`);
+        //     return res.status(403).json({
+        //         error: "Your account has been temporarily disabled. Contact help@ai4pharma.ai"
+        //     });
+        // }
 
-        const currentTime = new Date();
-        if (user.block_time && new Date(user.block_time) > currentTime) {
-            const minutesLeft = Math.ceil((new Date(user.block_time) - currentTime) / (1000 * 60));
-            logger.error(`Account is temporarily blocked. Try again in ${minutesLeft} minutes. ${email}`);
-            return res.status(401).json({
-                error: `Account is temporarily blocked. Try again in ${minutesLeft} minutes.`
-            });
-        }
+        // const currentTime = new Date();
+        // if (user.block_time && new Date(user.block_time) > currentTime) {
+        //     const minutesLeft = Math.ceil((new Date(user.block_time) - currentTime) / (1000 * 60));
+        //     logger.error(`Account is temporarily blocked. Try again in ${minutesLeft} minutes. ${email}`);
+        //     return res.status(401).json({
+        //         error: `Account is temporarily blocked. Try again in ${minutesLeft} minutes.`
+        //     });
+        // }
 
         const passwordValid = await bcrypt.compare(decryptedPassword, user.password);
         if (!passwordValid) {
-            const newAttempts = (user.failed_login_attempts || 0) + 1;
+            // const newAttempts = (user.failed_login_attempts || 0) + 1;
 
-            if (newAttempts >= 5) {
-                const blockUntil = new Date(currentTime.getTime() + 5 * 60 * 1000);
-                await query("UPDATE user_data SET failed_login_attempts = $1, block_time = $2 WHERE email = $3", [newAttempts, blockUntil, email.toLowerCase()]);
-                logger.error(`Too many failed attempts. Account blocked for 5 minutes. Email: ${email}`);
-                return res.status(401).json({ error: "Too many failed attempts. Account blocked for 5 minutes." });
-            } else {
-                await query("UPDATE user_data SET failed_login_attempts = $1 WHERE email = $2", [newAttempts, email.toLowerCase()]);
-                logger.error(`Invalid email or password. Attempt ${newAttempts}/5 Email: ${email}`);
+            // if (newAttempts >= 5) {
+            //     const blockUntil = new Date(currentTime.getTime() + 5 * 60 * 1000);
+            //     await query("UPDATE user_data SET failed_login_attempts = $1, block_time = $2 WHERE email = $3", [newAttempts, blockUntil, email.toLowerCase()]);
+            //     logger.error(`Too many failed attempts. Account blocked for 5 minutes. Email: ${email}`);
+            //     return res.status(401).json({ error: "Too many failed attempts. Account blocked for 5 minutes." });
+            // } else {
+                // await query("UPDATE user_data SET failed_login_attempts = $1 WHERE email = $2", [newAttempts, email.toLowerCase()]);
+                logger.error(`Invalid email or password`);
                 return res.status(401).json({ error: "Invalid email or password" });
-            }
+            // }
         }
         
         const role = (await query('SELECT name FROM user_role WHERE id = $1', [user.role_id])).rows[0];
         
         // Generate tokens
-        const { accessToken, refreshToken } = generateTokens(user, role, isMobile);
+        const { accessToken, refreshToken } = generateTokens(user, role);
         await addApiToRedis(user.id, 'Successful: User logged in', "Login",refreshToken);
 
         // // Define token durations in milliseconds
@@ -134,11 +137,11 @@ const loginUser = async (req, res, next) => {
         // );
 
         // Reset failed attempts
-        await query("UPDATE user_data SET failed_login_attempts = 0 WHERE email = $1", [email.toLowerCase()]);
+        // await query("UPDATE user_data SET failed_login_attempts = 0 WHERE email = $1", [email.toLowerCase()]);
 
         // Log login + session
-        await logLoginAttempt(user.id, clientRealIp);
-        await query("INSERT INTO UserSessionLogs (user_id, login_time) VALUES ($1, NOW())", [user.id]);
+        // await logLoginAttempt(user.id, clientRealIp);
+        // await query("INSERT INTO UserSessionLogs (user_id, login_time) VALUES ($1, NOW())", [user.id]);
 
         // Pass to cookie setter
         res.locals.accessToken = accessToken;
