@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
-const query = require('../config/dbConfig'); // Adjust path as needed
-const { headerKey } = require('../config/apiHeader');
-const { addApiToRedis } = require('../utils/queueSender');
-const { logger } = require('../utils/logger');
+const query = require('../../config/dbConfig'); // Adjust path as needed
+const { headerKey } = require('../../config/apiHeader');
+// const { addApiToRedis } = require('../utils/queueSender');
+const { logger } = require('../../utils/logger');
 // Make sure cookie-parser is required in your main app file (not here)
 // Example in your main app file (e.g., app.js or server.js):
 // const cookieParser = require('cookie-parser');

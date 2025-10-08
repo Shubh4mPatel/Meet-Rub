@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { googleLoginUser,otpSendApi, verifyOtpAndProcess, loginUser, blockUserController, unblockUserController, getDeleteUserListController, changePasswordController, deleteUserRequestController, deleteUserExecutionController } = require('../controller')
+const { loginUser, registerUser } = require('../controller');
 const { authenticateUser, refreshAccessToken, logout } = require('../middleware/authMiddleware');
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
-const { isFirstTime } = require('../controller/auth/isFirstTime/isFirstTimeController')
-const { logger } = require('../utils/logger');
+// const { isFirstTime } = require('../controller/auth/isFirstTime/isFirstTimeController')
+const { logger } = require('../../utils/logger');
 
-router.post("/send-otp", otpSendApi);
-router.post("/verify-otp", verifyOtpAndProcess);
+// router.post("/send-otp", otpSendApi);
+// router.post("/verify-otp", verifyOtpAndProcess);
 router.post("/login", loginUser, setTokenCookies, (req, res) => {
 
   res.status(200).json({
@@ -22,13 +22,14 @@ router.post('/refresh', refreshAccessToken, (req, res) => {
 });
 
 // Profile Chage Password 
-router.post("/changePassword", authenticateUser, changePasswordController);
+// router.post("/changePassword", authenticateUser, changePasswordController);
 // router.get("/delete-user-request", authenticateUser, deleteUserRequestController);
 // router.post("/delete-user", authenticateUser, deleteUserExecutionController);
 // router.get('/delete-user-list', authenticateUser, getDeleteUserListController);
 
 
 router.post('/logout', authenticateUser, logout);
+router.post('/register', registerUser)
 
 // router.post('/block-user', authenticateUser, blockUserController);
 // router.post('/unblock-user', authenticateUser, unblockUserController);

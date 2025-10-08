@@ -14,7 +14,7 @@ const otpSendApi = async (req, res, next) => {
     let userRes;
 
     if (type === "password-reset") {
-      userRes = await query("SELECT id FROM user_data WHERE email = $1", [email]);
+      userRes = await query("SELECT id FROM users WHERE email = $1", [email]);
 
       if (userRes.rows.length === 0) {
         return res.status(404).json({ error: "Email not found." });
@@ -33,7 +33,7 @@ const otpSendApi = async (req, res, next) => {
       //     error: "Please use a valid email address. Disposable or temporary email domains are not supported.",
       //   });
       // }
-      userRes = await query("SELECT * FROM user_data WHERE email = $1", [email]);
+      userRes = await query("SELECT * FROM users WHERE email = $1", [email]);
 
       if (userRes.rows.length > 0) {
         return res.status(400).json({

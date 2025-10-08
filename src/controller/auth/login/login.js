@@ -1,9 +1,10 @@
 const bcrypt = require("bcrypt");
+const query = require('../../../../config/dbConfig');
+const AppError = require("../../../../utils/appError");
 const jwt = require("jsonwebtoken");
-const query = require('../../../config/dbConfig');
-const { decryptId } = require("../../../config/encryptDecryptId");
-const { addApiToRedis } = require('../../../utils/queueSender');
-const { logger } = require('../../../utils/logger');
+const { decryptId } = require("../../../../config/encryptDecryptId");
+// const { addApiToRedis } = require('../../../utils/queueSender');
+const { logger } = require('../../../../utils/logger');
 
 // Fetch geolocation details
 // async function getGeoLocationDetails(ipAddress) {
@@ -76,7 +77,8 @@ const loginUser = async (req, res, next) => {
     email = email?.trim();
     if (!email || !password) {
         logger.error(`Email and password are required ${email}`);
-        return res.status(400).json({ error: "Email and password are required" });
+        return next(new AppError("Email and password are required", 400));
+
     }
 
     const decryptedPassword = decryptId(password)?.trim();
@@ -85,7 +87,7 @@ const loginUser = async (req, res, next) => {
         const user = (await query("SELECT * FROM user_data WHERE email = $1", [email.toLowerCase()])).rows[0];
         if (!user){ 
             logger.error(`Invalid email or password, Email:${email}`);
-            return res.status(401).json({ error: "Invalid email or password" });
+            return next(new AppError("Invalid email or password", 401));
         }
 
         // if (user.is_blocked) {
@@ -116,7 +118,7 @@ const loginUser = async (req, res, next) => {
             // } else {
                 // await query("UPDATE user_data SET failed_login_attempts = $1 WHERE email = $2", [newAttempts, email.toLowerCase()]);
                 logger.error(`Invalid email or password`);
-                return res.status(401).json({ error: "Invalid email or password" });
+                return next(new AppError("Invalid email or password", 401));
             // }
         }
         
@@ -124,7 +126,7 @@ const loginUser = async (req, res, next) => {
         
         // Generate tokens
         const { accessToken, refreshToken } = generateTokens(user, role);
-        await addApiToRedis(user.id, 'Successful: User logged in', "Login",refreshToken);
+        // await addApiToRedis(user.id, 'Successful: User logged in', "Login",refreshToken);
 
         // // Define token durations in milliseconds
         // const REFRESH_TOKEN_DURATION = 4 * 60 * 60 * 1000; // 4 hours

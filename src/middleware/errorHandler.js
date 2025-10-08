@@ -1,5 +1,5 @@
 
-const AppError = require('../utils/appError');
+const AppError = require('../../utils/appError');
 
 const globalErrorHandler = (err, req, res, next) => {
   // Set default values

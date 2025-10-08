@@ -5,17 +5,16 @@ const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
 const routes = require("./routes");
 const dotenv = require("dotenv");
-const AppError = require("./utils/appError");
+const AppError = require("../utils/appError");
 const cookieParser = require("cookie-parser");
-const admin = require("firebase-admin");
-const socketConfig = require("./socket/socketConfig");
+const socketConfig = require("../socket/socketConfig");
 const http = require("http");
 const socketIo = require("socket.io");
-const socketHandler = require("./socket/socketHandler");
-const { startCronJobs, stopCronJobs } = require("./cron/subsciptionChecker");
-require("./cron/dataRequestCron");
-const { logger } = require("./utils/logger");
-const { manageLogFiles } = require("./cron/logmanager");
+const socketHandler = require("../socket/socketHandler");
+// const { startCronJobs, stopCronJobs } = require("./cron/subsciptionChecker");
+// require("./cron/dataRequestCron");
+const { logger } = require("../utils/logger");
+const { manageLogFiles } = require("../cron/logmanager");
 dotenv.config();
 
 // Parse allowed origins
@@ -154,7 +153,7 @@ let server;
 if (process.env.NODE_ENV !== "development") {
   server = serverWithSocket.listen(PORT, HOST, () => {
     manageLogFiles();
-    startCronJobs(io);
+    // startCronJobs(io);
     logger.info(
       `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
     );
@@ -162,7 +161,7 @@ if (process.env.NODE_ENV !== "development") {
 } else {
   server = serverWithSocket.listen(PORT, () => {
     manageLogFiles();
-    startCronJobs(io);
+    // startCronJobs(io);
     logger.info(
       `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
     );

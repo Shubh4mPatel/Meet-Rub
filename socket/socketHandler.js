@@ -2,7 +2,7 @@ const {
   getUnseenNotifications,
   markNotificationAsSeen,
   markNotificationAsReadAndDelete
-} = require('../controller/notification/helper');
+} = require('../src/controller/notification/helper');
 const query = require('../config/dbConfig')
 const { connectedUsers } = require('../utils/globalState');
 const { getLogger } = require('../utils/logger');
