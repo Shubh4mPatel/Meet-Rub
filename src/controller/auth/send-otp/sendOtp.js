@@ -253,13 +253,13 @@ const otpSendApi = async (req, res, next) => {
 
   } catch (error) {
     logger.error("Error sending OTP:", error);
-    await query("insert into registration_failed_logs(email, message) values($1, $2)", [email, 'Failed to send Verification Code']);
-    const { rows: managementEmails } = await query(
-      "SELECT email FROM public.email_alert WHERE verification_code_send_failed_alert = $1;",
-      [true]
-    );        
-    const emailList = managementEmails.map(obj => obj.email).join(',');
-    await sendMail(emailList,'Error sending verification code', `Failed to send verification code for email: ${email}.`);
+    // await query("insert into registration_failed_logs(email, message) values($1, $2)", [email, 'Failed to send Verification Code']);
+    // const { rows: managementEmails } = await query(
+    //   "SELECT email FROM public.email_alert WHERE verification_code_send_failed_alert = $1;",
+    //   [true]
+    // );        
+    // const emailList = managementEmails.map(obj => obj.email).join(',');
+    // await sendMail(emailList,'Error sending verification code', `Failed to send verification code for email: ${email}.`);
     
     next(new AppError("Failed to send OTP.", 500));
   }

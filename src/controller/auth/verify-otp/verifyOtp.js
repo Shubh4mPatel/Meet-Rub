@@ -11,11 +11,11 @@ const {
 } = require("../../../mailTemplates/MailTemplatesHandler");
 const { logger } = require('../../../utils/logger');
 
-async function getGeoLocationDetails(ipAddress) {
-  let response = await fetch(`https://api.ip2location.io/?ip=${ipAddress}&key=${process.env.NEXT_IP_2_LOCATION_API_KEY}`);
-  response = await response.json();
-  return response;
-}
+// async function getGeoLocationDetails(ipAddress) {
+//   let response = await fetch(`https://api.ip2location.io/?ip=${ipAddress}&key=${process.env.NEXT_IP_2_LOCATION_API_KEY}`);
+//   response = await response.json();
+//   return response;
+// }
 
 const verifyOtpAndProcess = async (req, res, next) => {
 
