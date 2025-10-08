@@ -7,16 +7,20 @@ const AppError = require("../../../../utils/appError");
 const registerUser = async (req, res, next) => {
 
   try {
-    const { email, encryptedPassword, fullName, phoneNumber, role } = req.body;
+    let { email, password, fullName, phoneNumber, role } = req.body;
     email = email?.trim().toLowerCase();
-    if (!email || !encryptedPassword || !fullName || !phoneNumber || !role || role !== 'admin') {
+    console.log(email, password, fullName, phoneNumber, role);
+
+    if (!email || !password || !fullName || !phoneNumber || !role || role == 'admin') {
       return next(new AppError("Missing required fields", 400));
     }
-    const decryptedPassword = decryptId(encryptedPassword)?.trim();
+    // const decryptedPassword = decryptId(encryptedPassword)?.trim();
+    const decryptedPassword = password?.trim();
+
     const hashedPassword = await bcrypt.hash(decryptedPassword, 10);
 
 
-    const userRes = await query("SELECT * FROM users WHERE email = $1 ", [email]);
+    const userRes = await query("SELECT * FROM users WHERE user_email = $1 ", [email]);
     if (userRes.rows.length > 0) {
       return next(new AppError("Email already registered with this role", 400));
     }
@@ -27,7 +31,7 @@ const registerUser = async (req, res, next) => {
       [email, role, hashedPassword, currentTimestamp]
     );
 
-    const { rows: userDetails } = await query("INSERT INTO user_details (user_id, full_name, phone_number, created_at) VALUES ($1, $2, $3, $4) RETURNING *", [registeredUser[0].id, fullName, phoneNumber, currentTimestamp]);
+    const { rows: userDetails } = await query("INSERT INTO user_details (user_id, fullname, phone_number, created_at) VALUES ($1, $2, $3, $4) RETURNING *", [registeredUser[0].id, fullName, phoneNumber, currentTimestamp]);
 
     return res.status(200).json({
       status: "success",
@@ -37,7 +41,7 @@ const registerUser = async (req, res, next) => {
 
   } catch (error) {
     logger.error("Error during verification:", error);
-    await query("INSERT INTO registration_failed_logs(email, message) VALUES($1, $2)", [email, 'Failed during verification process']);
+    // await query("INSERT INTO registration_failed_logs(email, message) VALUES($1, $2)", [email, 'Failed during verification process']);
     next(new AppError("Verification failed", 500));
   }
 };

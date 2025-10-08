@@ -81,7 +81,9 @@ const loginUser = async (req, res, next) => {
 
     }
 
-    const decryptedPassword = decryptId(password)?.trim();
+    // const decryptedPassword = decryptId(password)?.trim();
+    const decryptedPassword = password?.trim();
+
 
     try {
         const user = (await query("SELECT * FROM user_data WHERE email = $1", [email.toLowerCase()])).rows[0];
