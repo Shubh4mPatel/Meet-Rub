@@ -169,28 +169,28 @@ if (process.env.NODE_ENV !== "development") {
 }
 
 // Graceful shutdown (after server is defined)
-const gracefulShutdown = (signal) => {
-  logger.info(`Received ${signal}. Shutting down gracefully...`);
-  stopCronJobs();
-  server.close(() => {
-    logger.info("Process terminated");
-    process.exit(0);
-  });
-};
+// const gracefulShutdown = (signal) => {
+//   logger.info(`Received ${signal}. Shutting down gracefully...`);
+//   stopCronJobs();
+//   server.close(() => {
+//     logger.info("Process terminated");
+//     process.exit(0);
+//   });
+// };
 
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+// process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+// process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (err) => {
-  logger.error("Unhandled Promise Rejection:", err);
-  server.close(() => {
-    process.exit(1);
-  });
-});
+// // Handle unhandled promise rejections
+// process.on("unhandledRejection", (err) => {
+//   logger.error("Unhandled Promise Rejection:", err);
+//   server.close(() => {
+//     process.exit(1);
+//   });
+// });
 
-// Handle uncaught exceptions
-process.on("uncaughtException", (err) => {
-  logger.error("Uncaught Exception:", err);
-  process.exit(1);
-});
+// // Handle uncaught exceptions
+// process.on("uncaughtException", (err) => {
+//   logger.error("Uncaught Exception:", err);
+//   process.exit(1);
+// });
