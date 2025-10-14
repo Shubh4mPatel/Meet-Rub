@@ -1,9 +1,10 @@
 const crypto = require("crypto");
-const sendMail = require("../../../config/email").sendMail;
+const sendMail = require("../../../../config/email").sendMail;
 const bcrypt = require("bcrypt");
-const query = require("../../../config/dbConfig");
-const AppError = require("../../../utils/appError");
-const { logger } = require('../../../utils/logger');
+const query = require("../../../../config/dbConfig");
+const AppError = require("../../../../utils/appError");
+const { logger } = require('../../../../utils/logger');
+const { addEmailJob } = require("../../../../config/bullqueue");
 
 const otpSendApi = async (req, res, next) => {
   let { email, type } = req.body; // POST body
@@ -33,6 +34,8 @@ const otpSendApi = async (req, res, next) => {
 
     const otp = crypto.randomBytes(3).toString("hex");
     const expiration = new Date(Date.now() + 600 * 1000);
+    console.log(otp, 'otp');
+    const jon = addEmailJob({ to:email, subject: "OTP Verification", body: `Your OTP is ${otp}. It will expire in 10 minutes.` });
 
     const otpReqPresent = await query(
       "SELECT * FROM otp_tokens WHERE email = $1 AND type = $2",
@@ -231,7 +234,7 @@ const otpSendApi = async (req, res, next) => {
         </html>`;
     }
 
-    await sendMail(email, subject, message);
+    // await sendMail(email, subject, message);
 
     return res.status(200).json({
       message: "Verification code sent successfully.",

@@ -11,6 +11,12 @@ const socketConfig = require("../socket/socketConfig");
 const http = require("http");
 const socketIo = require("socket.io");
 const socketHandler = require("../socket/socketHandler");
+// Bull Board imports
+const { createBullBoard } = require("@bull-board/api");
+const { BullMQAdapter } = require("@bull-board/api/bullMQAdapter");
+const { ExpressAdapter } = require("@bull-board/express");
+const { Queue } = require("bullmq");
+const { getRedisConnection } = require("../config/bullQueue");
 // const { startCronJobs, stopCronJobs } = require("./cron/subsciptionChecker");
 // require("./cron/dataRequestCron");
 const { logger } = require("../utils/logger");
@@ -68,6 +74,18 @@ const corsOptions = {
   optionsSuccessStatus: 200, // For legacy browser support
 };
 
+// Create BullMQ queue
+const emailQueue = new Queue("emailQueue", { connection: getRedisConnection() });
+
+// Set up Bull Board
+const serverAdapter = new ExpressAdapter();
+serverAdapter.setBasePath('/admin/queues');
+
+createBullBoard({
+  queues: [new BullMQAdapter(emailQueue)],
+  serverAdapter: serverAdapter,
+});
+
 const app = express();
 const serverWithSocket = http.createServer(app);
 const io = socketIo(serverWithSocket, socketConfig);
@@ -111,6 +129,9 @@ app.get("/api/v1/health", (req, res) => {
     uptime: process.uptime(),
   });
 });
+
+// Bull Board dashboard
+app.use('/admin/queues', serverAdapter.getRouter());
 
 // API routes
 app.use("/api/v1", routes);
