@@ -6,23 +6,20 @@ const AppError = require("../../../utils/appError");
 const { logger } = require('../../../utils/logger');
 
 const otpSendApi = async (req, res, next) => {
-      let { email, type } = req.body; // POST body
-      email = email?.trim();
+  let { email, type } = req.body; // POST body
+  email = email?.trim();
 
   try {
 
-    let userRes;
+    const userRes = await query("SELECT * FROM users WHERE user_email = $1", [email]);
 
     if (type === "password-reset") {
-      userRes = await query("SELECT id FROM users WHERE email = $1", [email]);
 
       if (userRes.rows.length === 0) {
         return res.status(404).json({ error: "Email not found." });
       }
 
     } else if (type === "email-verification") {
-
-      userRes = await query("SELECT * FROM users WHERE email = $1", [email]);
 
       if (userRes.rows.length > 0) {
         return res.status(400).json({
@@ -67,8 +64,8 @@ const otpSendApi = async (req, res, next) => {
     let message = "";
 
     if (type === "email-verification") {
-        subject = "Your Ai4Pharma Verification Code";
-        message = `<!DOCTYPE html>
+      subject = "Your Ai4Pharma Verification Code";
+      message = `<!DOCTYPE html>
   <html lang="en">
   <head>
       <meta charset="UTF-8">
@@ -149,9 +146,9 @@ const otpSendApi = async (req, res, next) => {
       </div>
   </body>
   </html>`;
-      } else if (type === "password-reset") {
-        subject = "Ai4Pharma Password Reset Code";
-        message = `<!DOCTYPE html>
+    } else if (type === "password-reset") {
+      subject = "Ai4Pharma Password Reset Code";
+      message = `<!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
@@ -232,24 +229,17 @@ const otpSendApi = async (req, res, next) => {
             </div>
         </body>
         </html>`;
-      }
+    }
 
     await sendMail(email, subject, message);
-    
+
     return res.status(200).json({
       message: "Verification code sent successfully.",
     });
 
   } catch (error) {
     logger.error("Error sending OTP:", error);
-    // await query("insert into registration_failed_logs(email, message) values($1, $2)", [email, 'Failed to send Verification Code']);
-    // const { rows: managementEmails } = await query(
-    //   "SELECT email FROM public.email_alert WHERE verification_code_send_failed_alert = $1;",
-    //   [true]
-    // );        
-    // const emailList = managementEmails.map(obj => obj.email).join(',');
-    // await sendMail(emailList,'Error sending verification code', `Failed to send verification code for email: ${email}.`);
-    
+
     next(new AppError("Failed to send OTP.", 500));
   }
 };
