@@ -1,12 +1,9 @@
 const jwt = require('jsonwebtoken');
 const query = require('../../config/dbConfig'); // Adjust path as needed
 const { headerKey } = require('../../config/apiHeader');
-// const { addApiToRedis } = require('../utils/queueSender');
+
 const { logger } = require('../../utils/logger');
-// Make sure cookie-parser is required in your main app file (not here)
-// Example in your main app file (e.g., app.js or server.js):
-// const cookieParser = require('cookie-parser');
-// app.use(cookieParser());
+
 
 // Middleware to verify access token
 const verifyAccessToken = async (req, res, next) => {
@@ -33,7 +30,7 @@ const verifyAccessToken = async (req, res, next) => {
                  LIMIT 1
              )`,
             [req.user.user_id]
-          );
+        );
         req.user = decoded;
         next();
     } catch (error) {
@@ -60,30 +57,18 @@ const refreshAccessToken = async (req, res, next) => {
         // Verify refresh token
         const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
 
-        // // Check if refresh token exists in database and is not expired
-        // // const tokenRecord = await query(
-        // //     "SELECT * FROM refresh_tokens WHERE token = $1 AND user_id = $2 AND expires_at > NOW()",
-        // //     [refreshToken, decoded.user_id]
-        // // );
-
-        // if (tokenRecord.rows.length === 0) {
-        //     return res.status(401).json({ error: 'Invalid or expired refresh token' });
-        // }
-
         // Get user details
-        const user = await query("SELECT * FROM user_data WHERE id = $1", [decoded.user_id]);
+        const user = await query("SELECT * FROM users WHERE id = $1", [decoded.user_id]);
         if (user.rows.length === 0) {
             return res.status(401).json({ error: 'User not found' });
         }
 
-        const role = await query('SELECT name FROM user_role WHERE id = $1', [user.rows[0].role_id]);
-
         // Generate new access token
         const payload = {
             user_id: user.rows[0].id,
-            email: user.rows[0].email,
-            name: user.rows[0].name,
-            role: role.rows[0].name
+            email: user.rows[0].user_email,
+            name: user.rows[0].user_name,
+            role: user.rows[0].user_role
         };
 
         const newAccessToken = jwt.sign(
@@ -103,18 +88,6 @@ const refreshAccessToken = async (req, res, next) => {
             path: '/',
         });
 
-                await query(
-            `UPDATE UserSessionLogs
-     SET logout_time = NOW()
-     WHERE id = (
-         SELECT id FROM UserSessionLogs
-         WHERE user_id = $1 AND logout_time IS NULL
-         ORDER BY login_time DESC
-         LIMIT 1
-     )`,
-            [user.rows[0].id]
-        );
-
         req.user = payload;
         req.headers[headerKey.authorization] = `Bearer ${newAccessToken}`;
         next();
@@ -126,8 +99,7 @@ const refreshAccessToken = async (req, res, next) => {
 // Combined middleware that tries access token first, then refresh token
 const authenticateUser = async (req, res, next) => {
     // First try to verify access token
-    let token = req.cookies?.orangeAccessToken ||
-        req.headers.authorization?.replace('Bearer ', '');
+    let token = req.cookies?.orangeAccessToken ;
 
     if (token && token !== 'null' && token !== 'undefined' && token.trim() !== '') {
         try {
@@ -167,11 +139,11 @@ const requireRole = (allowedRoles) => {
 
 // Middleware to logout (clear cookies and remove refresh token from DB)
 const logout = async (req, res, next) => {
-     try {
-    // await query(
-    //   "DELETE FROM refresh_tokens WHERE user_id = $1",
-    //   [req.user.user_id]
-    // );
+    try {
+        // await query(
+        //   "DELETE FROM refresh_tokens WHERE user_id = $1",
+        //   [req.user.user_id]
+        // );
         const refreshToken = req.cookies?.orangeRefreshToken;
         await addApiToRedis(req.user.user_id, 'Logout', "Logout", refreshToken);
         if (refreshToken) {
@@ -179,10 +151,10 @@ const logout = async (req, res, next) => {
             await query("DELETE FROM refresh_tokens WHERE token = $1", [refreshToken]);
         }
 
-    res.clearCookie('orangeAccessToken', { path: '/' });
-    res.clearCookie('orangeRefreshToken', { path: '/' });
-     await query(
-        `UPDATE UserSessionLogs
+        res.clearCookie('orangeAccessToken', { path: '/' });
+        res.clearCookie('orangeRefreshToken', { path: '/' });
+        await query(
+            `UPDATE UserSessionLogs
             SET logout_time = NOW()
             WHERE id = (
                 SELECT id FROM UserSessionLogs
@@ -190,12 +162,12 @@ const logout = async (req, res, next) => {
                 ORDER BY login_time DESC
                 LIMIT 1
             )`,
-        [req.user.user_id]
-    );
-    res.status(200).json({ message: 'Logged out successfully' });
-  } catch (error) {
-    res.status(500).json({ error: 'Logout failed' });
-  }
+            [req.user.user_id]
+        );
+        res.status(200).json({ message: 'Logged out successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Logout failed' });
+    }
 };
 
 module.exports = {
