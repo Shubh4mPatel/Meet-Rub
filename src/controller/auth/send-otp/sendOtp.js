@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const sendMail = require("../../../../config/email").sendMail;
+// const sendMail = require("../../../../config/email").sendMail;
 const bcrypt = require("bcrypt");
 const query = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
@@ -62,7 +62,6 @@ const otpSendApi = async (req, res, next) => {
         return res.status(500).json({ error: "Failed to insert OTP." });
       }
     }
-    sendEmailNotification(email, 'email verifcation', `your otp is ${otp}`, false);
     let subject = "";
     let message = "";
 
@@ -234,7 +233,8 @@ const otpSendApi = async (req, res, next) => {
         </html>`;
     }
 
-    // await sendMail(email, subject, message);
+    sendEmailNotification(email, subject, message, false);
+  
 
     return res.status(200).json({
       message: "Verification code sent successfully.",
