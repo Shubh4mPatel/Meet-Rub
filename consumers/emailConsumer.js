@@ -1,6 +1,7 @@
 // consumers/emailConsumer.js
 const { getChannel, QUEUES } = require('../config/rabbitmq');
 // const notificationService = require('../services/notificationService');
+const { sendMail } = require('../config/email');
 
 /**
  * Email Message Handler
@@ -16,7 +17,8 @@ async function handleEmailMessage(message) {
   console.log(`   Timestamp: ${notification.timestamp}`);
 
   // Process the email notification
-  // await notificationService.sendEmail(notification);
+  console.log(`📧 [EMAIL CONSUMER] Sending email to: ${notification.body}`);
+  await sendMail(notification.to, notification.subject, notification.body, notification.pdfAttachment);
 
   console.log(`✅ [EMAIL CONSUMER] Successfully sent email: ${notification.id}`);
   

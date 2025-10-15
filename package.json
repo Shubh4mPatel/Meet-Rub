@@ -15,6 +15,7 @@
     "bullmq": "^5.61.0",
     "dotenv": "^17.2.3",
     "ioredis": "^5.8.1",
+    "nodemailer": "^7.0.9",
     "nodemon": "^3.1.10"
   }
 }
