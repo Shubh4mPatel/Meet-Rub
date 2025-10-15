@@ -66,13 +66,13 @@ const otpSendApi = async (req, res, next) => {
     let message = "";
 
     if (type === "email-verification") {
-      subject = "Your Ai4Pharma Verification Code";
+      subject = "Your Meetrub Verification Code";
       message = `<!DOCTYPE html>
   <html lang="en">
   <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Ai4Pharma Verification Code</title>
+      <title>Meetrub Verification Code</title>
       <style>
           body {
               font-family: Arial, sans-serif;
@@ -125,37 +125,36 @@ const otpSendApi = async (req, res, next) => {
           <div class="header">
               <!-- Replace with your actual logo -->
               <img src="https://chatgmpreports.blob.core.windows.net/filestorage/Ai4Pharma%20Image.png" alt="Ai4Pharma Logo" class="logo">
-              <a href='https://www.ai4pharma.ai/'><h1>Ai4Pharma</h1></a>
+              <a href=''><h1>Meetrub</h1></a>
           </div>
           
           <div class="content">
               <h2>Verification Code</h2>
               <p>Hello,</p>
-              <p>Thank you for registering with Ai4Pharma. Please use the verification code below to complete your registration:</p>
+              <p>Thank you for registering with Meetrub. Please use the verification code below to complete your registration:</p>
               <div class="otp-code">${otp}</div>
               <p>This code will expire in 10 minutes.</p>
               <p>If you did not request this code, please ignore this email.</p>
-              <p>At Ai4Pharma, we are dedicated to using AI to address the unique challenges facing the pharmaceutical industry.</p>
-              <p>If you have any questions or need assistance, please contact us at: <a href="mailto:help@Ai4Pharma.ai">help@Ai4Pharma.ai</a></p>
-              <p>For More deails you can visit our website at <a href='https://www.ai4pharma.ai/'>Ai4Pharma</a></p>
+              <p>If you have any questions or need assistance, please contact us at: <a href="mailto:help@Meetrub.com">help@Meetrub.com</a></p>
+              <p>For More deails you can visit our website at <a href=''>Meetrub</a></p>
               <p>Best regards,</p>
-              <p>TEAM Ai4Pharma</p>
+              <p>TEAM Meetrub</p>
             </div>
                 
             <div class="footer">
-                <p>Copyright &copy; ${new Date().getFullYear()} Ai4Pharma Tech Limited. All Rights Reserved.</p>
+                <p>Copyright &copy; ${new Date().getFullYear()} Meetrub Tech Limited. All Rights Reserved.</p>
             </div>
       </div>
   </body>
   </html>`;
     } else if (type === "password-reset") {
-      subject = "Ai4Pharma Password Reset Code";
+      subject = "Meetrub Password Reset Code";
       message = `<!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Ai4Pharma Password Reset Code</title>
+            <title>Meetrub Password Reset Code</title>
             <style>
                 body {
                     font-family: Arial, sans-serif;
@@ -208,25 +207,24 @@ const otpSendApi = async (req, res, next) => {
                 <div class="header">
                     <!-- Replace with your actual logo -->
                     <img src="https://chatgmpreports.blob.core.windows.net/filestorage/Ai4Pharma%20Image.png" alt="Ai4Pharma Logo" class="logo">
-              <a href='https://www.ai4pharma.ai/'><h1>Ai4Pharma</h1></a>
+              <a href=''><h1>Meetrub</h1></a>
                 </div>
                 
                 <div class="content">
                     <h2>Password Reset Code</h2>
                     <p>Hello,</p>
-                    <p>We received a request to reset your password for your Ai4Pharma account. Please use the verification code below to complete the password reset process:</p>
+                    <p>We received a request to reset your password for your Meetrub account. Please use the verification code below to complete the password reset process:</p>
                     <div class="otp-code">${otp}</div>
                     <p>This code will expire in 10 minutes.</p>
                     <p>If you did not request a password reset, please ignore this email or contact us immediately if you have concerns about your account security.</p>                  
-                    <p>At Ai4Pharma, we are dedicated to using AI to address the unique challenges facing the pharmaceutical industry.</p>
-                    <p>If you have any questions or need assistance, please contact us at: <a href="mailto:help@Ai4Pharma.ai">help@Ai4Pharma.ai</a></p>
-                    <p>For More deails you can visit our website at <a href='https://www.ai4pharma.ai/'>Ai4Pharma</a></p>
+                    <p>If you have any questions or need assistance, please contact us at: <a href="">help@Meetrub.com</a></p>
+                    <p>For More deails you can visit our website at <a href=''>Meetrub</a></p>
                     <p>Best regards,</p>
-                    <p>TEAM Ai4Pharma</p>
+                    <p>TEAM Meetrub</p>
                 </div>
                 
                 <div class="footer">
-                    <p>Copyright &copy; ${new Date().getFullYear()} Ai4Pharma Tech Limited. All Rights Reserved.</p>
+                    <p>Copyright &copy; ${new Date().getFullYear()} Meetrub Tech Limited. All Rights Reserved.</p>
                 </div>
             </div>
         </body>

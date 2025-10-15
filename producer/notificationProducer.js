@@ -30,11 +30,6 @@ async function publishToExchange(exchange, routingKey, notificationData) {
         contentType: 'application/json'
       }
     );
-
-    console.log(`📤 Published to exchange: ${exchange}`);
-    console.log(`   Routing Key: ${routingKey}`);
-    console.log(`   Data:`, notification);
-    
     return { success: true, id: notification.id };
   } catch (error) {
     console.error('Error publishing to exchange:', error);
