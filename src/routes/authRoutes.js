@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { loginUser, registerUser,otpSendApi } = require('../controller');
+const { loginUser,otpSendApi } = require('../controller');
 const { authenticateUser, refreshAccessToken, logout } = require('../middleware/authMiddleware');
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
 // const { isFirstTime } = require('../controller/auth/isFirstTime/isFirstTimeController')
@@ -29,7 +29,7 @@ router.post('/refresh', refreshAccessToken, (req, res) => {
 
 
 router.post('/logout', authenticateUser, logout);
-router.post('/register', registerUser)
+// router.post('/register', registerUser)
 
 // router.post('/block-user', authenticateUser, blockUserController);
 // router.post('/unblock-user', authenticateUser, unblockUserController);
