@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { loginUser,otpSendApi } = require('../controller');
+const { loginUser,otpSendApi,verifyOtpAndProcess } = require('../controller');
 const { authenticateUser, refreshAccessToken, logout } = require('../middleware/authMiddleware');
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
 // const { isFirstTime } = require('../controller/auth/isFirstTime/isFirstTimeController')
 const { logger } = require('../../utils/logger');
 
 router.post("/send-otp", otpSendApi);
-// router.post("/verify-otp", verifyOtpAndProcess);
+router.post("/verify-otp", verifyOtpAndProcess);
 router.post("/login", loginUser, setTokenCookies, (req, res) => {
 
   res.status(200).json({
