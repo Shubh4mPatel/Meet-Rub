@@ -5,3 +5,5 @@ const { authenticateUser } = require('../middleware/authMiddleware');
 
 router.get('/getProfile', authenticateUser, getUserProfile);
 router.post('/editProfile', authenticateUser, editProfile);
+
+module.exports = router;
