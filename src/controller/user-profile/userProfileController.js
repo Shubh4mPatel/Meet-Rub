@@ -1,6 +1,10 @@
 const AppError = require("../../../utils/appError");
 const query = require("../../../config/dbConfig");
 const { decodedToken } = require("../../../utils/helper");
+const { minioClient } = require("../../../config/minio");
+// const { BUCKET_NAME } = require("../../../config/minio");
+
+const BUCKET_NAME='freelancer-documents';
 
 const getUserProfile = async (req, res, next) => {
   try {
@@ -74,8 +78,8 @@ const editProfile = async (req, res, next) => {
           new AppError("All fields are required for bankDetails", 400)
         );
       }
-      await query(
-        "update freelancer set freelancer_full_name=$1,bank_account_no=$2,bank_name=$3,bank_ifsc_code=$4,bank_branch_name=$5 where user_id=$6",
+      const { rows } = await query(
+        "update freelancer set freelancer_full_name=$1,bank_account_no=$2,bank_name=$3,bank_ifsc_code=$4,bank_branch_name=$5 where user_id=$6 returning *",
         [
           freelancer_fullname,
           bank_account_no,
@@ -85,19 +89,86 @@ const editProfile = async (req, res, next) => {
           user.user_id,
         ]
       );
+      return res.status(200).json({
+        status: "success",
+        message: "Bank details updated successfully",
+        data: rows[0],
+      });
     } else if (type === "govtId") {
       {
-        const { gov_id_type, gov_id_url } = userData;
-        if (!gov_id_type || !gov_id_url) {
+        const { gov_id_type } = userData;
+        
+        if (!gov_id_type || !req.file) {
           return next(new AppError("All fields are required for govtId", 400));
         }
-        await query(
-          "update freelancer set gov_id_type=$1,gov_id_url=$2 where user_id=$3",
+        // Upload file to MinIO
+        const fileExt = path.extname(req.file.originalname);
+        const fileName = `${crypto.randomUUID()}${fileExt}`;
+        const folder = `goverment-doc/${gov_id_type}`;
+        const objectName = `${folder}/${fileName}`;
+        const gov_id_url = `${process.env.MINIO_ENDPOINT}/${BUCKET_NAME}/${objectName}`;
+        // Store in S3
+        await minioClient.putObject(
+          BUCKET_NAME,
+          objectName,
+          req.file.buffer,
+          req.file.size,
+          { 'Content-Type': req.file.mimetype }
+        );
+        const { rows } = await query(
+          "update freelancer set gov_id_type=$1,gov_id_url=$2 where user_id=$3 returning *",
           [gov_id_type, gov_id_url, user.user_id]
         );
+        const expirySeconds = 240 * 60;
+
+      // Generate presigned URL
+      const url = await minioClient.presignedGetObject(
+        BUCKET_NAME,
+        objectName,
+        expirySeconds
+      );
+        return res.status(200).json({
+          status: "success",
+          message: "Government ID updated successfully",
+          data: url,
+        });
       }
     } else if (type === "profileImage") {
-      // Update profile image logic here
+      if (!req.file) {
+        return next(new AppError('profile image required!', 400));
+      }
+      const fileExt = path.extname(req.file.originalname);
+      const fileName = `${crypto.randomUUID()}${fileExt}`;
+      const folder = `freelancer-profile-image`;
+      const objectName = `${folder}/${fileName}`;
+      const profile_url = `${process.env.MINIO_ENDPOINT}/${BUCKET_NAME}/${objectName}`;
+      // Store in S3
+      await minioClient.putObject(
+        BUCKET_NAME,
+        objectName,
+        req.file.buffer,
+        req.file.size,
+        { 'Content-Type': req.file.mimetype }
+      );
+      const { rows: storedUrl } = await query(
+        "update freelancer set profile_image_url=$1 where user_id=$2 returning *",
+        [profile_url, user.user_id]
+      );
+      const expirySeconds = 240 * 60;
+
+      // Generate presigned URL
+      const url = await minioClient.presignedGetObject(
+        BUCKET_NAME,
+        objectName,
+        expirySeconds
+      );
+      return res.status(200).json({
+        status: 'success',
+        message: 'Profile image updated successfully',
+        url: url,
+        expiresIn: `${240 * 60} minutes`,
+        data: url,
+      });
     } else {
       const {
         freelancer_fullname,
@@ -115,8 +186,8 @@ const editProfile = async (req, res, next) => {
       ) {
         return next(new AppError("All fields are required for basicInfo", 400));
       }
-      await query(
-        "update freelancer set freelancer_full_name=$1,freelancer_email=$2,date_of_birth=$3,phone_number=$4,profile_title=$5 where user_id=$6",
+      const { rows } = await query(
+        "update freelancer set freelancer_full_name=$1,freelancer_email=$2,date_of_birth=$3,phone_number=$4,profile_title=$5 where user_id=$6 returning freelancer_full_name,freelancer_email,date_of_birth,phone_number,profile_title",
         [
           freelancer_fullname,
           freelancer_email,
@@ -126,6 +197,11 @@ const editProfile = async (req, res, next) => {
           user.user_id,
         ]
       );
+      return res.status(200).json({
+        status: "success",
+        message: "Profile updated successfully",
+        data: rows[0],
+      });
     }
   } catch (error) {
     return next(new AppError("Failed to edit user profile", 500));
