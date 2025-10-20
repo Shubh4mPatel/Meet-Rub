@@ -9,7 +9,7 @@ const { logger } = require('../../utils/logger');
 const verifyAccessToken = async (req, res, next) => {
     try {
         // Get token from cookie or Authorization header
-        let token = req.cookies?.orangeAccessToken ||
+        let token = req.cookies?.AccessToken ||
             req.headers.authorization?.replace('Bearer ', '');
 
         if (!token) {
@@ -47,7 +47,7 @@ const verifyAccessToken = async (req, res, next) => {
 const refreshAccessToken = async (req, res, next) => {
     logger.info('Attempting to refresh access token...');
     try {
-        const refreshToken = req.cookies?.orangeRefreshToken;
+        const refreshToken = req.cookies?.RefreshToken;
 
         logger.info("refreshToken  ", refreshToken);
         if (!refreshToken) {
@@ -80,7 +80,7 @@ const refreshAccessToken = async (req, res, next) => {
         // Set new access token cookie
         const ACCESS_TOKEN_DURATION = 15 * 60 * 1000; // 15 minutes
         const isProduction = process.env.NODE_ENV === 'production';
-        res.cookie('orangeAccessToken', newAccessToken, {
+        res.cookie('AccessToken', newAccessToken, {
             maxAge: ACCESS_TOKEN_DURATION,
             httpOnly: isProduction ? true : false,
             secure: isProduction, // ensure the cookie is sent over HTTPS in production
@@ -99,7 +99,7 @@ const refreshAccessToken = async (req, res, next) => {
 // Combined middleware that tries access token first, then refresh token
 const authenticateUser = async (req, res, next) => {
     // First try to verify access token
-    let token = req.cookies?.orangeAccessToken ;
+    let token = req.cookies?. AccessToken ;
 
     if (token && token !== 'null' && token !== 'undefined' && token.trim() !== '') {
         try {
@@ -144,15 +144,15 @@ const logout = async (req, res, next) => {
         //   "DELETE FROM refresh_tokens WHERE user_id = $1",
         //   [req.user.user_id]
         // );
-        const refreshToken = req.cookies?.orangeRefreshToken;
+        const refreshToken = req.cookies?.RefreshToken;
         await addApiToRedis(req.user.user_id, 'Logout', "Logout", refreshToken);
         if (refreshToken) {
             // Remove refresh token from database
             await query("DELETE FROM refresh_tokens WHERE token = $1", [refreshToken]);
         }
 
-        res.clearCookie('orangeAccessToken', { path: '/' });
-        res.clearCookie('orangeRefreshToken', { path: '/' });
+        res.clearCookie('AccessToken', { path: '/' });
+        res.clearCookie('RefreshToken', { path: '/' });
         await query(
             `UPDATE UserSessionLogs
             SET logout_time = NOW()

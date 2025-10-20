@@ -29,21 +29,7 @@ const ensureBucketExists = async (bucketName) => {
     }
   };
   
-  // Initialize multiple buckets
-  const initBuckets = async (bucketNames = []) => {
-    try {
-      const promises = bucketNames.map(bucket => ensureBucketExists(bucket));
-      await Promise.all(promises);
-      console.log('✓ All buckets initialized');
-    } catch (err) {
-      console.error('✗ Error initializing buckets:', err);
-      throw err;
-    }
-  };
-  
 
 module.exports = {
   minioClient,
-  BUCKET_NAME,
-  initBucket
 };

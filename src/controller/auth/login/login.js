@@ -6,6 +6,24 @@ const { decryptId } = require("../../../../config/encryptDecryptId");
 // const { addApiToRedis } = require('../../../utils/queueSender');
 const { logger } = require('../../../../utils/logger');
 
+function generateTokens(user) {
+    logger.info("Generating tokens for user:", user.id,);
+
+    const payload = {
+        user_id: user.id,
+        email: user.user_email,
+        name: user.user_name,
+        role: user.user_role,
+    };
+    const accessTokenOptions = { expiresIn: "15m" }; // 15 min for web
+
+    const refreshTokenOptions ={ expiresIn: "4h" }; // 4 hours for web
+
+    const accessToken = jwt.sign(payload, process.env.JWT_SECRET, accessTokenOptions);
+    const refreshToken = jwt.sign({ user_id: user.id }, process.env.JWT_SECRET, refreshTokenOptions);
+
+    return { accessToken, refreshToken };
+}
 
 
 
@@ -25,26 +43,27 @@ const loginUser = async (req, res, next) => {
 
 
     try {
-        const user = (await query("SELECT * FROM user_data WHERE email = $1", [email.toLowerCase()])).rows[0];
+        const user = (await query("SELECT * FROM users WHERE user_email = $1", [email.toLowerCase()])).rows[0];
         if (!user){ 
             logger.error(`Invalid email or password, Email:${email}`);
             return next(new AppError("Invalid email or password", 401));
         }
 
        
-        const passwordValid = await bcrypt.compare(decryptedPassword, user.password);
+        const passwordValid = await bcrypt.compare(decryptedPassword, user.user_password);
         if (!passwordValid) {
             
                 logger.error(`Invalid email or password`);
                 return next(new AppError("Invalid email or password", 401));
         }
         
-        const role = (await query('SELECT name FROM user_role WHERE id = $1', [user.role_id])).rows[0];
+        const role = (await query('SELECT user_role FROM users WHERE id = $1', [user.id])).rows[0];
         
-        // // Generate tokens
-        // const { accessToken, refreshToken } = generateTokens(user, role);
-        // // Log login attempt
-        // res.locals.accessToken = accessToken;
+        // Generate tokens
+        const { accessToken, refreshToken } = generateTokens(user);
+        // Log login attempt
+        res.locals.accessToken = accessToken;
+        res.locals.refreshToken =refreshToken;
         res.locals.user = {
             user_id: user.id,
             name: user.name,

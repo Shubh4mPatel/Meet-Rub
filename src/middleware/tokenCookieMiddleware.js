@@ -1,6 +1,7 @@
 function setTokenCookies(req, res, next) {
     const isProduction = process.env.NODE_ENV === 'production';
-    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    // const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV !== 'production';
+    const isHttps =false
     const ACCESS_TOKEN_DURATION_WEB = 15 * 60 * 1000;  // 15 minutes
     const REFRESH_TOKEN_DURATION_WEB = 4 * 60 * 60 * 1000; // 4 hours
 
@@ -15,6 +16,7 @@ function setTokenCookies(req, res, next) {
     }
 
     if (res.locals.refreshToken) {
+        console.log()
         res.cookie('RefreshToken', res.locals.refreshToken, {
             maxAge: REFRESH_TOKEN_DURATION_WEB,
             httpOnly: isProduction ? true : false,
@@ -23,7 +25,7 @@ function setTokenCookies(req, res, next) {
             path: '/',
         });
     }
-
+    console.log("Tokens set in cookies");
     next();
 }
 
