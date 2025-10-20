@@ -4,7 +4,8 @@ const { decodedToken } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
 // const { BUCKET_NAME } = require("../../../config/minio");
 
-const BUCKET_NAME='freelancer-documents';
+const BUCKET_NAME = "freelancer-documents";
+const expirySeconds = 4 * 60 * 60; // 4 hours
 
 const getUserProfile = async (req, res, next) => {
   try {
@@ -22,15 +23,46 @@ const getUserProfile = async (req, res, next) => {
           userBasicInfo: userBasicInfo[0],
         },
       });
-    } else if (tyep === "govtId") {
+    }else if(tyep==="profileImage"){
+      const { rows: userProfileImage } = await query(
+        "select profile_image_url from freelancer where user_id=$1",
+        [user.user_id]
+      );
+      const userProfileImageUrl= userProfileImage[0]?.profile_image_url.split("/");
+      const bucketName= userProfileImageUrl[2];
+      const objectName = userProfileImageUrl.slice(3).join('/');
+      const url = await minioClient.presignedGetObject(
+        bucketName,
+        objectName,
+        expirySeconds
+      )
+      return res.status(200).json({
+        status: "success",
+        data: {
+          userProfileImage: url,
+        },
+      });
+    }
+     else if (tyep === "govtId") {
       const { rows: userGovtId } = await query(
         "select gov_id_type,gov_id_url from freelancer where user_id=$1",
         [user.user_id]
       );
+      const userGovtIdUrl = userGovtId[0]?.gov_id_url.split("/");
+      const bucketName = userGovtIdUrl[2];
+      const objectName = userGovtIdUrl.slice(3).join("/");
+      
+
+      const url = await minioClient.presignedGetObject(
+        bucketName,
+        objectName,
+        expirySeconds
+      );
       return res.status(200).json({
         status: "success",
         data: {
-          userGovtId: userGovtId[0],
+          userGovtId: url,
+          userGovtIdType: userGovtId[0]?.gov_id_type,
         },
       });
     } else if (tyep === "bankDetails") {
@@ -97,7 +129,7 @@ const editProfile = async (req, res, next) => {
     } else if (type === "govtId") {
       {
         const { gov_id_type } = userData;
-        
+
         if (!gov_id_type || !req.file) {
           return next(new AppError("All fields are required for govtId", 400));
         }
@@ -106,68 +138,48 @@ const editProfile = async (req, res, next) => {
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = `goverment-doc/${gov_id_type}`;
         const objectName = `${folder}/${fileName}`;
-        const gov_id_url = `${process.env.MINIO_ENDPOINT}/${BUCKET_NAME}/${objectName}`;
+        const gov_id_url = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
         // Store in S3
         await minioClient.putObject(
           BUCKET_NAME,
           objectName,
           req.file.buffer,
           req.file.size,
-          { 'Content-Type': req.file.mimetype }
+          { "Content-Type": req.file.mimetype }
         );
         const { rows } = await query(
           "update freelancer set gov_id_type=$1,gov_id_url=$2 where user_id=$3 returning *",
           [gov_id_type, gov_id_url, user.user_id]
         );
-        const expirySeconds = 240 * 60;
-
-      // Generate presigned URL
-      const url = await minioClient.presignedGetObject(
-        BUCKET_NAME,
-        objectName,
-        expirySeconds
-      );
         return res.status(200).json({
           status: "success",
           message: "Government ID updated successfully",
-          data: url,
         });
       }
     } else if (type === "profileImage") {
       if (!req.file) {
-        return next(new AppError('profile image required!', 400));
+        return next(new AppError("profile image required!", 400));
       }
       const fileExt = path.extname(req.file.originalname);
       const fileName = `${crypto.randomUUID()}${fileExt}`;
       const folder = `freelancer-profile-image`;
       const objectName = `${folder}/${fileName}`;
-      const profile_url = `${process.env.MINIO_ENDPOINT}/${BUCKET_NAME}/${objectName}`;
+      const profile_url = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
       // Store in S3
       await minioClient.putObject(
         BUCKET_NAME,
         objectName,
         req.file.buffer,
         req.file.size,
-        { 'Content-Type': req.file.mimetype }
+        { "Content-Type": req.file.mimetype }
       );
       const { rows: storedUrl } = await query(
         "update freelancer set profile_image_url=$1 where user_id=$2 returning *",
         [profile_url, user.user_id]
       );
-      const expirySeconds = 240 * 60;
-
-      // Generate presigned URL
-      const url = await minioClient.presignedGetObject(
-        BUCKET_NAME,
-        objectName,
-        expirySeconds
-      );
       return res.status(200).json({
-        status: 'success',
-        message: 'Profile image updated successfully',
-        url: url,
-        expiresIn: `${240 * 60} minutes`,
-        data: url,
+        status: "success",
+        message: "Profile image updated successfully",
       });
     } else {
       const {
