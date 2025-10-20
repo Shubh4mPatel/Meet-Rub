@@ -17,6 +17,7 @@ const getUserProfile = async (req, res, next) => {
         "select freelancer_full_name,date_of_birth,phone_number,profile_title,freelancer_email from freelancer where user_id=$1",
         [user.user_id]
       );
+      console.log(userBasicInfo)
       return res.status(200).json({
         status: "success",
         data: {
@@ -88,8 +89,8 @@ const editProfile = async (req, res, next) => {
   try {
     const user = decodedToken(req.cookies?.AccessToken);
     const { type, userData } = req.body;
-    if (!type || !userData) {
-      return next(new AppError("Type and userData are required", 400));
+    if (!userData) {
+      return next(new AppError("userData are required", 400));
     }
     if (type === "bankDetails") {
       const {
