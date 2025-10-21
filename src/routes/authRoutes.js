@@ -5,9 +5,10 @@ const { authenticateUser, refreshAccessToken, logout } = require('../middleware/
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
 // const { isFirstTime } = require('../controller/auth/isFirstTime/isFirstTimeController')
 const { logger } = require('../../utils/logger');
+const upload = require('../../config/multer');
 
 router.post("/send-otp", otpSendApi);
-router.post("/verify-otp", verifyOtpAndProcess);
+router.post("/verify-otp",upload.single('file'), verifyOtpAndProcess);
 router.post("/login", loginUser, setTokenCookies, (req, res) => {
 
   res.status(200).json({

@@ -6,6 +6,7 @@ const { logger } = require("../../../../utils/logger");
 const {
   sendEmailNotification,
 } = require("../../../../producer/notificationProducer");
+const { forEach } = require("jszip");
 
 const verifyOtpAndProcess = async (req, res, next) => {
   let { userData, otp, type } = req.body;
@@ -80,8 +81,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
       ]);
 
       if (role == "freelancer") {
-        if(!req.file){
-          return next( new AppError('document is required',400))
+        if (!req.file) {
+          return next(new AppError("document is required", 400));
         }
         const { rows: freelancer } = await query(
           `INSERT INTO freelancer 
@@ -97,9 +98,11 @@ const verifyOtpAndProcess = async (req, res, next) => {
             created_at,
             updated_at,
             freelancer_full_name,
-            freelancer_email
+            freelancer_email,
+            gov_id_number
+            niche
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $11, $12, $9, $10)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $11, $12, $9, $10,$11,$12)
           RETURNING *`,
           [
             user_id,
@@ -113,10 +116,22 @@ const verifyOtpAndProcess = async (req, res, next) => {
             `${firstName} ${lastName}`, // freelancer_full_name
             email,
             currentDateTime,
-            currentDateTime
+            currentDateTime,
+            govId,
+            niche
           ]
         );
-        
+        serviceOffred.forEach(async (service) => {
+          await query(
+            "insert into services (freelancer_id,sercvice_category,created_at,updated_at) VALUES ($1, $2, $3, $4)",
+            [
+              freelancer[0].freelancer_id,
+              service,
+              currentTimestamp,
+              currentTimestamp,
+            ]
+          );
+        });
       }
 
       // Prepare Welcome Email HTML

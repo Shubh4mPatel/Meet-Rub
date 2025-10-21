@@ -46,7 +46,7 @@ const getUserProfile = async (req, res, next) => {
     }
      else if (tyep === "govtId") {
       const { rows: userGovtId } = await query(
-        "select gov_id_type,gov_id_url from freelancer where user_id=$1",
+        "select gov_id_type,gov_id_url,gov_id_number from freelancer where user_id=$1",
         [user.user_id]
       );
       const userGovtIdUrl = userGovtId[0]?.gov_id_url.split("/");
@@ -64,6 +64,7 @@ const getUserProfile = async (req, res, next) => {
         data: {
           userGovtId: url,
           userGovtIdType: userGovtId[0]?.gov_id_type,
+          userGovtIdNumber:userGovtId[0]?.gov_id_number
         },
       });
     } else if (tyep === "bankDetails") {
@@ -129,7 +130,7 @@ const editProfile = async (req, res, next) => {
       });
     } else if (type === "govtId") {
       {
-        const { gov_id_type } = userData;
+        const { gov_id_type,gov_id_number } = userData;
 
         if (!gov_id_type || !req.file) {
           return next(new AppError("All fields are required for govtId", 400));
@@ -149,8 +150,8 @@ const editProfile = async (req, res, next) => {
           { "Content-Type": req.file.mimetype }
         );
         const { rows } = await query(
-          "update freelancer set gov_id_type=$1,gov_id_url=$2 where user_id=$3 returning *",
-          [gov_id_type, gov_id_url, user.user_id]
+          "update freelancer set gov_id_type=$1,gov_id_url=$2,gov_id_number=$3 where user_id=$4 returning *",
+          [gov_id_type, gov_id_url,gov_id_number, user.user_id]
         );
         return res.status(200).json({
           status: "success",
