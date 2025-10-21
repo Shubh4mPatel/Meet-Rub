@@ -12,7 +12,7 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
     const user = decodedToken(req.cookies?.AccessToken);
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
-    }
+    } 
    
   } catch (error) {
     return next(new AppError("Failed to get portfolio", 500));

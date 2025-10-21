@@ -6,12 +6,12 @@ const { logger } = require("../../../../utils/logger");
 const {
   sendEmailNotification,
 } = require("../../../../producer/notificationProducer");
-const { forEach } = require("jszip");
+// const { forEach } = require("jszip");
+const path = require('path');  // CommonJS
+const { minioClient } = require("../../../../config/minio");
 
 const verifyOtpAndProcess = async (req, res, next) => {
-  let { userData, otp, type } = req.body;
-  let {
-    email,
+  let { email,
     encryptedPassword,
     role,
     userName,
@@ -22,8 +22,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
     serviceOffred,
     niche,
     govId,
-    govIdType,
-  } = userData;
+    phoneNumber,
+    govIdType, otp, type } = req.body;
   email = email?.trim();
   otp = otp?.trim();
 
@@ -84,6 +84,24 @@ const verifyOtpAndProcess = async (req, res, next) => {
         if (!req.file) {
           return next(new AppError("document is required", 400));
         }
+        console.log('add freelancer data ')
+        const BUCKET_NAME='freelancer-documents'
+        // Upload file to MinIO
+        const fileExt = path.extname(req.file.originalname);
+        const fileName = `${crypto.randomUUID()}${fileExt}`;
+        const folder = `goverment-doc/${govIdType}`;
+        const objectName = `${folder}/${fileName}`;
+        const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+        console.log('bucket',objectName)
+        // Store in S3
+        console.log('adding image to s3')
+        await minioClient.putObject(
+          BUCKET_NAME,
+          objectName,
+          req.file.buffer,
+          req.file.size,
+          { "Content-Type": req.file.mimetype }
+        );
         const { rows: freelancer } = await query(
           `INSERT INTO freelancer 
           (
@@ -99,26 +117,26 @@ const verifyOtpAndProcess = async (req, res, next) => {
             updated_at,
             freelancer_full_name,
             freelancer_email,
-            gov_id_number
+            gov_id_number,
             niche
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $11, $12, $9, $10,$11,$12)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
           RETURNING *`,
           [
-            user_id,
-            profileTitle,
-            govIdType,
-            govIdUrl,
-            firstName,
-            lastName,
-            dateOfBirth,
-            phoneNumber,
-            `${firstName} ${lastName}`, // freelancer_full_name
-            email,
-            currentDateTime,
-            currentDateTime,
-            govId,
-            niche
+            newUserResMeetRub[0].user_id,      // $1
+            profileTitle,                       // $2
+            govIdType,                          // $3
+            govIdUrl,                           // $4
+            firstName,                          // $5
+            lastName,                           // $6
+            dateOfBirth,                        // $7
+            phoneNumber,                        // $8
+            currentDateTime,                    // $9 - created_at
+            currentDateTime,                    // $10 - updated_at
+            `${firstName} ${lastName}`,         // $11 - freelancer_full_name
+            email,                              // $12 - freelancer_email
+            govId,                              // $13 - gov_id_number
+            niche                               // $14 - niche
           ]
         );
         serviceOffred.forEach(async (service) => {

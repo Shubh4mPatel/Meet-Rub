@@ -2,6 +2,7 @@ const AppError = require("../../../utils/appError");
 const query = require("../../../config/dbConfig");
 const { decodedToken } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
+const path = require('path');  // CommonJS
 // const { BUCKET_NAME } = require("../../../config/minio");
 
 const BUCKET_NAME = "freelancer-documents";
