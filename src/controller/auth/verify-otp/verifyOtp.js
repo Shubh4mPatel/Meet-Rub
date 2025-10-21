@@ -2,10 +2,6 @@ const bcrypt = require("bcrypt");
 const query = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
 const { decryptId } = require("../../../../config/encryptDecryptId");
-// const { format } = require('date-fns');
-// const {
-//     MailTemplatesHandler,
-// } = require("../../../mailTemplates/MailTemplatesHandler");
 const { logger } = require("../../../../utils/logger");
 const {
   sendEmailNotification,
