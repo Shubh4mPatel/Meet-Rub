@@ -7,11 +7,12 @@ const {
   sendEmailNotification,
 } = require("../../../../producer/notificationProducer");
 // const { forEach } = require("jszip");
-const path = require('path');  // CommonJS
+const path = require("path"); // CommonJS
 const { minioClient } = require("../../../../config/minio");
 
 const verifyOtpAndProcess = async (req, res, next) => {
-  let { email,
+  let {
+    email,
     encryptedPassword,
     role,
     userName,
@@ -23,7 +24,10 @@ const verifyOtpAndProcess = async (req, res, next) => {
     niche,
     govId,
     phoneNumber,
-    govIdType, otp, type } = req.body;
+    govIdType,
+    otp,
+    type,
+  } = req.body;
   email = email?.trim();
   otp = otp?.trim();
 
@@ -79,77 +83,106 @@ const verifyOtpAndProcess = async (req, res, next) => {
         email,
         type,
       ]);
-
       if (role == "freelancer") {
         if (!req.file) {
           return next(new AppError("document is required", 400));
         }
-        console.log('add freelancer data ')
-        const BUCKET_NAME='freelancer-documents'
-        // Upload file to MinIO
+      
+        const BUCKET_NAME = "freelancer-documents";
         const fileExt = path.extname(req.file.originalname);
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = `goverment-doc/${govIdType}`;
         const objectName = `${folder}/${fileName}`;
         const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
-        console.log('bucket',objectName)
-        // Store in S3
-        console.log('adding image to s3')
-        await minioClient.putObject(
-          BUCKET_NAME,
-          objectName,
-          req.file.buffer,
-          req.file.size,
-          { "Content-Type": req.file.mimetype }
-        );
-        const { rows: freelancer } = await query(
-          `INSERT INTO freelancer 
-          (
-            user_id,
-            profile_title,
-            gov_id_type,
-            gov_id_url,
-            first_name,
-            last_name,
-            date_of_birth,
-            phone_number,
-            created_at,
-            updated_at,
-            freelancer_full_name,
-            freelancer_email,
-            gov_id_number,
-            niche
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-          RETURNING *`,
-          [
-            newUserResMeetRub[0].user_id,      // $1
-            profileTitle,                       // $2
-            govIdType,                          // $3
-            govIdUrl,                           // $4
-            firstName,                          // $5
-            lastName,                           // $6
-            dateOfBirth,                        // $7
-            phoneNumber,                        // $8
-            currentDateTime,                    // $9 - created_at
-            currentDateTime,                    // $10 - updated_at
-            `${firstName} ${lastName}`,         // $11 - freelancer_full_name
-            email,                              // $12 - freelancer_email
-            govId,                              // $13 - gov_id_number
-            niche                               // $14 - niche
-          ]
-        );
-        serviceOffred.forEach(async (service) => {
-          await query(
-            "insert into services (freelancer_id,sercvice_category,created_at,updated_at) VALUES ($1, $2, $3, $4)",
+      
+        // Start transaction
+        const client = await pool.connect();
+        
+        try {
+          await client.query('BEGIN');
+      
+          // Upload file to MinIO first
+          console.log("bucket", objectName);
+          console.log("adding image to s3");
+          await minioClient.putObject(
+            BUCKET_NAME,
+            objectName,
+            req.file.buffer,
+            req.file.size,
+            { "Content-Type": req.file.mimetype }
+          );
+      
+          // Insert freelancer record
+          const { rows: freelancer } = await client.query(
+            `INSERT INTO freelancer 
+            (
+              user_id,
+              profile_title,
+              gov_id_type,
+              gov_id_url,
+              first_name,
+              last_name,
+              date_of_birth,
+              phone_number,
+              created_at,
+              updated_at,
+              freelancer_full_name,
+              freelancer_email,
+              gov_id_number,
+              niche
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING *`,
             [
-              freelancer[0].freelancer_id,
-              service,
-              currentTimestamp,
-              currentTimestamp,
+              newUserResMeetRub[0].user_id,
+              profileTitle,
+              govIdType,
+              govIdUrl,
+              firstName,
+              lastName,
+              dateOfBirth,
+              phoneNumber,
+              currentDateTime,
+              currentDateTime,
+              `${firstName} ${lastName}`,
+              email,
+              govId,
+              niche,
             ]
           );
-        });
+      
+          // Insert all services
+          for (const service of serviceOffred) {
+            await client.query(
+              "INSERT INTO services (freelancer_id, sercvice_category, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+              [
+                freelancer[0].freelancer_id,
+                service,
+                currentTimestamp,
+                currentTimestamp,
+              ]
+            );
+          }
+      
+          // Commit transaction
+          await client.query('COMMIT');
+          
+        } catch (error) {
+          // Rollback transaction on error
+          await client.query('ROLLBACK');
+          
+          // Cleanup: Delete uploaded file from MinIO if database operations failed
+          try {
+            await minioClient.removeObject(BUCKET_NAME, objectName);
+            console.log("Rolled back MinIO upload due to database error");
+          } catch (minioError) {
+            console.error("Failed to cleanup MinIO object:", minioError);
+          }
+          
+          throw error; // Re-throw to be handled by error middleware
+        } finally {
+          client.release();
+        }
       }
 
       // Prepare Welcome Email HTML
