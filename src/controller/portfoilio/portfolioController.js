@@ -4,6 +4,7 @@ const { decodedToken } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
 const path = require("path");
 const crypto = require("crypto");
+const logger = require("../../../utils/logger");
 
 const BUCKET_NAME = "freelancer-portfolios";
 const expirySeconds = 4 * 60 * 60;
@@ -27,16 +28,23 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
       });
     }
 
-    const userPortFolioData = await userPortFolios.reduce(async (accPromise, curr) => {
-      const acc = await accPromise;
-      const objectName = curr.portfolio_item_url.slice(3).join("/");
-      const url = await minioClient.presignedGetObject(BUCKET_NAME, objectName, expirySeconds);
+    const userPortFolioData = await userPortFolios.reduce(
+      async (accPromise, curr) => {
+        const acc = await accPromise;
+        const objectName = curr.portfolio_item_url.slice(3).join("/");
+        const url = await minioClient.presignedGetObject(
+          BUCKET_NAME,
+          objectName,
+          expirySeconds
+        );
 
-      curr.portfolio_item_url = url;
-      const key = curr.portfolio_item_service_type;
-      (acc[key] ||= []).push(curr);
-      return acc;
-    }, Promise.resolve({}));
+        curr.portfolio_item_url = url;
+        const key = curr.portfolio_item_service_type;
+        (acc[key] ||= []).push(curr);
+        return acc;
+      },
+      Promise.resolve({})
+    );
 
     return res.status(200).json({
       status: "success",
@@ -47,7 +55,6 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
     return next(new AppError("Failed to get portfolio", 500));
   }
 };
-
 
 const addFreelancerPortfolio = async (req, res, next) => {
   const uploadedFiles = [];
@@ -99,7 +106,7 @@ const addFreelancerPortfolio = async (req, res, next) => {
       }
 
       const fileExt = path.extname(file.originalname);
-      const fileName = `${crypto.randomUUID()}${fileExt}`;
+      const fileName = `${fileExt}`;
       const folder = `${type}/${user.user_id}`;
       const objectName = `${folder}/${fileName}`;
       const fileUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
@@ -122,7 +129,6 @@ const addFreelancerPortfolio = async (req, res, next) => {
     }
 
     // Start database transaction
-
     try {
       await client.query("BEGIN");
 
@@ -173,7 +179,7 @@ const addFreelancerPortfolio = async (req, res, next) => {
       client.release();
     }
   } catch (error) {
-    console.error("Portfolio upload error:", error);
+    logger.error("Portfolio upload error:", error);
 
     // If error occurred before transaction, cleanup MinIO files
     if (uploadedFiles.length > 0 && !error.message.includes("ROLLBACK")) {
@@ -190,7 +196,73 @@ const addFreelancerPortfolio = async (req, res, next) => {
   }
 };
 
+const updateFreelancerPortfolio = async (req, res, next) => {
+  const client = await pool.connect(); // get a dedicated connection
+  try {
+    const { url, type } = req.body;
+    const user = decodedToken(req.cookies?.AccessToken);
+
+    if (!req.file || !url) {
+      return next(new AppError("Please provide all the details", 400));
+    }
+
+    if (!["image", "video"].includes(type)) {
+      return next(new AppError("Type must be either 'image' or 'video'", 400));
+    }
+
+    await client.query('BEGIN'); // start transaction
+
+    const objectToRemove = getObjectNameFromUrl(url, BUCKET_NAME);
+
+    // remove old file (optional — you can skip if you overwrite)
+    await minioClient.removeObject(BUCKET_NAME, objectToRemove);
+
+    const fileExt = path.extname(req.file.originalname);
+    const fileName = `${Date.now()}${fileExt}`;
+    const folder = `${type}/${user.user_id}`;
+    const objectName = `${folder}/${fileName}`;
+    const fileUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+    const oldUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectToRemove}`;
+
+    // upload new file to MinIO
+    await minioClient.putObject(BUCKET_NAME, objectName, req.file.buffer, {
+      "Content-Type": req.file.mimetype,
+    });
+
+    // generate presigned URL
+    const newUrl = await minioClient.presignedGetObject(
+      BUCKET_NAME,
+      objectName,
+      expirySeconds
+    );
+
+    // update DB record atomically
+    await client.query(
+      `UPDATE portfolio 
+       SET portfolio_item_url = $1, portfolio_item_updated_at = $2
+       WHERE portfolio_item_url = $3`,
+      [fileUrl,new Date.now(), oldUrl]
+    );
+
+    await client.query('COMMIT'); // all good — commit
+
+    return res.status(200).json({
+      status: "success",
+      message: "Portfolio item updated successfully",
+      data: { newUrl },
+    });
+  } catch (error) {
+    await client.query('ROLLBACK'); // undo any DB change
+    console.error("Update portfolio error:", error);
+    return next(new AppError("Failed to update the item", 500));
+  } finally {
+    client.release(); // always release connection
+  }
+};
+
+
 module.exports = {
   getPortfolioByFreelancerId,
   addFreelancerPortfolio,
+  updateFreelancerPortfolio,
 };
