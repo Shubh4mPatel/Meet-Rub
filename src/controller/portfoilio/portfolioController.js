@@ -6,38 +6,48 @@ const path = require("path");
 const crypto = require("crypto");
 
 const BUCKET_NAME = "freelancer-portfolios";
+const expirySeconds = 4 * 60 * 60;
 
 const getPortfolioByFreelancerId = async (req, res, next) => {
   try {
     const user = decodedToken(req.cookies?.AccessToken);
     const { rows: userPortFolios } = await query(
       `SELECT *
-FROM portfolio
-WHERE freelancer_id IN (
-  SELECT id FROM freelancer WHERE user_id = $1
-);
- `[user.id]
+       FROM portfolio
+       WHERE freelancer_id IN (
+         SELECT id FROM freelancer WHERE user_id = $1
+       );`,
+      [user.id]
     );
-    if(userPortFolios.length===0){
+
+    if (userPortFolios.length === 0) {
       return res.status(204).json({
-        status:'success',
-        message : 'no portfolio data found'
-      }) 
+        status: "success",
+        message: "no portfolio data found",
+      });
     }
-    const userPortFolioData = userPortFolios.reduce((acc, curr) => {
+
+    const userPortFolioData = await userPortFolios.reduce(async (accPromise, curr) => {
+      const acc = await accPromise;
+      const objectName = curr.portfolio_item_url.slice(3).join("/");
+      const url = await minioClient.presignedGetObject(BUCKET_NAME, objectName, expirySeconds);
+
+      curr.portfolio_item_url = url;
       const key = curr.portfolio_item_service_type;
       (acc[key] ||= []).push(curr);
       return acc;
-    }, {});
+    }, Promise.resolve({}));
+
     return res.status(200).json({
-      status:'success',
-      data : userPortFolioData,
-      message: 'portfolio data found'
-    })
+      status: "success",
+      data: userPortFolioData,
+      message: "portfolio data found",
+    });
   } catch (error) {
     return next(new AppError("Failed to get portfolio", 500));
   }
 };
+
 
 const addFreelancerPortfolio = async (req, res, next) => {
   const uploadedFiles = [];
@@ -178,4 +188,9 @@ const addFreelancerPortfolio = async (req, res, next) => {
 
     return next(new AppError("Failed to add portfolio", 500));
   }
+};
+
+module.exports = {
+  getPortfolioByFreelancerId,
+  addFreelancerPortfolio,
 };
