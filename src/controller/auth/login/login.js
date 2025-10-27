@@ -29,7 +29,7 @@ function generateTokens(user) {
 
 // Login controller
 const loginUser = async (req, res, next) => {
-
+    let roleWiseId='' 
     let { email, password } = req.body;
     email = email?.trim();
     if (!email || !password) {
@@ -56,8 +56,10 @@ const loginUser = async (req, res, next) => {
                 logger.error(`Invalid email or password`);
                 return next(new AppError("Invalid email or password", 401));
         }
-        
-        const role = (await query('SELECT user_role FROM users WHERE id = $1', [user.id])).rows[0];
+       
+        if(user.user_role=='freelancer'){
+           roleWiseId  = (await query ('select freelancer_id from freelancer where user_id=$1',[user.id])).rows[0];
+        }
         
         // Generate tokens
         const { accessToken, refreshToken } = generateTokens(user);
@@ -67,7 +69,8 @@ const loginUser = async (req, res, next) => {
         res.locals.user = {
             user_id: user.id,
             name: user.name,
-            role: role.name,
+            role: user.user_role,
+            roleWiseId : roleWiseId
         };
 
         return next();

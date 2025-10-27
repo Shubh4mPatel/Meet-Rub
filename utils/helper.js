@@ -11,7 +11,7 @@ function getObjectNameFromUrl(url, bucketName) {
       return path.replace(`/${bucketName}/`, '');
     } catch (err) {
       console.error("Invalid URL:", err);
-      return null;
+      return err;
     }
   }
   
