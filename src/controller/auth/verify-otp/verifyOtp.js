@@ -1,7 +1,6 @@
 const bcrypt = require("bcrypt");
 const query = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
-const { decryptId } = require("../../../../config/encryptDecryptId");
 const { logger } = require("../../../../utils/logger");
 const {
   sendEmailNotification,
