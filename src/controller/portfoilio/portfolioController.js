@@ -3,7 +3,6 @@ const AppError = require("../../../utils/appError");
 const { decodedToken } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
 const path = require("path");
-const crypto = require("crypto");
 const logger = require("../../../utils/logger");
 
 const BUCKET_NAME = "freelancer-portfolios";
