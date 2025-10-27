@@ -259,9 +259,129 @@ const updateFreelancerPortfolio = async (req, res, next) => {
   }
 };
 
+const deleteFreelancerPortfolio = async (req, res, next) => {
+  const client = await pool.connect();
+  const deletedFiles = [];
+  
+  try {
+    const { urls } = req.body; // Array of presigned URLs to delete
+    const user = decodedToken(req.cookies?.AccessToken);
+
+    // Validate input
+    if (!urls || !Array.isArray(urls) || urls.length === 0) {
+      return next(new AppError("Please provide portfolio URLs to delete", 400));
+    }
+
+    await client.query('BEGIN');
+
+    // Extract object names from presigned URLs and get base URLs
+    const urlsData = urls.map(presignedUrl => {
+      const objectName = getObjectNameFromPresignedUrl(presignedUrl, BUCKET_NAME);
+      const baseUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+      return { presignedUrl, objectName, baseUrl };
+    });
+
+    const baseUrls = urlsData.map(data => data.baseUrl);
+
+    // Get portfolio items belonging to the user using base URLs
+    const { rows: portfolioItems } = await query(
+      `SELECT p.id, p.portfolio_item_url 
+       FROM portfolio p
+       INNER JOIN freelancer f ON p.freelancer_id = f.id
+       WHERE p.portfolio_item_url = ANY($1) AND f.user_id = $2`,
+      [baseUrls, user.id]
+    );
+
+    if (portfolioItems.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        status: "fail",
+        message: "No portfolio items found or you don't have permission to delete them",
+      });
+    }
+
+    // Create a map of base URL to portfolio item for easier lookup
+    const portfolioMap = new Map(
+      portfolioItems.map(item => [item.portfolio_item_url, item])
+    );
+
+    // Delete files from MinIO
+    for (const urlData of urlsData) {
+      const portfolioItem = portfolioMap.get(urlData.baseUrl);
+      
+      if (!portfolioItem) {
+        deletedFiles.push({
+          url: urlData.presignedUrl,
+          objectName: urlData.objectName,
+          status: 'not_found',
+          message: 'Portfolio item not found or unauthorized'
+        });
+        continue;
+      }
+
+      try {
+        await minioClient.removeObject(BUCKET_NAME, urlData.objectName);
+        deletedFiles.push({
+          id: portfolioItem.id,
+          url: urlData.presignedUrl,
+          objectName: urlData.objectName,
+          status: 'deleted'
+        });
+      } catch (minioError) {
+        logger.error(`Failed to delete MinIO object ${urlData.objectName}:`, minioError);
+        deletedFiles.push({
+          id: portfolioItem.id,
+          url: urlData.presignedUrl,
+          objectName: urlData.objectName,
+          status: 'failed',
+          error: minioError.message
+        });
+      }
+    }
+
+    // Delete from database (only items that were found)
+    const portfolioIdsToDelete = portfolioItems.map(item => item.id);
+    
+    if (portfolioIdsToDelete.length > 0) {
+      const { rowCount } = await client.query(
+        `DELETE FROM portfolio 
+         WHERE id = ANY($1)`,
+        [portfolioIdsToDelete]
+      );
+
+      await client.query('COMMIT');
+
+      return res.status(200).json({
+        status: "success",
+        message: `Successfully deleted ${rowCount} portfolio item(s)`,
+        data: {
+          deletedCount: rowCount,
+          requestedCount: urls.length,
+          deletedFiles
+        }
+      });
+    } else {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        status: "fail",
+        message: "No valid portfolio items to delete",
+        data: { deletedFiles }
+      });
+    }
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error("Delete portfolio error:", error);
+
+    return next(new AppError("Failed to delete portfolio items", 500));
+  } finally {
+    client.release();
+  }
+};
 
 module.exports = {
   getPortfolioByFreelancerId,
   addFreelancerPortfolio,
   updateFreelancerPortfolio,
+  deleteFreelancerPortfolio,
 };
