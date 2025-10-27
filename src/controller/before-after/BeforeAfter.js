@@ -211,6 +211,8 @@ const getBeforeAfter = async (req, res, next) => {
   }
 };
 
+// add deleteAfterBefore controller
+
 module.exports = {
     uploadBeforeAfter,
     getBeforeAfter,

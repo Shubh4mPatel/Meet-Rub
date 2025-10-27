@@ -1,7 +1,7 @@
 const express = require('express');
 const upload = require('../../config/multer');
 const router = express.Router();
-const {uploadBeforeAfter}= require('../controller')
+const {uploadBeforeAfter,getBeforeAfter}= require('../controller')
 
 
 router.post('/upload', upload.fields([
@@ -14,3 +14,6 @@ router.post('/upload', upload.fields([
         maxCount: 1,
     }
 ]),uploadBeforeAfter)
+router.get('/get-after-before',getBeforeAfter)
+
+module.exports={router}
