@@ -106,63 +106,109 @@ const uploadBeforeAfter = async (req, res, next) => {
 }
 
 const getBeforeAfter = async (req, res, next) => {
-    try {
-        const user = decodedToken(req.cookies?.AccessToken);
-        const freelancerId = user?.roleWiseId;
+  try {
+    const user = decodedToken(req.cookies?.AccessToken);
+    const freelancerId = user?.roleWiseId;
 
+    // Get pagination parameters from query string with defaults
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
+    const page = parseInt(req.query.page) || 1;
 
-        const { rows: portfolios } = await query(
-            `SELECT * FROM impact 
+    // Calculate offset from page if page is provided
+    const calculatedOffset = req.query.page ? (page - 1) * limit : offset;
+
+    // Get total count for pagination metadata
+    const { rows: countResult } = await query(
+      `SELECT COUNT(*) as total 
+       FROM impact 
+       WHERE freelancer_id = $1 
+       AND before_service_url IS NOT NULL 
+       AND after_service_url IS NOT NULL`,
+      [freelancerId]
+    );
+
+    const totalRecords = parseInt(countResult[0].total);
+    const totalPages = Math.ceil(totalRecords / limit);
+
+    // Get paginated data
+    const { rows: portfolios } = await query(
+      `SELECT * FROM impact 
        WHERE freelancer_id = $1 
        AND before_service_url IS NOT NULL 
        AND after_service_url IS NOT NULL
-       ORDER BY updated_at DESC`,
-            [freelancerId]
-        );
+       ORDER BY updated_at DESC
+       LIMIT $2 OFFSET $3`,
+      [freelancerId, limit, calculatedOffset]
+    );
 
-        if (portfolios.length === 0) {
-            return res.status(204).json({
-                status: 'success',
-                message: 'No before/after data found',
-            });
-        }
-
-        // Generate presigned URLs
-        const portfoliosWithUrls = await Promise.all(
-            portfolios.map(async (portfolio) => {
-                const beforeObjectName = getObjectNameFromUrl(portfolio.before_service_url, BUCKET_NAME)
-                const afterObjectName = getObjectNameFromUrl(portfolio.after_service_url, BUCKET_NAME)
-
-                const beforeUrl = await minioClient.presignedGetObject(
-                    BUCKET_NAME,
-                    beforeObjectName,
-                    expirySeconds
-                );
-
-                const afterUrl = await minioClient.presignedGetObject(
-                    BUCKET_NAME,
-                    afterObjectName,
-                    expirySeconds
-                );
-
-                return {
-                    ...portfolio,
-                    portfolio_item_url_before: beforeUrl,
-                    portfolio_item_url_after: afterUrl,
-                };
-            })
-        );
-
-        return res.status(200).json({
-            status: 'success',
-            data: portfoliosWithUrls,
-            message: 'Before/After data found',
-        });
-
-    } catch (error) {
-        logger.error('Get before/after error:', error);
-        return next(new AppError('Failed to get before/after data', 500));
+    if (portfolios.length === 0) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'No before/after data found',
+        data: [],
+        pagination: {
+          total: totalRecords,
+          totalPages: totalPages,
+          currentPage: page,
+          limit: limit,
+          offset: calculatedOffset,
+          hasNext: page < totalPages,
+          hasPrevious: page > 1,
+        },
+      });
     }
+
+    // Generate presigned URLs
+    const portfoliosWithUrls = await Promise.all(
+      portfolios.map(async (portfolio) => {
+        const beforeObjectName = getObjectNameFromUrl(
+          portfolio.before_service_url,
+          BUCKET_NAME
+        );
+        const afterObjectName = getObjectNameFromUrl(
+          portfolio.after_service_url,
+          BUCKET_NAME
+        );
+
+        const beforeUrl = await minioClient.presignedGetObject(
+          BUCKET_NAME,
+          beforeObjectName,
+          expirySeconds
+        );
+
+        const afterUrl = await minioClient.presignedGetObject(
+          BUCKET_NAME,
+          afterObjectName,
+          expirySeconds
+        );
+
+        return {
+          ...portfolio,
+          before_service_url: beforeUrl,
+          after_service_url: afterUrl,
+        };
+      })
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      data: portfoliosWithUrls,
+      pagination: {
+        total: totalRecords,
+        totalPages: totalPages,
+        currentPage: page,
+        limit: limit,
+        offset: calculatedOffset,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1,
+      },
+      message: 'Before/After data found',
+    });
+  } catch (error) {
+    logger.error('Get before/after error:', error);
+    return next(new AppError('Failed to get before/after data', 500));
+  }
 };
 
 module.exports = {
