@@ -94,7 +94,7 @@ const getUserProfile = async (req, res, next) => {
       return res.status(200).json({
         status: "success",
         data: {
-          userGovtId: signedUrl,
+          userGovtIdUrl: signedUrl,
           userGovtIdType: rows[0]?.gov_id_type,
           userGovtIdNumber: rows[0]?.gov_id_number
         }
