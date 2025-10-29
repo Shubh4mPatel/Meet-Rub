@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const query = require('../../config/dbConfig'); // Adjust path as needed
+const {query} = require('../../config/dbConfig'); // Adjust path as needed
 const { headerKey } = require('../../config/apiHeader');
 
 const { logger } = require('../../utils/logger');
@@ -53,7 +53,6 @@ const refreshAccessToken = async (req, res, next) => {
         if (!refreshToken) {
             return res.status(401).json({ error: 'Refresh token required' });
         }
-
         // Verify refresh token
         const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
 

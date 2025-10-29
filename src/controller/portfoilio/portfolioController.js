@@ -3,7 +3,7 @@ const AppError = require("../../../utils/appError");
 const { decodedToken } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
 const path = require("path");
-const logger = require("../../../utils/logger");
+const {logger} = require("../../../utils/logger");
 
 const BUCKET_NAME = "freelancer-portfolios";
 const expirySeconds = 4 * 60 * 60;

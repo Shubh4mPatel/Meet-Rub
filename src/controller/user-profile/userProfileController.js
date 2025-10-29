@@ -4,7 +4,7 @@ const { decodedToken } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
 const path = require("path");
 const crypto = require("crypto");
-const logger = require("../../../utils/logger");
+const {logger} = require("../../../utils/logger");
 
 const BUCKET_NAME = "freelancer-documents";
 const expirySeconds = 4 * 60 * 60; // 4 hours

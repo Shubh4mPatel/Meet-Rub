@@ -2,7 +2,7 @@ const { query, pool } = require("../../../config/dbConfig");
 const { minioClient } = require("../../../config/minio");
 const AppError = require("../../../utils/appError");
 const { decodedToken } = require("../../../utils/helper");
-const logger = require("../../../utils/logger");
+const {logger} = require("../../../utils/logger");
 const path = require("path");
 const crypto = require("crypto");
 

@@ -1,7 +1,7 @@
 const { query } = require('../../../config/dbConfig');
 const AppError = require('../../../utils/appError');
 const { decodedToken } = require('../../../utils/helper');
-const logger = require('../../../utils/logger');
+const {logger} = require('../../../utils/logger');
 
 // ✅ Get all available services
 const getServices = async (req, res, next) => {
