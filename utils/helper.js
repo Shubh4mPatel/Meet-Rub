@@ -14,5 +14,13 @@ function getObjectNameFromUrl(url, bucketName) {
       return err;
     }
   }
-  
-module.exports = {decodedToken,getObjectNameFromUrl};
+  function addAssetsPrefix(rawUrl) {
+  const u = new URL(rawUrl);
+  // Normalize existing path (remove leading slash for split)
+  const parts = u.pathname.replace(/^\/+/, '').split('/');
+  // If it already starts with 'assets', do nothing
+  if (parts[0] !== 'assets') parts.unshift('assets');
+  u.pathname = '/' + parts.join('/');
+  return u.toString();
+}
+module.exports = {decodedToken,getObjectNameFromUrl,addAssetsPrefix};

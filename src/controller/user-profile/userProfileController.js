@@ -1,6 +1,6 @@
 const AppError = require("../../../utils/appError");
-const query = require("../../../config/dbConfig");
-const { decodedToken } = require("../../../utils/helper");
+const {query} = require("../../../config/dbConfig");
+const { decodedToken, addAssetsPrefix } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
 const path = require('path');  // CommonJS
 // const { BUCKET_NAME } = require("../../../config/minio");
@@ -11,6 +11,7 @@ const expirySeconds = 4 * 60 * 60; // 4 hours
 const getUserProfile = async (req, res, next) => {
   try {
     const user = decodedToken(req.cookies?.AccessToken);
+    console.log(req.query)
     const tyep = req.query.type;
     if (tyep === "basicInfo") {
       // add logic to send profile image url as well
@@ -25,13 +26,13 @@ const getUserProfile = async (req, res, next) => {
           userBasicInfo: userBasicInfo[0],
         },
       });
-    }else if(tyep==="profileImage"){
+    } else if (tyep === "profileImage") {
       const { rows: userProfileImage } = await query(
         "select profile_image_url from freelancer where user_id=$1",
         [user.user_id]
       );
-      const userProfileImageUrl= userProfileImage[0]?.profile_image_url.split("/");
-      const bucketName= userProfileImageUrl[2];
+      const userProfileImageUrl = userProfileImage[0]?.profile_image_url.split("/");
+      const bucketName = userProfileImageUrl[2];
       const objectName = userProfileImageUrl.slice(3).join('/');
       const url = await minioClient.presignedGetObject(
         bucketName,
@@ -45,7 +46,7 @@ const getUserProfile = async (req, res, next) => {
         },
       });
     }
-     else if (tyep === "govtId") {
+    else if (tyep === "govtId") {
       const { rows: userGovtId } = await query(
         "select gov_id_type,gov_id_url,gov_id_number from freelancer where user_id=$1",
         [user.user_id]
@@ -53,19 +54,20 @@ const getUserProfile = async (req, res, next) => {
       const userGovtIdUrl = userGovtId[0]?.gov_id_url.split("/");
       const bucketName = userGovtIdUrl[2];
       const objectName = userGovtIdUrl.slice(3).join("/");
-      
+
 
       const url = await minioClient.presignedGetObject(
         bucketName,
         objectName,
         expirySeconds
       );
+      // const prefixUrl=addAssetsPrefix(url)
       return res.status(200).json({
         status: "success",
         data: {
           userGovtId: url,
           userGovtIdType: userGovtId[0]?.gov_id_type,
-          userGovtIdNumber:userGovtId[0]?.gov_id_number
+          userGovtIdNumber: userGovtId[0]?.gov_id_number
         },
       });
     } else if (tyep === "bankDetails") {
@@ -83,6 +85,7 @@ const getUserProfile = async (req, res, next) => {
       return next(new AppError("Invalid type parameter", 400));
     }
   } catch (error) {
+    console.log(error)
     return next(new AppError("Failed to get user profile", 500));
   }
 };
@@ -131,7 +134,7 @@ const editProfile = async (req, res, next) => {
       });
     } else if (type === "govtId") {
       {
-        const { gov_id_type,gov_id_number } = userData;
+        const { gov_id_type, gov_id_number } = userData;
 
         if (!gov_id_type || !req.file) {
           return next(new AppError("All fields are required for govtId", 400));
@@ -152,7 +155,7 @@ const editProfile = async (req, res, next) => {
         );
         const { rows } = await query(
           "update freelancer set gov_id_type=$1,gov_id_url=$2,gov_id_number=$3 where user_id=$4 returning *",
-          [gov_id_type, gov_id_url,gov_id_number, user.user_id]
+          [gov_id_type, gov_id_url, gov_id_number, user.user_id]
         );
         return res.status(200).json({
           status: "success",

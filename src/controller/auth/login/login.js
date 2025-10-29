@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-const query = require('../../../../config/dbConfig');
+const {query} = require('../../../../config/dbConfig');
 const AppError = require("../../../../utils/appError");
 const jwt = require("jsonwebtoken");
 const { decryptId } = require("../../../../config/encryptDecryptId");
