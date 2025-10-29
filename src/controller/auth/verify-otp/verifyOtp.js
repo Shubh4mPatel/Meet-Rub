@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-const query = require("../../../../config/dbConfig");
+const {query,client} = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
 const { logger } = require("../../../../utils/logger");
 const {
@@ -10,6 +10,7 @@ const path = require("path"); // CommonJS
 const { minioClient } = require("../../../../config/minio");
 
 const verifyOtpAndProcess = async (req, res, next) => {
+  console.log("BODY:", req.body);
   let {
     email,
     encryptedPassword,
@@ -95,10 +96,10 @@ const verifyOtpAndProcess = async (req, res, next) => {
         const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
       
         // Start transaction
-        const client = await pool.connect();
+        const pool = await client.connect();
         
         try {
-          await client.query('BEGIN');
+          await pool.query('BEGIN');
       
           // Upload file to MinIO first
           console.log("bucket", objectName);
@@ -112,7 +113,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           );
       
           // Insert freelancer record
-          const { rows: freelancer } = await client.query(
+          const { rows: freelancer } = await pool.query(
             `INSERT INTO freelancer 
             (
               user_id,
@@ -133,7 +134,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING *`,
             [
-              newUserResMeetRub[0].user_id,
+              newUserResMeetRub[0].id,
               profileTitle,
               govIdType,
               govIdUrl,
@@ -151,24 +152,24 @@ const verifyOtpAndProcess = async (req, res, next) => {
           );
       
           // Insert all services
-          for (const service of serviceOffred) {
-            await client.query(
-              "INSERT INTO services (freelancer_id, sercvice_category, created_at, updated_at) VALUES ($1, $2, $3, $4)",
-              [
-                freelancer[0].freelancer_id,
-                service,
-                currentTimestamp,
-                currentTimestamp,
-              ]
-            );
-          }
+          // for (const service of serviceOffred) {
+          //   await pool.query(
+          //     "INSERT INTO services (freelancer_id, sercvice_category, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+          //     [
+          //       freelancer[0].freelancer_id,
+          //       service,
+          //       currentTimestamp,
+          //       currentTimestamp,
+          //     ]
+          //   );
+          // }
       
           // Commit transaction
-          await client.query('COMMIT');
+          await pool.query('COMMIT');
           
         } catch (error) {
           // Rollback transaction on error
-          await client.query('ROLLBACK');
+          await pool.query('ROLLBACK');
           
           // Cleanup: Delete uploaded file from MinIO if database operations failed
           try {
@@ -180,7 +181,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           
           throw error; // Re-throw to be handled by error middleware
         } finally {
-          client.release();
+          pool.release();
         }
       }
 

@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 // const sendMail = require("../../../../config/email").sendMail;
 const bcrypt = require("bcrypt");
-const query = require("../../../../config/dbConfig");
+const {query} = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
 const { logger } = require('../../../../utils/logger');
 const { sendEmailNotification } = require("../../../../producer/notificationProducer");

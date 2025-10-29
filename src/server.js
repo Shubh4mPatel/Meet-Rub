@@ -90,6 +90,8 @@ const socketHelpers = socketHandler(io);
 // Make io and socket helpers available to routes
 app.set("io", io);
 app.set("socketHelpers", socketHelpers);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use(cors(corsOptions));
 // app.use(helmet());
