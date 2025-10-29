@@ -152,17 +152,17 @@ const verifyOtpAndProcess = async (req, res, next) => {
           );
       
           // Insert all services
-          // for (const service of serviceOffred) {
-          //   await pool.query(
-          //     "INSERT INTO services (freelancer_id, sercvice_category, created_at, updated_at) VALUES ($1, $2, $3, $4)",
-          //     [
-          //       freelancer[0].freelancer_id,
-          //       service,
-          //       currentTimestamp,
-          //       currentTimestamp,
-          //     ]
-          //   );
-          // }
+          for (const service of serviceOffred) {
+            await pool.query(
+              "INSERT INTO services (freelancer_id, service_name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+              [
+                freelancer[0].freelancer_id,
+                service,
+                currentTimestamp,
+                currentTimestamp,
+              ]
+            );
+          }
       
           // Commit transaction
           await pool.query('COMMIT');
