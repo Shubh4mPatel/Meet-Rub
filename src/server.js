@@ -11,8 +11,6 @@ const socketConfig = require("../socket/socketConfig");
 const http = require("http");
 const socketIo = require("socket.io");
 const socketHandler = require("../socket/socketHandler");
-// const { startCronJobs, stopCronJobs } = require("./cron/subsciptionChecker");
-// require("./cron/dataRequestCron");
 const { logger } = require("../utils/logger");
 const { manageLogFiles } = require("../cron/logmanager");
 dotenv.config();
@@ -21,17 +19,6 @@ dotenv.config();
 const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((origin) =>
   origin.trim()
 );
-
-// Rate limiting
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // limit each IP to 100 requests per windowMs
-//   message: 'Too many requests from this IP, please try again later.',
-//   standardHeaders: true,
-//   legacyHeaders: false,
-// });
-
-// Merged CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, Postman, etc.)
@@ -67,18 +54,6 @@ const corsOptions = {
   exposedHeaders: ["Set-Cookie"],
   optionsSuccessStatus: 200, // For legacy browser support
 };
-
-// Create BullMQ queue
-// const emailQueue = new Queue("emailQueue", { connection: getRedisConnection() });
-
-// // Set up Bull Board
-// const serverAdapter = new ExpressAdapter();
-// serverAdapter.setBasePath('/admin/queues');
-
-// createBullBoard({
-//   queues: [new BullMQAdapter(emailQueue)],
-//   serverAdapter: serverAdapter,
-// });
 
 const app = express();
 const serverWithSocket = http.createServer(app);
@@ -183,29 +158,3 @@ if (process.env.NODE_ENV !== "development") {
   });
 }
 
-// Graceful shutdown (after server is defined)
-// const gracefulShutdown = (signal) => {
-//   logger.info(`Received ${signal}. Shutting down gracefully...`);
-//   stopCronJobs();
-//   server.close(() => {
-//     logger.info("Process terminated");
-//     process.exit(0);
-//   });
-// };
-
-// process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-// process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-
-// // Handle unhandled promise rejections
-// process.on("unhandledRejection", (err) => {
-//   logger.error("Unhandled Promise Rejection:", err);
-//   server.close(() => {
-//     process.exit(1);
-//   });
-// });
-
-// // Handle uncaught exceptions
-// process.on("uncaughtException", (err) => {
-//   logger.error("Uncaught Exception:", err);
-//   process.exit(1);
-// });

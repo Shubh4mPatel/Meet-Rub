@@ -1,219 +1,217 @@
-const { query, client } = require("../../../config/dbConfig");
+const { query, pool } = require("../../../config/dbConfig");
 const { minioClient } = require("../../../config/minio");
 const AppError = require("../../../utils/appError");
 const { decodedToken } = require("../../../utils/helper");
+const logger = require("../../../utils/logger");
+const path = require("path");
+const crypto = require("crypto");
 
 const BUCKET_NAME = "freelancer-portfolios";
 const expirySeconds = 4 * 60 * 60;
 
 const uploadBeforeAfter = async (req, res, next) => {
-    const uploadedFiles = [];
-    try {
-        const { matric, serviceType } = req.body;
-        const user = decodedToken(req.cookies?.AccessToken);
-        const freelancerId = user?.roleWiseId;
+  logger.info("Before/After upload started");
 
-        if (!serviceType || !matric) {
-            return next(new AppError('Service and detials are required', 400))
-        }
-        if (!req.files || !req.files.before || !req.files.after) {
-            return next(new AppError('Both before and after files are required', 400));
-        }
-        const beforeFile = req.files.before[0];
-        const afterFile = req.files.after[0];
-        await client.query('BEGIN');
+  let client;
+  const uploadedFiles = [];
 
-        // Upload both files to MinIO
-        const filesToUpload = [
-            { file: beforeFile, type: 'before' },
-            { file: afterFile, type: 'after' }
-        ];
+  try {
+    const { matric, serviceType } = req.body;
+    const user = decodedToken(req.cookies?.AccessToken);
+    const freelancerId = user?.roleWiseId;
+    client = await pool.connect();
 
-        for (const { file, type } of filesToUpload) {
+    logger.debug("Request payload", req.body);
 
-            // const mediaType = file.mimetype.startsWith('image') ? 'image' : 'video';
-            const fileExt = path.extname(file.originalname);
-            const fileName = `${fileExt}`;
-            const folder = `Impact/${user.user_id}/${type}`;
-            const objectName = `${folder}/${fileName}`;
-            const fileUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
-
-            // Upload to MinIO
-            await minioClient.putObject(
-                BUCKET_NAME,
-                objectName,
-                file.buffer,
-                file.size,
-                { 'Content-Type': file.mimetype }
-            );
-
-            uploadedFiles.push({
-                type,
-                objectName,
-                fileUrl,
-                originalName: file.originalname,
-                mimeType: file.mimetype,
-            });
-        }
-        const { rows } = await client.query(
-            `INSERT INTO impact 
-      (freelancer_id, service_type, before_service_url, 
-       after_service_url, impact_matric, 
-       created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *`,
-            [
-                freelancerId,
-                serviceType,
-                uploadedFiles.find(f => f.type === 'before').fileUrl,
-                uploadedFiles.find(f => f.type === 'after').fileUrl,
-                matric,
-                new Date.now(),
-                new Date.now(),
-            ]
-        );
-
-        await client.query('COMMIT');
-
-        res.status(201).json({
-            status: 'success',
-            message: 'Before/After files uploaded successfully',
-            data: {
-                portfolio: rows[0],
-                files: uploadedFiles,
-            },
-        });
-
-
-    } catch (error) {
-        await client.query('ROLLBACK');
-        logger.error('Before/After upload error:', error);
-
-        const filesToUpload = [
-            { file: beforeFile, type: 'before' },
-            { file: afterFile, type: 'after' }
-        ];
-        // Cleanup: Remove uploaded files from MinIO
-        for (const fileData of uploadedFiles) {
-            try {
-                await minioClient.removeObject(BUCKET_NAME, fileData.objectName);
-            } catch (minioError) {
-                logger.error('Failed to cleanup MinIO object:', minioError);
-            }
-        }
-        return next(new AppError('failed to add Impact'))
+    if (!serviceType || !matric) {
+      logger.warn("Missing required fields serviceType or matric");
+      return next(new AppError("Service and details are required", 400));
     }
-}
+
+    if (!req.files?.before?.[0] || !req.files?.after?.[0]) {
+      logger.error("Before or After file missing");
+      return next(new AppError("Both before and after files are required", 400));
+    }
+
+    const beforeFile = req.files.before[0];
+    const afterFile = req.files.after[0];
+
+    await client.query("BEGIN");
+    logger.info("DB Transaction started");
+
+    const filesToUpload = [
+      { file: beforeFile, type: "before" },
+      { file: afterFile, type: "after" }
+    ];
+
+    for (const { file, type } of filesToUpload) {
+      const fileExt = path.extname(file.originalname);
+      const fileName = `${crypto.randomUUID()}${fileExt}`;
+      const folder = `Impact/${user.user_id}/${type}`;
+      const objectName = `${folder}/${fileName}`;
+      const fileUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+
+      logger.debug(`Uploading ${type} file: ${file.originalname}`);
+
+      await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, {
+        "Content-Type": file.mimetype,
+      });
+
+      uploadedFiles.push({ type, objectName, fileUrl });
+    }
+
+    const { rows } = await client.query(
+      `INSERT INTO impact 
+        (freelancer_id, service_type, before_service_url, after_service_url,
+         impact_matric, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        freelancerId,
+        serviceType,
+        uploadedFiles.find(f => f.type === "before").fileUrl,
+        uploadedFiles.find(f => f.type === "after").fileUrl,
+        matric,
+        new Date(),
+        new Date(),
+      ]
+    );
+
+    await client.query("COMMIT");
+    logger.info("Impact saved — DB Transaction committed ✅");
+
+    return res.status(201).json({
+      status: "success",
+      message: "Before/After uploaded successfully",
+      data: rows[0],
+      files: uploadedFiles,
+    });
+
+  } catch (error) {
+    logger.error("Upload before/after error:", error);
+    if (client) await client.query("ROLLBACK");
+
+    for (const fileData of uploadedFiles) {
+      try {
+        await minioClient.removeObject(BUCKET_NAME, fileData.objectName);
+        logger.warn("File rollback success:", fileData.objectName);
+      } catch (cleanupError) {
+        logger.error("File cleanup failed:", cleanupError);
+      }
+    }
+
+    return next(new AppError("Failed to upload before/after", 500));
+  } finally {
+    if (client) client.release();
+    logger.info("DB connection released");
+  }
+};
+
+
 
 const getBeforeAfter = async (req, res, next) => {
+  logger.info("Get before/after started");
   try {
     const user = decodedToken(req.cookies?.AccessToken);
     const freelancerId = user?.roleWiseId;
 
-    // Get pagination parameters from query string with defaults
     const limit = parseInt(req.query.limit) || 10;
-    const offset = parseInt(req.query.offset) || 0;
     const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
 
-    // Calculate offset from page if page is provided
-    const calculatedOffset = req.query.page ? (page - 1) * limit : offset;
-
-    // Get total count for pagination metadata
     const { rows: countResult } = await query(
-      `SELECT COUNT(*) as total 
-       FROM impact 
-       WHERE freelancer_id = $1 
-       AND before_service_url IS NOT NULL 
-       AND after_service_url IS NOT NULL`,
+      `SELECT COUNT(*) AS total FROM impact WHERE freelancer_id=$1`,
       [freelancerId]
     );
 
-    const totalRecords = parseInt(countResult[0].total);
+    const totalRecords = Number(countResult[0].total);
     const totalPages = Math.ceil(totalRecords / limit);
 
-    // Get paginated data
-    const { rows: portfolios } = await query(
-      `SELECT * FROM impact 
-       WHERE freelancer_id = $1 
-       AND before_service_url IS NOT NULL 
-       AND after_service_url IS NOT NULL
-       ORDER BY updated_at DESC
-       LIMIT $2 OFFSET $3`,
-      [freelancerId, limit, calculatedOffset]
+    const { rows: records } = await query(
+      `SELECT * FROM impact WHERE freelancer_id=$1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3`,
+      [freelancerId, limit, offset]
     );
 
-    if (portfolios.length === 0) {
-      return res.status(200).json({
-        status: 'success',
-        message: 'No before/after data found',
-        data: [],
-        pagination: {
-          total: totalRecords,
-          totalPages: totalPages,
-          currentPage: page,
-          limit: limit,
-          offset: calculatedOffset,
-          hasNext: page < totalPages,
-          hasPrevious: page > 1,
-        },
-      });
-    }
-
-    // Generate presigned URLs
-    const portfoliosWithUrls = await Promise.all(
-      portfolios.map(async (portfolio) => {
-        const beforeObjectName = getObjectNameFromUrl(
-          portfolio.before_service_url,
-          BUCKET_NAME
-        );
-        const afterObjectName = getObjectNameFromUrl(
-          portfolio.after_service_url,
-          BUCKET_NAME
-        );
-
-        const beforeUrl = await minioClient.presignedGetObject(
-          BUCKET_NAME,
-          beforeObjectName,
-          expirySeconds
-        );
-
-        const afterUrl = await minioClient.presignedGetObject(
-          BUCKET_NAME,
-          afterObjectName,
-          expirySeconds
-        );
-
-        return {
-          ...portfolio,
-          before_service_url: beforeUrl,
-          after_service_url: afterUrl,
-        };
-      })
-    );
+    logger.debug(`Total impact found: ${totalRecords}`);
 
     return res.status(200).json({
-      status: 'success',
-      data: portfoliosWithUrls,
+      status: "success",
+      message: records.length ? "Impact data fetched" : "No before/after data",
+      data: records,
       pagination: {
         total: totalRecords,
-        totalPages: totalPages,
+        totalPages,
         currentPage: page,
-        limit: limit,
-        offset: calculatedOffset,
+        limit,
+        offset,
         hasNext: page < totalPages,
         hasPrevious: page > 1,
       },
-      message: 'Before/After data found',
     });
+
   } catch (error) {
-    logger.error('Get before/after error:', error);
-    return next(new AppError('Failed to get before/after data', 500));
+    logger.error("Error fetching before/after:", error);
+    return next(new AppError("Failed to fetch data", 500));
   }
 };
 
-// add deleteAfterBefore controller
+
+// ✅ NEW CONTROLLER — DELETE Impact Data
+const deleteBeforeAfter = async (req, res, next) => {
+  logger.info("Deleting before/after item");
+  let client;
+  try {
+    const { id } = req.body;
+    const user = decodedToken(req.cookies?.AccessToken);
+
+    if (!id) {
+      logger.warn("ID missing for delete operation");
+      return next(new AppError("Impact ID required", 400));
+    }
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    const { rows } = await client.query(
+      `SELECT before_service_url, after_service_url FROM impact 
+       WHERE id=$1 AND freelancer_id=$2`,
+      [id, user.roleWiseId]
+    );
+
+    if (!rows.length) {
+      logger.warn("No impact record found for delete");
+      return next(new AppError("Record not found or unauthorized", 404));
+    }
+
+    for (const key of ["before_service_url", "after_service_url"]) {
+      const parts = rows[0][key].split("/");
+      const objName = parts.slice(3).join("/");
+      await minioClient.removeObject(BUCKET_NAME, objName);
+      logger.debug(`Deleted file from MinIO: ${objName}`);
+    }
+
+    await client.query(`DELETE FROM impact WHERE id=$1`, [id]);
+    await client.query("COMMIT");
+
+    logger.info("Impact deleted successfully ✅");
+
+    return res.status(200).json({
+      status: "success",
+      message: "Impact deleted successfully",
+    });
+
+  } catch (error) {
+    if (client) await client.query("ROLLBACK");
+    logger.error("Delete impact error:", error);
+    return next(new AppError("Failed to delete impact", 500));
+  } finally {
+    if (client) client.release();
+  }
+};
+
 
 module.exports = {
-    uploadBeforeAfter,
-    getBeforeAfter,
+  uploadBeforeAfter,
+  getBeforeAfter,
+  deleteBeforeAfter,
 };
