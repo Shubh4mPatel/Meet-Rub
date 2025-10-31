@@ -189,6 +189,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
     if (type === "password-reset") {
       logger.info("Processing password reset");
+      if (!email || !encryptedPassword) {
+        return next(new AppError('email or password is required', 400))
+      }
 
       const { rowCount } = await query(
         `UPDATE users SET user_password=$1 WHERE user_email=$2`,
