@@ -6,15 +6,12 @@ const { addApiToRedis } = require('../../../utils/queueSender');
 
 
 const changePasswordController = async (req, res, next) => {
- 
+
 
   try {
     await addApiToRedis(req.user.user_id, "Change Password", "User Profile", req.cookies?.orangeRefreshToken);
     const { oldPassword, newPassword } = req.body;
-  
-   
 
-  
     const userId = req.user.user_id;
 
     if (!userId || !oldPassword || !newPassword) {
