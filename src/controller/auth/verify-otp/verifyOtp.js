@@ -1,70 +1,63 @@
 const bcrypt = require("bcrypt");
-const { query, pool } = require("../../../../config/dbConfig");
+const query = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
+const { decryptId } = require("../../../../config/encryptDecryptId");
 const { logger } = require("../../../../utils/logger");
-const { sendEmailNotification } = require("../../../../producer/notificationProducer");
-const path = require("path");
+const {
+  sendEmailNotification,
+} = require("../../../../producer/notificationProducer");
+// const { forEach } = require("jszip");
+const path = require("path"); // CommonJS
 const { minioClient } = require("../../../../config/minio");
-const crypto = require("crypto");
 
 const verifyOtpAndProcess = async (req, res, next) => {
-  logger.info("OTP verification request received");
+  //role,password,otp,type,email
+  let {
+    email,
+    otp,
+    type,
+    encryptedPassword,
+    role,
+    userName,
+    firstName,
+    lastName,
+    dateOfBirth,
+    profileTitle,
+    serviceOffred,
+    niche,
+    govId,
+    phoneNumber,
+    govIdType,
+  } = req.body;
+  email = email?.trim();
+  otp = otp?.trim();
 
   try {
-    let {
-      email,
-      encryptedPassword,
-      role,
-      userName,
-      firstName,
-      lastName,
-      dateOfBirth,
-      profileTitle,
-      serviceOffred,
-      niche,
-      govId,
-      phoneNumber,
-      govIdType,
-      otp,
-      type,
-    } = req.body;
-
-    email = email?.trim();
-    otp = otp?.trim();
-
-    logger.debug("Verification parameters received", {
-      email,
-      type,
-      role
-    });
-
+    // const decryptedPassword = decryptId(encryptedPassword)?.trim();
     const decryptedPassword = encryptedPassword;
-    const now = new Date();
+    const currentDateTime = new Date(Date.now());
 
-    const otpResult = await query(
-      `SELECT * FROM otp_tokens 
-       WHERE email = $1 AND type = $2 AND expires_at > $3`,
-      [email, type, now]
+    const otpRes = await query(
+      "SELECT * FROM otp_tokens WHERE email = $1 AND type = $2 AND expires_at > $3",
+      [email, type, currentDateTime]
     );
 
-    if (!otpResult.rows.length) {
-      logger.warn("Invalid or expired OTP", { email });
+    if (otpRes.rows.length === 0) {
       return res.status(400).json({
         status: "fail",
-        message: "Invalid or expired OTP"
+        error: "Invalid or expired OTP",
+        errorCode: 5024,
       });
     }
 
-    const isOtpValid = await bcrypt.compare(otp, otpResult.rows[0].otp);
+    const isOtpValid = await bcrypt.compare(otp, otpRes.rows[0].otp);
     if (!isOtpValid) {
-      logger.warn("OTP mismatch");
       return res.status(400).json({
         status: "fail",
-        message: "Invalid OTP"
+        error: "Invalid OTP",
+        errorCode: 5023,
       });
     }
-
-    logger.info("OTP validated successfully");
 
     const hashedPassword = await bcrypt.hash(decryptedPassword, 10);
 
@@ -83,57 +76,74 @@ const verifyOtpAndProcess = async (req, res, next) => {
         logger.warn("Email already registered", { email });
         return res.status(400).json({
           status: "fail",
-          message: "Email already registered"
+          error: "Email Alredy Register",
+          errorCode: 401,
         });
       }
 
-      const created_at = new Date();
-      const { rows: userRows } = await query(
-        `INSERT INTO users
-        (user_email, user_role, user_password, user_name, created_at)
-         VALUES ($1,$2,$3,$4,$5)
-         RETURNING *`,
-        [email.toLowerCase(), role, hashedPassword, userName, created_at]
+      const currentTimestamp = new Date().toUTCString();
+
+      const { rows: newUserResMeetRub } = await query(
+        "INSERT INTO users (user_email, user_role, user_password, user_name, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+        [email.toLowerCase(), role, hashedPassword, userName, currentTimestamp] // Include gender here
       );
 
-      logger.info("User created in users table", { user_id: userRows[0].id });
-
-      if (role === "freelancer") {
+      await query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
+        email,
+        type,
+      ]);
+      if (role == "freelancer") {
         if (!req.file) {
-          logger.warn("Government ID missing during freelancer signup");
-          return next(new AppError("Government ID required", 400));
+          return next(new AppError("document is required", 400));
         }
-
-        const governmentBucket = "freelancer-documents";
+      
+        const BUCKET_NAME = "freelancer-documents";
         const fileExt = path.extname(req.file.originalname);
         const fileName = `${crypto.randomUUID()}${fileExt}`;
-        const objectName = `goverment-doc/${govIdType}/${fileName}`;
-        const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${governmentBucket}/${objectName}`;
-
-        const clientConn = await pool.connect();
-
+        const folder = `goverment-doc/${govIdType}`;
+        const objectName = `${folder}/${fileName}`;
+        const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+      
+        // Start transaction
+        const client = await pool.connect();
+        
         try {
-          await clientConn.query("BEGIN");
-
-          logger.info("Uploading Gov ID to minio");
+          await client.query('BEGIN');
+      
+          // Upload file to MinIO first
+          console.log("bucket", objectName);
+          console.log("adding image to s3");
           await minioClient.putObject(
-            governmentBucket,
+            BUCKET_NAME,
             objectName,
             req.file.buffer,
             req.file.size,
             { "Content-Type": req.file.mimetype }
           );
-
-          const { rows: freelancer } = await clientConn.query(
-            `INSERT INTO freelancer (
-              user_id, profile_title, gov_id_type, gov_id_url, first_name, last_name,
-              date_of_birth, phone_number, created_at, updated_at, freelancer_full_name,
-              freelancer_email, gov_id_number, niche
+      
+          // Insert freelancer record
+          const { rows: freelancer } = await client.query(
+            `INSERT INTO freelancer 
+            (
+              user_id,
+              profile_title,
+              gov_id_type,
+              gov_id_url,
+              first_name,
+              last_name,
+              date_of_birth,
+              phone_number,
+              created_at,
+              updated_at,
+              freelancer_full_name,
+              freelancer_email,
+              gov_id_number,
+              niche
             )
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-            RETURNING freelancer_id`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING *`,
             [
-              userRows[0].id,
+              newUserResMeetRub[0].user_id,
               profileTitle,
               govIdType,
               govIdUrl,
@@ -141,36 +151,46 @@ const verifyOtpAndProcess = async (req, res, next) => {
               lastName,
               dateOfBirth,
               phoneNumber,
-              created_at,
-              created_at,
+              currentDateTime,
+              currentDateTime,
               `${firstName} ${lastName}`,
               email,
               govId,
-              niche
+              niche,
             ]
           );
-
-          const freelancerId = freelancer[0].freelancer_id;
-
+      
+          // Insert all services
           for (const service of serviceOffred) {
-            await clientConn.query(
-              `INSERT INTO services 
-               (freelancer_id, service_name, created_at, updated_at)
-               VALUES ($1,$2,$3,$4)`,
-              [freelancerId, service, created_at, created_at]
+            await client.query(
+              "INSERT INTO services (freelancer_id, sercvice_category, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+              [
+                freelancer[0].freelancer_id,
+                service,
+                currentTimestamp,
+                currentTimestamp,
+              ]
             );
           }
-
-          await clientConn.query("COMMIT");
-          logger.info("Freelancer created successfully", { freelancerId });
-
-        } catch (err) {
-          await clientConn.query("ROLLBACK");
-          await minioClient.removeObject(governmentBucket, objectName);
-          logger.error("Freelancer register rollback", { err });
-          throw err;
+      
+          // Commit transaction
+          await client.query('COMMIT');
+          
+        } catch (error) {
+          // Rollback transaction on error
+          await client.query('ROLLBACK');
+          
+          // Cleanup: Delete uploaded file from MinIO if database operations failed
+          try {
+            await minioClient.removeObject(BUCKET_NAME, objectName);
+            console.log("Rolled back MinIO upload due to database error");
+          } catch (minioError) {
+            console.error("Failed to cleanup MinIO object:", minioError);
+          }
+          
+          throw error; // Re-throw to be handled by error middleware
         } finally {
-          clientConn.release();
+          client.release();
         }
       }
       
@@ -180,50 +200,50 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
       sendEmailNotification(
         email,
-        `Welcome to Meetrub, ${userName}!`,
-        `<p>Hello ${userName}, welcome!</p>`,
+        userRegistrationSubject,
+        userRegistrationHtml,
         false
       );
 
       return res.status(200).json({
         status: "success",
-        message: "Signup successful"
+        message: "Signup successful",
       });
-    }
-
-    if (type === "password-reset") {
-      logger.info("Processing password reset");
-      if (!email || !encryptedPassword) {
-        return next(new AppError('email or password is required', 400))
-      }
-
-      const { rowCount } = await query(
-        `UPDATE users SET user_password=$1 WHERE user_email=$2`,
-        [hashedPassword, email.toLowerCase()]
-      );
-
-      if (!rowCount) {
-        logger.warn("Password reset failed — user not found");
+    } else if (type === "password-reset") {
+      const userRes = await query("SELECT * FROM users WHERE email = $1", [
+        email,
+      ]);
+      if (userRes.rows.length === 0) {
         return res.status(404).json({
           status: "fail",
-          message: "Email not found"
+          error: "Email not found",
+          errorCode: 401,
         });
       }
 
-      await query("DELETE FROM otp_tokens WHERE email=$1 AND type=$2", [email, type]);
+      await query("UPDATE users SET user_password = $1 WHERE user_email = $2", [
+        hashedPassword,
+        email.toLowerCase(),
+      ]);
+      await query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
+        email,
+        type,
+      ]);
 
       return res.status(200).json({
         status: "success",
-        message: "Password reset successful"
+        message: "Password reset succefully",
+      });
+    } else {
+      return res.status(400).json({
+        status: "fail",
+        error: "Invalid OTP",
+        errorCode: 401,
       });
     }
-
-    logger.warn("Invalid type during OTP validation");
-    return next(new AppError("Invalid OTP flow type", 400));
-
   } catch (error) {
-    logger.error("OTP verification failed", { error });
-    return next(new AppError("OTP verification failed", 500));
+    logger.error("Error during Verification Code verification:", error);
+    next(new AppError("OTP verification failed", 500));
   }
 };
 
