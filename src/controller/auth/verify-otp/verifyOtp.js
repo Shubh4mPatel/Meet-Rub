@@ -71,6 +71,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
     if (type === "email-verification") {
       logger.info("Performing user registration");
 
+      if (!role == 'freelancer' || !role == 'creator') {
+        return next(new AppError('role does not exist'))
+      }
       const existingUser = await query(
         "SELECT id FROM users WHERE user_email=$1",
         [email]
@@ -170,6 +173,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           clientConn.release();
         }
       }
+      
 
       await query("DELETE FROM otp_tokens WHERE email=$1 AND type=$2", [email, type]);
       logger.info("OTP entry deleted after success");
