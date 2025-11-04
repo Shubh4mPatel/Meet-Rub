@@ -1,4 +1,3 @@
-const { error } = require('console')
 const { query } = require('../../../config/dbConfig')
 const AppError = require('../../../utils/appError');
 const logger = require('../../../utils/logger');
