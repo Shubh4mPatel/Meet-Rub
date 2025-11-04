@@ -128,7 +128,7 @@ const requireRole = (allowedRoles) => {
         const user = decodedToken(req.cookies?.AccessToken);
 
         if (!allowedRoles.includes(user.role)) {
-            return res.status(403).json({ error: 'Insufficient permissions' });
+            return res.status(403).json({ error: 'Insufficient permissions for this role' });
         }
 
         next();

@@ -107,8 +107,6 @@ const uploadBeforeAfter = async (req, res, next) => {
   }
 };
 
-
-
 const getBeforeAfter = async (req, res, next) => {
   logger.info("Get before/after started");
   try {
@@ -154,7 +152,6 @@ const getBeforeAfter = async (req, res, next) => {
     return next(new AppError("Failed to fetch data", 500));
   }
 };
-
 
 // ✅ NEW CONTROLLER — DELETE Impact Data
 const deleteBeforeAfter = async (req, res, next) => {

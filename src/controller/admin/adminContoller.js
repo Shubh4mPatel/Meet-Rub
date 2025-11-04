@@ -26,3 +26,5 @@ const approveProfile = async (req, res, next) => {
         return next(new AppError(`failed to update user approval`, 500))
     }
 }
+
+module.exports={approveProfile}
