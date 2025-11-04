@@ -2,9 +2,10 @@ const { loginUser } = require('./auth/login/login');
 const { otpSendApi } = require('./auth/send-otp/sendOtp');
 const { verifyOtpAndProcess } = require('./auth/verify-otp/verifyOtp');
 const { getUserProfile, editProfile } = require('./user-profile/userProfileController');
-const { uploadBeforeAfter, getBeforeAfter } = require('./before-after/BeforeAfter');
+const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter } = require('./before-after/BeforeAfter');
 const { approveProfile } = require('./admin/adminContoller');
-const { addServices, getServices } = require('./services/serviceController');
+const { addServices, getServices, addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('./services/serviceController');
+const { deleteFreelancerPortfolio, updateFreelancerPortfolio, addFreelancerPortfolio, getPortfolioByFreelancerId } = require('./portfoilio/portfolioController');
 
 module.exports = {
     loginUser,
@@ -14,7 +15,16 @@ module.exports = {
     editProfile,
     uploadBeforeAfter,
     getBeforeAfter,
+    deleteBeforeAfter,
     approveProfile,
     getServices,
     addServices,
+    getPortfolioByFreelancerId,
+    addFreelancerPortfolio,
+    updateFreelancerPortfolio,
+    deleteFreelancerPortfolio,
+    addServicesByFreelancer, 
+    getServicesByFreelaner, 
+    deleteServiceByFreelancer, 
+    updateServiceByFreelancer
 };
