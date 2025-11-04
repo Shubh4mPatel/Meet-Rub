@@ -7,8 +7,8 @@ const freelancerRoutes = require('./freelancerRoutes')
 const { authenticateUser, requireRole } = require('../middleware/authMiddleware');
 
 router.use('/auth', authroutes);
-router.use('/user-profile', authenticateUser,userProfileRoutes);
-router.use('/admin',authenticateUser,requireRole(['admin']),adminRoutes)
-router.use('/freelancer',authenticateUser,requireRole(['freelancer']),freelancerRoutes)
+router.use('/user-profile', authenticateUser, userProfileRoutes);
+router.use('/admin', authenticateUser, requireRole(['admin']), adminRoutes)
+router.use('/freelancer', authenticateUser, requireRole(['freelancer']), freelancerRoutes)
 
 module.exports = router;
