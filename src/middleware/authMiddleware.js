@@ -88,7 +88,6 @@ const refreshAccessToken = async (req, res, next) => {
         });
 
         req.user = payload;
-        req.headers[headerKey.authorization] = `Bearer ${newAccessToken}`;
         next();
     } catch (error) {
         return res.status(401).json({ error: 'Token refresh failed' });
