@@ -7,10 +7,10 @@ const routes = require("./routes");
 const dotenv = require("dotenv");
 const AppError = require("../utils/appError");
 const cookieParser = require("cookie-parser");
-const socketConfig = require("../socket/socketConfig");
+// const socketConfig = require("../socket/socketConfig");
 const http = require("http");
-const socketIo = require("socket.io");
-const socketHandler = require("../socket/socketHandler");
+// const socketIo = require("socket.io");
+// const socketHandler = require("../socket/socketHandler");
 const { logger } = require("../utils/logger");
 const { manageLogFiles } = require("../cron/logmanager");
 dotenv.config();
@@ -57,14 +57,14 @@ const corsOptions = {
 
 const app = express();
 const serverWithSocket = http.createServer(app);
-const io = socketIo(serverWithSocket, socketConfig);
+// const io = socketIo(serverWithSocket, socketConfig);
 
 // Initialize socket handling
-const socketHelpers = socketHandler(io);
+// const socketHelpers = socketHandler(io);
 
 // Make io and socket helpers available to routes
-app.set("io", io);
-app.set("socketHelpers", socketHelpers);
+// app.set("io", io);
+// app.set("socketHelpers", socketHelpers);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

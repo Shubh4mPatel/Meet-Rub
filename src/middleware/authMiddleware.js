@@ -98,7 +98,7 @@ const refreshAccessToken = async (req, res, next) => {
 // Combined middleware that tries access token first, then refresh token
 const authenticateUser = async (req, res, next) => {
     // First try to verify access token
-    let token = req.cookies?. AccessToken ;
+    let token = req.cookies?.AccessToken ;
 
     if (token && token !== 'null' && token !== 'undefined' && token.trim() !== '') {
         try {
