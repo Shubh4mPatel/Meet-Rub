@@ -6,7 +6,7 @@ const logger = require('../../../utils/logger');
 const approveProfile = async (req, res, next) => {
     try {
         const { userEmail } = req.body;
-        const adminUser = decodedToken(req.cookies?.AccessToken);
+        const adminUser = req.user
         await query(
             `UPDATE users
    SET approval_status = 'approved',

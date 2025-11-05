@@ -11,7 +11,7 @@ const expirySeconds = 4 * 60 * 60;
 const getPortfolioByFreelancerId = async (req, res, next) => {
   logger.info("Fetching portfolio by freelancer ID");
   try {
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     logger.debug("Decoded user:", user);
 
     const { rows: userPortFolios } = await query(
@@ -68,7 +68,7 @@ const addFreelancerPortfolio = async (req, res, next) => {
 
   try {
     const { type, serviceType, itemDescription } = req.body;
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     logger.debug("Request body:", req.body);
 
     if (!req.files?.length) {

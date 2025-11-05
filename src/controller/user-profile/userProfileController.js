@@ -13,7 +13,8 @@ const expirySeconds = 4 * 60 * 60; // 4 hours
 const getUserProfile = async (req, res, next) => {
   logger.info("Fetching user profile");
   try {
-    const user = decodedToken(req.cookies?.AccessToken);
+
+    const user = req.user
     logger.debug("Decoded User:", user);
     const type = req.query.type;
     logger.info(`Profile fetch type: ${type}`);
@@ -133,7 +134,7 @@ const getUserProfile = async (req, res, next) => {
 const editProfile = async (req, res, next) => {
   logger.info("Updating user profile");
   try {
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     const { type, userData } = req.body;
 
     logger.debug("Edit request type:", type);

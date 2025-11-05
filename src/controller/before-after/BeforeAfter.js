@@ -17,7 +17,7 @@ const uploadBeforeAfter = async (req, res, next) => {
 
   try {
     const { matric, serviceType } = req.body;
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     const freelancerId = user?.roleWiseId;
     client = await pool.connect();
 
@@ -110,7 +110,7 @@ const uploadBeforeAfter = async (req, res, next) => {
 const getBeforeAfter = async (req, res, next) => {
   logger.info("Get before/after started");
   try {
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     const freelancerId = user?.roleWiseId;
 
     const limit = parseInt(req.query.limit) || 10;
@@ -159,7 +159,7 @@ const deleteBeforeAfter = async (req, res, next) => {
   let client;
   try {
     const { id } = req.body;
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
 
     if (!id) {
       logger.warn("ID missing for delete operation");

@@ -31,7 +31,7 @@ const addServices = async (req, res, next) => {
   logger.info("Adding services by admin");
   try {
     const { serviceType } = req.body;
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     const admin = user?.id;
 
     if (!Array.isArray(serviceType) || serviceType.length === 0) {
@@ -67,7 +67,7 @@ const addServicesByFreelancer = async (req, res, next) => {
   logger.info("Freelancer adding service");
   try {
     const { service, price, description } = req.body;
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     const freelancer_id = user?.roleWiseId;
 
     if (!service) {
@@ -99,7 +99,7 @@ const updateServiceByFreelancer = async (req, res, next) => {
   logger.info("Freelancer updating service");
   try {
     const { service, price, description, serviceId } = req.body;
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     const freelancer_id = user?.roleWiseId;
 
     if (!serviceId || !service) {
@@ -138,7 +138,7 @@ const deleteServiceByFreelancer = async (req, res, next) => {
   logger.info("Freelancer deleting service");
   try {
     const { id } = req.body;
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     const freelancer_id = user?.roleWiseId;
 
     if (!id) {
@@ -172,7 +172,7 @@ const deleteServiceByFreelancer = async (req, res, next) => {
 const getServicesByFreelaner = async (req, res, next) => {
   logger.info("Fetching freelancer services");
   try {
-    const user = decodedToken(req.cookies?.AccessToken);
+    const user = req.user
     const freelancer_id = user.roleWiseId;
 
     const { rows: services } = await query(
