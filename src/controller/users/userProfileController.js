@@ -400,4 +400,18 @@ const getAllFreelancers = async (req, res, next) => {
   }
 };
 
+
+const getFreelancerById = async (req, res, next) => {
+  logger.info("Fetching freelancer by ID");
+  try {
+    const freelancerId = req.params.id;
+    const { rows:freelancerData } = await query(
+      "SELECT freelancer_id, freelancer_full_name, profile_title, profile_image_url FROM freelancer WHERE freelancer_id = $1",
+      [freelancerId]
+    );
+    logger.debug("Freelancer ID:", freelancerId);
+  } catch (error) {
+    logger.error("Error fetching freelancer by ID:", error);
+    return next(new AppError("Failed to fetch freelancer by ID", 500));
+  }}
 module.exports = { getUserProfile, editProfile, getAllFreelancers };
