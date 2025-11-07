@@ -4,7 +4,7 @@ const { decodedToken } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
 const path = require("path");
 const crypto = require("crypto");
-const {logger} = require("../../../utils/logger");
+const { logger } = require("../../../utils/logger");
 
 const BUCKET_NAME = "freelancer-documents";
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -287,8 +287,8 @@ const getAllFreelancers = async (req, res, next) => {
     const minPrice = parseFloat(req.query.minPrice) || 0;
     const maxPrice = parseFloat(req.query.maxPrice) || Number.MAX_SAFE_INTEGER;
     // Handle serviceType as an array
-    const serviceTypes = req.query.serviceType ? 
-      (Array.isArray(req.query.serviceType) ? req.query.serviceType : [req.query.serviceType]) 
+    const serviceTypes = req.query.serviceType ?
+      (Array.isArray(req.query.serviceType) ? req.query.serviceType : [req.query.serviceType])
       : [];
 
     // Build the query based on filters
@@ -340,9 +340,9 @@ const getAllFreelancers = async (req, res, next) => {
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1
       ${search ? ` AND f.freelancer_full_name ILIKE $1` : ''}
-      ${serviceTypes.length > 0 ? 
-        ` AND s.service_type IN (${serviceTypes.map((_, i) => 
-          `$${search ? 2 + i : 1 + i}`).join(',')})` 
+      ${serviceTypes.length > 0 ?
+        ` AND s.service_type IN (${serviceTypes.map((_, i) =>
+          `$${search ? 2 + i : 1 + i}`).join(',')})`
         : ''}
       AND (s.service_price >= $${search ? (serviceTypes.length > 0 ? 2 + serviceTypes.length : 2) : (serviceTypes.length > 0 ? 1 + serviceTypes.length : 1)}
       AND s.service_price <= $${search ? (serviceTypes.length > 0 ? 3 + serviceTypes.length : 3) : (serviceTypes.length > 0 ? 2 + serviceTypes.length : 2)})
@@ -363,7 +363,7 @@ const getAllFreelancers = async (req, res, next) => {
           const parts = freelancer.profile_image_url.split('/');
           const bucketName = parts[2];
           const objectName = parts.slice(3).join('/');
-          
+
           try {
             const signedUrl = await minioClient.presignedGetObject(
               bucketName,
@@ -405,13 +405,32 @@ const getFreelancerById = async (req, res, next) => {
   logger.info("Fetching freelancer by ID");
   try {
     const freelancerId = req.params.id;
-    const { rows:freelancerData } = await query(
+    const { rows: freelancerData } = await query(
       "SELECT freelancer_id, freelancer_full_name, profile_title, profile_image_url FROM freelancer WHERE freelancer_id = $1",
       [freelancerId]
     );
+    const { rows: portfolioData } = await query(
+      `SELECT 
+    portfolio_item_service_type,
+    json_agg(
+        json_build_object(
+            'portfolio_id', portfolio_id,
+            'portfolio_item_url', portfolio_item_url,
+            'portfolio_item_description', portfolio_item_description
+        )
+    ) as portfolio_items
+FROM portfolio 
+WHERE freelancer_id = $1
+GROUP BY portfolio_item_service_type
+ORDER BY portfolio_item_service_type;`,
+      [freelancerId]
+    );
+    const {rows : afterBeforeData} = await query(`
+      SELECT`)
     logger.debug("Freelancer ID:", freelancerId);
   } catch (error) {
     logger.error("Error fetching freelancer by ID:", error);
     return next(new AppError("Failed to fetch freelancer by ID", 500));
-  }}
+  }
+}
 module.exports = { getUserProfile, editProfile, getAllFreelancers };
