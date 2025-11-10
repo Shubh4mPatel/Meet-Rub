@@ -400,6 +400,7 @@ const getAllFreelancers = async (req, res, next) => {
   }
 };
 
+// ✅ GET FREELANCER BY ID
 const getFreelancerById = async (req, res, next) => {
   logger.info("Fetching freelancer by ID");
   try {
