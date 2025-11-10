@@ -400,7 +400,6 @@ const getAllFreelancers = async (req, res, next) => {
   }
 };
 
-
 const getFreelancerById = async (req, res, next) => {
   logger.info("Fetching freelancer by ID");
   try {
@@ -433,4 +432,5 @@ ORDER BY portfolio_item_service_type;`,
     return next(new AppError("Failed to fetch freelancer by ID", 500));
   }
 }
+
 module.exports = { getUserProfile, editProfile, getAllFreelancers };
