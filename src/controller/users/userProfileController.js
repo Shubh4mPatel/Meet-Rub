@@ -434,4 +434,24 @@ ORDER BY portfolio_item_service_type;`,
   }
 }
 
+const addFreelancerToWhitelist = async (req, res, next) => {
+  // Implementation goes here
+  try{
+    user=req.user;
+    const freelancerId = req.params.id;
+    await query(
+      "INSERT INTO whitelist (user_id, freelancer_id,created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+      [user.user_id, freelancerId,new Date()]
+    );
+    logger.info(`Freelancer ${freelancerId} added to whitelist for user ${user.user_id}`);
+    return res.status(200).json({
+      status: "success",
+      message: "Freelancer added to whitelist successfully"
+    });
+
+  }catch(error){
+    return next(new AppError("Failed to add freelancer to whitelist", 500));
+  }
+}
+
 module.exports = { getUserProfile, editProfile, getAllFreelancers };
