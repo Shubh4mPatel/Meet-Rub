@@ -1,6 +1,5 @@
 const AppError = require("../../../utils/appError");
 const { query } = require("../../../config/dbConfig");
-const { decodedToken } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
 const path = require("path");
 const crypto = require("crypto");
@@ -247,6 +246,7 @@ const editProfile = async (req, res, next) => {
       date_of_birth,
       phone_number,
       profile_title,
+      thumbnail_image_url
     } = userData;
 
     if (!freelancer_fullname || !freelancer_email || !date_of_birth || !phone_number || !profile_title) {
@@ -254,11 +254,61 @@ const editProfile = async (req, res, next) => {
       return next(new AppError("All basic info fields required", 400));
     }
 
-    const { rows } = await query(
-      `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5 WHERE user_id=$6 
-       RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title`,
-      [freelancer_fullname, freelancer_email, date_of_birth, phone_number, profile_title, user.user_id]
-    );
+    // Check if thumbnail file needs to be uploaded
+    let newThumbnailUrl = null;
+    if (thumbnail_image_url) {
+      // Fetch current thumbnail URL from database
+      const { rows: currentData } = await query(
+        "SELECT profile_image_url FROM freelancer WHERE user_id = $1",
+        [user.user_id]
+      );
+
+      const currentThumbnailUrl = currentData[0]?.profile_image_url;
+
+      // Check if thumbnail URL is different from the one in DB
+      if (currentThumbnailUrl !== thumbnail_image_url) {
+        // URL has changed, check if file is uploaded
+        if (!req.file) {
+          logger.warn("Thumbnail URL changed but no file uploaded");
+          return next(new AppError("Thumbnail file is required when URL changes", 400));
+        }
+
+        logger.info("Thumbnail URL changed, uploading new file to MinIO");
+
+        const fileExt = path.extname(req.file.originalname);
+        const fileName = `${crypto.randomUUID()}${fileExt}`;
+        const folder = "freelancer-profile-image";
+        const objectName = `${folder}/${fileName}`;
+        newThumbnailUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+
+        // Upload to MinIO
+        await minioClient.putObject(
+          BUCKET_NAME,
+          objectName,
+          req.file.buffer,
+          req.file.size,
+          { "Content-Type": req.file.mimetype }
+        );
+
+        logger.info("New thumbnail uploaded successfully to MinIO");
+      } else {
+        logger.info("Thumbnail URL unchanged, skipping upload");
+      }
+    }
+
+    // Update database with or without new thumbnail URL
+    let updateQuery, updateParams;
+    if (newThumbnailUrl) {
+      updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5, profile_image_url=$6 WHERE user_id=$7
+       RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, profile_image_url`;
+      updateParams = [freelancer_fullname, freelancer_email, date_of_birth, phone_number, profile_title, newThumbnailUrl, user.user_id];
+    } else {
+      updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5 WHERE user_id=$6
+       RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, profile_image_url`;
+      updateParams = [freelancer_fullname, freelancer_email, date_of_birth, phone_number, profile_title, user.user_id];
+    }
+
+    const { rows } = await query(updateQuery, updateParams);
 
     logger.info("Basic info updated successfully");
     return res.status(200).json({
