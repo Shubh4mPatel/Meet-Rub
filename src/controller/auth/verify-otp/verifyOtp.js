@@ -6,29 +6,44 @@ const { logger } = require("../../../../utils/logger");
 const {
   sendEmailNotification,
 } = require("../../../../producer/notificationProducer");
-// const { forEach } = require("jszip");
 const path = require("path"); // CommonJS
 const { minioClient } = require("../../../../config/minio");
+const Joi = require("joi"); // Add Joi for validation
+
+// Define validation schema
+const verifyOtpSchema = Joi.object({
+  email: Joi.string().email().required(),
+  otp: Joi.string().required(),
+  type: Joi.string().valid("email-verification", "password-reset").required(),
+  encryptedPassword: Joi.string().required(),
+  role: Joi.string().valid("freelancer", "creator").optional(),
+  UserData: Joi.object({
+    firstName: Joi.string().optional(),
+    lastName: Joi.string().optional(),
+    dateOfBirth: Joi.date().less("now").iso().optional(), // Must be a valid date in the past
+    profileTitle: Joi.string().optional(),
+    serviceOffred: Joi.array().items(Joi.string()).optional(),
+    niche: Joi.array().items(Joi.string()).optional(), // Changed to array of strings
+    govId: Joi.string().optional(),
+    phoneNumber: Joi.string()
+      .pattern(/^\+?[1-9]\d{1,14}$/) // Must be a valid E.164 phone number
+      .optional(),
+    govIdType: Joi.string().optional(),
+  }).optional(),
+});
 
 const verifyOtpAndProcess = async (req, res, next) => {
-  //role,password,otp,type,email
-  let {
-    email,
-    otp,
-    type,
-    encryptedPassword,
-    role,
-    userName,
-    firstName,
-    lastName,
-    dateOfBirth,
-    profileTitle,
-    serviceOffred,
-    niche,
-    govId,
-    phoneNumber,
-    govIdType,
-  } = req.body;
+  // Validate req.body
+  const { error } = verifyOtpSchema.validate(req.body, { abortEarly: false });
+  if (error) {
+    return res.status(400).json({
+      status: "fail",
+      message: error.details.map((detail) => detail.message),
+    });
+  }
+
+  let { email, otp, type, encryptedPassword, role } = req.body;
+  const { UserData } = req.body;
   email = email?.trim();
   otp = otp?.trim();
 
@@ -64,8 +79,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
     if (type === "email-verification") {
       logger.info("Performing user registration");
 
-      if (!role == 'freelancer' || !role == 'creator') {
-        return next(new AppError('role does not exist'))
+      if (!role == "freelancer" || !role == "creator") {
+        return next(new AppError("role does not exist"));
       }
       const existingUser = await query(
         "SELECT id FROM users WHERE user_email=$1",
@@ -92,24 +107,35 @@ const verifyOtpAndProcess = async (req, res, next) => {
         email,
         type,
       ]);
-      if (role == "freelancer") {
+      if (role === "freelancer") {
+        const {
+          firstName,
+          lastName,
+          dateOfBirth,
+          profileTitle,
+          serviceOffred,
+          niche,
+          govId,
+          phoneNumber,
+          govIdType,
+        } = UserData;
         if (!req.file) {
           return next(new AppError("document is required", 400));
         }
-      
+
         const BUCKET_NAME = "freelancer-documents";
         const fileExt = path.extname(req.file.originalname);
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = `goverment-doc/${govIdType}`;
         const objectName = `${folder}/${fileName}`;
         const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
-      
+
         // Start transaction
         const client = await pool.connect();
-        
+
         try {
-          await client.query('BEGIN');
-      
+          await client.query("BEGIN");
+
           // Upload file to MinIO first
           console.log("bucket", objectName);
           console.log("adding image to s3");
@@ -120,7 +146,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
             req.file.size,
             { "Content-Type": req.file.mimetype }
           );
-      
+
           // Insert freelancer record
           const { rows: freelancer } = await client.query(
             `INSERT INTO freelancer 
@@ -159,7 +185,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
               niche,
             ]
           );
-      
+
           // Insert all services
           for (const service of serviceOffred) {
             await client.query(
@@ -172,14 +198,22 @@ const verifyOtpAndProcess = async (req, res, next) => {
               ]
             );
           }
-      
+
           // Commit transaction
-          await client.query('COMMIT');
-          
+          await client.query("COMMIT");
+
+          logger.info("User registration successful", { email });
+
+          sendEmailNotification(
+            email,
+            userRegistrationSubject,
+            userRegistrationHtml,
+            false
+          );
         } catch (error) {
           // Rollback transaction on error
-          await client.query('ROLLBACK');
-          
+          await client.query("ROLLBACK");
+
           // Cleanup: Delete uploaded file from MinIO if database operations failed
           try {
             await minioClient.removeObject(BUCKET_NAME, objectName);
@@ -187,23 +221,77 @@ const verifyOtpAndProcess = async (req, res, next) => {
           } catch (minioError) {
             console.error("Failed to cleanup MinIO object:", minioError);
           }
-          
+
+          throw error; // Re-throw to be handled by error middleware
+        } finally {
+          client.release();
+        }
+      } else if (role === "creator") {
+        const { firstName, lastName, niche, bio, socialLinks } = UserData;
+
+        // Validate required fields for creator
+        if (!firstName || !lastName || !niche || !bio) {
+          return next(new AppError("Missing required fields for creator", 400));
+        }
+
+        // Start transaction
+        const client = await pool.connect();
+
+        try {
+          await client.query("BEGIN");
+
+          // Insert creator record
+          const { rows: creator } = await client.query(
+            `INSERT INTO creators 
+            (
+              user_id,
+              first_name,
+              last_name,
+              niche,
+              bio,
+              social_links,
+              created_at,
+              updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING *`,
+            [
+              newUserResMeetRub[0].user_id,
+              firstName,
+              lastName,
+              niche,
+              bio,
+              socialLinks || null,
+              currentDateTime,
+              currentDateTime,
+            ]
+          );
+
+          // Commit transaction
+          await client.query("COMMIT");
+
+          logger.info("Creator registration successful", { email });
+
+          sendEmailNotification(
+            email,
+            userRegistrationSubject,
+            userRegistrationHtml,
+            false
+          );
+        } catch (error) {
+          // Rollback transaction on error
+          await client.query("ROLLBACK");
           throw error; // Re-throw to be handled by error middleware
         } finally {
           client.release();
         }
       }
-      
 
-      await query("DELETE FROM otp_tokens WHERE email=$1 AND type=$2", [email, type]);
-      logger.info("OTP entry deleted after success");
-
-      sendEmailNotification(
+      await query("DELETE FROM otp_tokens WHERE email=$1 AND type=$2", [
         email,
-        userRegistrationSubject,
-        userRegistrationHtml,
-        false
-      );
+        type,
+      ]);
+      logger.info("OTP entry deleted after success");
 
       return res.status(200).json({
         status: "success",
