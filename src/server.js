@@ -13,6 +13,8 @@ const http = require("http");
 // const socketHandler = require("../socket/socketHandler");
 const { logger } = require("../utils/logger");
 const { manageLogFiles } = require("../cron/logmanager");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
 dotenv.config();
 
 // Parse allowed origins
@@ -91,6 +93,12 @@ if (process.env.NODE_ENV === "development") {
 // Body parser middleware
 // app.use(express.json({ limit: '10mb' }));
 // app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Swagger documentation
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'MeetRub API Documentation',
+}));
 
 // Health check endpoint
 app.get("/api/v1/health", (req, res) => {
