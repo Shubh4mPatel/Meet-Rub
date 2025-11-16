@@ -4,7 +4,7 @@ const { verifyOtpAndProcess } = require('./auth/verify-otp/verifyOtp');
 const { getUserProfile, editProfile } = require('./users/userProfileController');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter } = require('./before-after/BeforeAfter');
 const { approveProfile } = require('./admin/adminContoller');
-const { addServices, getServices, addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('./services/serviceController');
+const { addServices, getServices, addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer ,createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion,getUserServiceRequestsToAdmin } = require('./services/serviceController');
 const { deleteFreelancerPortfolio, updateFreelancerPortfolio, addFreelancerPortfolio, getPortfolioByFreelancerId } = require('./portfoilio/portfolioController');
 
 module.exports = {
@@ -26,5 +26,9 @@ module.exports = {
     addServicesByFreelancer, 
     getServicesByFreelaner, 
     deleteServiceByFreelancer, 
-    updateServiceByFreelancer
+    updateServiceByFreelancer,
+    createSreviceRequest,
+    getUserServiceRequests,
+    getUserServiceRequestsSuggestion,
+    getUserServiceRequestsToAdmin
 };

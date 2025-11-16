@@ -1,5 +1,5 @@
 const expess = require('express')
-const { approveProfile, getServices, addServices } = require('../controller')
+const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
 const router = expess.Router()
 
 /**
@@ -107,6 +107,58 @@ router.get('/getServices', getServices)
  *         description: Forbidden - Admin role required
  */
 router.post('/addServices', addServices)
+
+/**
+ * @swagger
+ * /admin/service-requests:
+ *   get:
+ *     summary: Get all active service requests (Admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Service requests retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Service requests fetched successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       creator_id:
+ *                         type: integer
+ *                       creator_name:
+ *                         type: string
+ *                       service:
+ *                         type: string
+ *                       details:
+ *                         type: string
+ *                       budget:
+ *                         type: number
+ *                       status:
+ *                         type: string
+ *                       created_at:
+ *                         type: string
+ *                         format: date-time
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ */
+router.get('/service-requests', getUserServiceRequestsToAdmin)
 
 
 module.exports = router
