@@ -2,6 +2,9 @@ const { query } = require('../../../config/dbConfig');
 const AppError = require('../../../utils/appError');
 const { decodedToken } = require('../../../utils/helper');
 const {logger} = require('../../../utils/logger');
+const { minioClient } = require('../../../config/minio');
+
+const expirySeconds = 4 * 60 * 60; // 4 hours
 
 // ✅ Get all available services
 const getServices = async (req, res, next) => {
@@ -202,25 +205,137 @@ const getServicesByFreelaner = async (req, res, next) => {
   }
 };
 
-
 const createSreviceRequest = async (req, res, next) => {
+  logger.info("Creating service request");
   try{
-    const { service, details,budget } = req.body;
+    const { service, details, budget } = req.body;
     const user = req.user;
     const creator_id = user?.roleWiseId;
 
     if (!service || !details || !budget) {
+      logger.warn("Missing required fields for service request");
       return next(new AppError("Please provide all required fields", 400));
     }
+
     const { rows } = await query(
-      `INSERT INTO service_requests (client_id, service, details, budget, created_at, updated_at,status) 
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO service_requests (creator_id, service, details, budget, created_at, updated_at, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [creator_id, service, details, budget, new Date(),new Date(),'active']
-    );  
-  }
-  catch (error) {
+      [creator_id, service, details, budget, new Date(), new Date(), 'active']
+    );
+
+    logger.info("Service request created successfully");
+    return res.status(201).json({
+      status: "success",
+      message: "Service request created successfully",
+      data: rows[0]
+    });
+
+  } catch (error) {
+    logger.error("Failed to create service request:", error);
     return next(new AppError("Failed to create service request", 500));
+  }
+};
+
+// ✅ Get user's service requests
+const getUserServiceRequests = async (req, res, next) => {
+  logger.info("Fetching user service requests");
+  try {
+    const user = req.user;
+    const creator_id = user?.roleWiseId;
+
+    const { rows: serviceRequests } = await query(
+      `SELECT * FROM service_requests
+       WHERE creator_id = $1
+       ORDER BY created_at DESC`,
+      [creator_id]
+    );
+
+    logger.debug(`Total service requests found: ${serviceRequests.length}`);
+
+    if (serviceRequests.length < 1) {
+      logger.warn("No service requests found for user");
+      return res.status(200).json({
+        status: "success",
+        message: "No service requests found",
+        data: []
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Service requests fetched successfully",
+      data: serviceRequests
+    });
+
+  } catch (error) {
+    logger.error("Failed to fetch service requests:", error);
+    return next(new AppError("Failed to fetch service requests", 500));
+  }
+};
+
+const getUserServiceRequestsSuggestion = async (req, res, next) => {
+  logger.info("Fetching user service requests suggestions");
+  try {
+    const user = req.user;
+    const requestId = req.params.requestId;
+    const creator_id = user?.roleWiseId;
+
+    const { rows: serviceRequests } = await query(
+      `SELECT freelancer_id FROM service_request_suggestions
+       WHERE request_id = $1
+       ORDER BY created_at DESC`,
+      [requestId]
+    );
+    logger.debug(`Total suggestions found: ${serviceRequests.length}`);
+
+    if (serviceRequests.length < 1) {
+      logger.warn("No suggestions found for service request");
+      return res.status(200).json({
+        status: "success",
+        message: "No suggestions found",
+        data: []
+      });
+    }
+    const{ rows: freelancers} = await query(
+      `SELECT id, freelancer_full_name, profile_picture, rating  FROM freelancers
+       WHERE id = ANY($1::int[])`,
+      [serviceRequests.map(sr => sr.freelancer_id)]
+    );
+    logger.debug(`Total freelancers found: ${freelancers.length}`);
+
+    // Generate presigned URLs for profile pictures
+    const freelancersWithSignedUrls = await Promise.all(
+      freelancers.map(async (freelancer) => {
+        if (freelancer.profile_picture) {
+          try {
+            const parts = freelancer.profile_picture.split('/');
+            const bucketName = parts[2];
+            const objectName = parts.slice(3).join('/');
+
+            const signedUrl = await minioClient.presignedGetObject(
+              bucketName,
+              objectName,
+              expirySeconds
+            );
+            freelancer.profile_picture = signedUrl;
+          } catch (error) {
+            logger.error(`Error generating signed URL for freelancer ${freelancer.id}:`, error);
+            freelancer.profile_picture = null;
+          }
+        }
+        return freelancer;
+      })
+    );
+
+    return res.status(200).json({
+      status: "success",
+      message: "Suggestions fetched successfully",
+      data: freelancersWithSignedUrls
+    });
+  } catch (error) {
+    logger.error("Failed to fetch service request suggestions:", error);
+    return next(new AppError("Failed to fetch service request suggestions", 500));
   }
 }
 
@@ -230,5 +345,8 @@ module.exports = {
   deleteServiceByFreelancer,
   updateServiceByFreelancer,
   addServicesByFreelancer,
-  getServicesByFreelaner
+  getServicesByFreelaner,
+  createSreviceRequest,
+  getUserServiceRequests,
+  getUserServiceRequestsSuggestion
 };
