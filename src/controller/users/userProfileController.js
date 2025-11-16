@@ -341,15 +341,22 @@ const getAllFreelancers = async (req, res, next) => {
       (Array.isArray(req.query.serviceType) ? req.query.serviceType : [req.query.serviceType])
       : [];
 
+    // Sort and delivery time filters
+    const sortBy = req.query.sortBy || 'newest'; // toprated, newest
+    const deliveryTime = req.query.deliveryTime || ''; // e.g., "2-3 days"
+
     // Build the query based on filters
     let queryText = `
-      SELECT 
+      SELECT
         f.freelancer_id,
         f.freelancer_full_name,
         f.profile_title,
         f.profile_image_url,
+        f.rating,
         s.service_type,
-        s.service_price
+        s.service_price,
+        s.delivery_time,
+        s.created_at
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1
@@ -378,29 +385,66 @@ const getAllFreelancers = async (req, res, next) => {
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
+    // Add delivery time filter
+    if (deliveryTime) {
+      queryText += ` AND s.delivery_time = $${paramCount}`;
+      queryParams.push(deliveryTime);
+      paramCount++;
+    }
+
+    // Add sorting based on sortBy parameter
+    let orderByClause = '';
+    switch (sortBy) {
+      case 'toprated':
+        orderByClause = 'ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name';
+        break;
+      case 'newest':
+      default:
+        orderByClause = 'ORDER BY s.created_at DESC NULLS LAST, f.freelancer_full_name';
+        break;
+    }
+
     // Add pagination
-    queryText += ` ORDER BY f.freelancer_full_name
+    queryText += ` ${orderByClause}
                   LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
     queryParams.push(limit, offset);
 
     // Get total count for pagination
-    const countQuery = `
+    let countQuery = `
       SELECT COUNT(DISTINCT f.freelancer_id)
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1
-      ${search ? ` AND f.freelancer_full_name ILIKE $1` : ''}
-      ${serviceTypes.length > 0 ?
-        ` AND s.service_type IN (${serviceTypes.map((_, i) =>
-          `$${search ? 2 + i : 1 + i}`).join(',')})`
-        : ''}
-      AND (s.service_price >= $${search ? (serviceTypes.length > 0 ? 2 + serviceTypes.length : 2) : (serviceTypes.length > 0 ? 1 + serviceTypes.length : 1)}
-      AND s.service_price <= $${search ? (serviceTypes.length > 0 ? 3 + serviceTypes.length : 3) : (serviceTypes.length > 0 ? 2 + serviceTypes.length : 2)})
     `;
+
+    const countParams = [];
+    let countParamIndex = 1;
+
+    if (search) {
+      countQuery += ` AND f.freelancer_full_name ILIKE $${countParamIndex}`;
+      countParams.push(`%${search}%`);
+      countParamIndex++;
+    }
+
+    if (serviceTypes.length > 0) {
+      const serviceTypeParams = serviceTypes.map((_, index) => `$${countParamIndex + index}`).join(',');
+      countQuery += ` AND s.service_type IN (${serviceTypeParams})`;
+      countParams.push(...serviceTypes);
+      countParamIndex += serviceTypes.length;
+    }
+
+    countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${countParamIndex + 1})`;
+    countParams.push(minPrice, maxPrice);
+    countParamIndex += 2;
+
+    if (deliveryTime) {
+      countQuery += ` AND s.delivery_time = $${countParamIndex}`;
+      countParams.push(deliveryTime);
+    }
 
     const [results, countResult] = await Promise.all([
       query(queryText, queryParams),
-      query(countQuery, queryParams.slice(0, -2)) // Remove limit and offset params
+      query(countQuery, countParams)
     ]);
 
     const totalCount = parseInt(countResult.rows[0].count);

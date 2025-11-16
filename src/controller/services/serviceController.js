@@ -202,6 +202,28 @@ const getServicesByFreelaner = async (req, res, next) => {
   }
 };
 
+
+const createSreviceRequest = async (req, res, next) => {
+  try{
+    const { service, details,budget } = req.body;
+    const user = req.user;
+    const creator_id = user?.roleWiseId;
+
+    if (!service || !details || !budget) {
+      return next(new AppError("Please provide all required fields", 400));
+    }
+    const { rows } = await query(
+      `INSERT INTO service_requests (client_id, service, details, budget, created_at, updated_at,status) 
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [creator_id, service, details, budget, new Date(),new Date(),'active']
+    );  
+  }
+  catch (error) {
+    return next(new AppError("Failed to create service request", 500));
+  }
+}
+
 module.exports = {
   getServices,
   addServices,
