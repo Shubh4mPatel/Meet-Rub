@@ -178,8 +178,6 @@ const testNotification = async (req, res, next) => {
   }
 }
 
-
-
 const sendNotification = async (req, res, next) => {
   try {
     const { recipient_type, title, message, metadata, user_ids } = req.body;

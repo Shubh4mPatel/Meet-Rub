@@ -1,8 +1,8 @@
-const { query } = require('../../../config/dbConfig');
-const AppError = require('../../../utils/appError');
-const { decodedToken } = require('../../../utils/helper');
-const {logger} = require('../../../utils/logger');
-const { minioClient } = require('../../../config/minio');
+const { query } = require("../../../config/dbConfig");
+const AppError = require("../../../utils/appError");
+const { decodedToken } = require("../../../utils/helper");
+const { logger } = require("../../../utils/logger");
+const { minioClient } = require("../../../config/minio");
 
 const expirySeconds = 4 * 60 * 60; // 4 hours
 
@@ -10,18 +10,22 @@ const expirySeconds = 4 * 60 * 60; // 4 hours
 const getServices = async (req, res, next) => {
   logger.info("Fetching available services");
   try {
-    const { rows: services } = await query("SELECT service_type FROM available_services");
+    const { rows: services } = await query(
+      "SELECT service_type FROM available_services"
+    );
     logger.debug(`Total available services found: ${services.length}`);
 
     if (services.length < 1) {
       logger.warn("No available services found");
-      return next(new AppError("Services are not available at this moment", 404));
+      return next(
+        new AppError("Services are not available at this moment", 404)
+      );
     }
 
     return res.status(200).json({
       status: "success",
       message: "Services fetched successfully",
-      data: services
+      data: services,
     });
   } catch (error) {
     logger.error("Failed to fetch services:", error);
@@ -34,7 +38,7 @@ const addServices = async (req, res, next) => {
   logger.info("Adding services by admin");
   try {
     const { serviceType } = req.body;
-    const user = req.user
+    const user = req.user;
     const admin = user?.id;
 
     if (!Array.isArray(serviceType) || serviceType.length === 0) {
@@ -43,7 +47,7 @@ const addServices = async (req, res, next) => {
     }
 
     const results = await Promise.all(
-      serviceType.map(service =>
+      serviceType.map((service) =>
         query(
           `INSERT INTO available_services(service_type, created_by, created_at)
            VALUES ($1,$2,$3) RETURNING *`,
@@ -56,9 +60,8 @@ const addServices = async (req, res, next) => {
     return res.status(201).json({
       status: "success",
       message: "Services added successfully",
-      data: results.map(r => r.rows[0])
+      data: results.map((r) => r.rows[0]),
     });
-
   } catch (error) {
     logger.error("Failed to add services:", error);
     return next(new AppError("Failed to add services", 500));
@@ -70,7 +73,7 @@ const addServicesByFreelancer = async (req, res, next) => {
   logger.info("Freelancer adding service");
   try {
     const { service, price, description } = req.body;
-    const user = req.user
+    const user = req.user;
     const freelancer_id = user?.roleWiseId;
 
     if (!service) {
@@ -89,7 +92,7 @@ const addServicesByFreelancer = async (req, res, next) => {
     return res.status(200).json({
       status: "success",
       message: "Service added successfully",
-      data: rows[0]
+      data: rows[0],
     });
   } catch (error) {
     logger.error("Failed to add freelancer service:", error);
@@ -102,7 +105,7 @@ const updateServiceByFreelancer = async (req, res, next) => {
   logger.info("Freelancer updating service");
   try {
     const { service, price, description, serviceId } = req.body;
-    const user = req.user
+    const user = req.user;
     const freelancer_id = user?.roleWiseId;
 
     if (!serviceId || !service) {
@@ -127,9 +130,8 @@ const updateServiceByFreelancer = async (req, res, next) => {
     return res.status(200).json({
       status: "success",
       message: "Service updated successfully",
-      data: rows[0]
+      data: rows[0],
     });
-
   } catch (error) {
     logger.error("Failed to update service:", error);
     return next(new AppError("Failed to update service", 500));
@@ -141,7 +143,7 @@ const deleteServiceByFreelancer = async (req, res, next) => {
   logger.info("Freelancer deleting service");
   try {
     const { id } = req.body;
-    const user = req.user
+    const user = req.user;
     const freelancer_id = user?.roleWiseId;
 
     if (!id) {
@@ -162,9 +164,8 @@ const deleteServiceByFreelancer = async (req, res, next) => {
     logger.info(`Service ID ${id} deleted successfully`);
     return res.status(200).json({
       status: "success",
-      message: "Service deleted successfully"
+      message: "Service deleted successfully",
     });
-
   } catch (error) {
     logger.error("Failed to delete service:", error);
     return next(new AppError("Failed to delete service", 500));
@@ -175,7 +176,7 @@ const deleteServiceByFreelancer = async (req, res, next) => {
 const getServicesByFreelaner = async (req, res, next) => {
   logger.info("Fetching freelancer services");
   try {
-    const user = req.user
+    const user = req.user;
     const freelancer_id = user.roleWiseId;
 
     const { rows: services } = await query(
@@ -189,16 +190,15 @@ const getServicesByFreelaner = async (req, res, next) => {
       logger.warn("No services found for freelancer");
       return res.status(204).json({
         status: "success",
-        message: "No services found"
+        message: "No services found",
       });
     }
 
     return res.status(200).json({
       status: "success",
       message: "Services fetched successfully",
-      data: services
+      data: services,
     });
-
   } catch (error) {
     logger.error("Failed to fetch freelancer services:", error);
     return next(new AppError("Failed to fetch services", 500));
@@ -207,7 +207,7 @@ const getServicesByFreelaner = async (req, res, next) => {
 
 const createSreviceRequest = async (req, res, next) => {
   logger.info("Creating service request");
-  try{
+  try {
     const { service, details, budget } = req.body;
     const user = req.user;
     const creator_id = user?.roleWiseId;
@@ -221,16 +221,15 @@ const createSreviceRequest = async (req, res, next) => {
       `INSERT INTO service_requests (creator_id, service, details, budget, created_at, updated_at, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [creator_id, service, details, budget, new Date(), new Date(), 'active']
+      [creator_id, service, details, budget, new Date(), new Date(), "active"]
     );
 
     logger.info("Service request created successfully");
     return res.status(201).json({
       status: "success",
       message: "Service request created successfully",
-      data: rows[0]
+      data: rows[0],
     });
-
   } catch (error) {
     logger.error("Failed to create service request:", error);
     return next(new AppError("Failed to create service request", 500));
@@ -258,16 +257,15 @@ const getUserServiceRequests = async (req, res, next) => {
       return res.status(200).json({
         status: "success",
         message: "No service requests found",
-        data: []
+        data: [],
       });
     }
 
     return res.status(200).json({
       status: "success",
       message: "Service requests fetched successfully",
-      data: serviceRequests
+      data: serviceRequests,
     });
-
   } catch (error) {
     logger.error("Failed to fetch service requests:", error);
     return next(new AppError("Failed to fetch service requests", 500));
@@ -294,13 +292,13 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
       return res.status(200).json({
         status: "success",
         message: "No suggestions found",
-        data: []
+        data: [],
       });
     }
-    const{ rows: freelancers} = await query(
+    const { rows: freelancers } = await query(
       `SELECT id, freelancer_full_name, profile_picture, rating  FROM freelancers
        WHERE id = ANY($1::int[])`,
-      [serviceRequests.map(sr => sr.freelancer_id)]
+      [serviceRequests.map((sr) => sr.freelancer_id)]
     );
     logger.debug(`Total freelancers found: ${freelancers.length}`);
 
@@ -309,9 +307,9 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
       freelancers.map(async (freelancer) => {
         if (freelancer.profile_picture) {
           try {
-            const parts = freelancer.profile_picture.split('/');
+            const parts = freelancer.profile_picture.split("/");
             const bucketName = parts[2];
-            const objectName = parts.slice(3).join('/');
+            const objectName = parts.slice(3).join("/");
 
             const signedUrl = await minioClient.presignedGetObject(
               bucketName,
@@ -320,7 +318,10 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
             );
             freelancer.profile_picture = signedUrl;
           } catch (error) {
-            logger.error(`Error generating signed URL for freelancer ${freelancer.id}:`, error);
+            logger.error(
+              `Error generating signed URL for freelancer ${freelancer.id}:`,
+              error
+            );
             freelancer.profile_picture = null;
           }
         }
@@ -331,13 +332,62 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     return res.status(200).json({
       status: "success",
       message: "Suggestions fetched successfully",
-      data: freelancersWithSignedUrls
+      data: freelancersWithSignedUrls,
     });
   } catch (error) {
     logger.error("Failed to fetch service request suggestions:", error);
-    return next(new AppError("Failed to fetch service request suggestions", 500));
+    return next(
+      new AppError("Failed to fetch service request suggestions", 500)
+    );
   }
-}
+};
+
+const getUserServiceRequestsToAdmin = async (req, res, next) => {
+  logger.info("Admin fetching all user service requests");
+  try {
+    const { rows: serviceRequests } = await query(
+      `SELECT * FROM service_requests
+       WHERE status NOT IN ('assigned','completed')
+       ORDER BY created_at DESC`
+    );
+
+    logger.debug(`Total service requests found: ${serviceRequests.length}`);
+
+    if (serviceRequests.length < 1) {
+      logger.warn("No service requests found");
+      return res.status(200).json({
+        status: "success",
+        message: "No service requests found",
+        data: [],
+      });
+    }
+
+    const { rows: creators } = await query(
+      `SELECT id, full_name FROM creators
+       WHERE id = ANY($1::int[])`,
+      [serviceRequests.map((sr) => sr.creator_id)]
+    );
+
+    // Create a Map for O(1) lookup - O(m) time complexity
+    const creatorMap = new Map(creators.map(c => [c.id, c.full_name]));
+
+    // Enrich service requests with creator names - O(n) time complexity
+    const enrichedRequests = serviceRequests.map((req) => ({
+      ...req,
+      creator_name: creatorMap.get(req.creator_id) || 'Unknown'
+    }));
+
+    logger.info("Service requests fetched and enriched successfully");
+    return res.status(200).json({
+      status: "success",
+      message: "Service requests fetched successfully",
+      data: enrichedRequests,
+    });
+  } catch (error) {
+    logger.error("Failed to fetch all service requests:", error);
+    return next(new AppError("Failed to fetch all service requests", 500));
+  }
+};
 
 module.exports = {
   getServices,
@@ -348,5 +398,6 @@ module.exports = {
   getServicesByFreelaner,
   createSreviceRequest,
   getUserServiceRequests,
-  getUserServiceRequestsSuggestion
+  getUserServiceRequestsSuggestion,
+  getUserServiceRequestsToAdmin,
 };
