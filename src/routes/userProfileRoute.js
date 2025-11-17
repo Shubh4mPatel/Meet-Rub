@@ -240,7 +240,7 @@ router.get('/freelancers/:id', getFreelancerById);
 
 /**
  * @swagger
- * /user-profile/freelancers/{id}/whitelist:
+ * /user-profile/freelancers/whitelist:
  *   post:
  *     summary: Add freelancer to user's whitelist
  *     tags: [User Profile]
