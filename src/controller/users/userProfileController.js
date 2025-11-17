@@ -571,6 +571,47 @@ const getFreelancerById = async (req, res, next) => {
       [freelancerId]
     );
 
+    logger.info(`Successfully fetched freelancer data for ID: ${freelancerId}`);
+
+    // Send response with freelancer basic info and services only
+    return res.status(200).json({
+      status: "success",
+      data: {
+        freelancer: freelancerData[0],
+        services: freelancerServices.length > 0 ? freelancerServices : []
+      }
+    });
+
+  } catch (error) {
+    logger.error("Error fetching freelancer by ID:", error);
+    return next(new AppError("Failed to fetch freelancer by ID", 500));
+  }
+}
+
+// ✅ GET FREELANCER PORTFOLIO BY ID
+const getFreelancerPortfolio = async (req, res, next) => {
+  logger.info("Fetching freelancer portfolio by ID");
+
+  try {
+    const freelancerId = req.params?.id;
+
+    // Validate freelancer ID parameter
+    if (!freelancerId) {
+      logger.warn("Freelancer ID parameter is missing");
+      return next(new AppError("Freelancer ID is required", 400));
+    }
+
+    // Check if freelancer exists
+    const { rows: freelancerExists } = await query(
+      "SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1",
+      [freelancerId]
+    );
+
+    if (!freelancerExists[0]) {
+      logger.warn(`Freelancer not found with ID: ${freelancerId}`);
+      return next(new AppError("Freelancer not found", 404));
+    }
+
     const { rows: portfolioData } = await query(
       `SELECT
     portfolio_item_service_type,
@@ -628,6 +669,45 @@ ORDER BY portfolio_item_service_type`,
           })
         );
       }
+    }
+
+    logger.info(`Successfully fetched portfolio data for freelancer ID: ${freelancerId}`);
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        portfolio: portfolioData
+      }
+    });
+
+  } catch (error) {
+    logger.error("Error fetching freelancer portfolio:", error);
+    return next(new AppError("Failed to fetch freelancer portfolio", 500));
+  }
+}
+
+// ✅ GET FREELANCER IMPACT (BEFORE/AFTER) BY ID
+const getFreelancerImpact = async (req, res, next) => {
+  logger.info("Fetching freelancer impact data by ID");
+
+  try {
+    const freelancerId = req.params?.id;
+
+    // Validate freelancer ID parameter
+    if (!freelancerId) {
+      logger.warn("Freelancer ID parameter is missing");
+      return next(new AppError("Freelancer ID is required", 400));
+    }
+
+    // Check if freelancer exists
+    const { rows: freelancerExists } = await query(
+      "SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1",
+      [freelancerId]
+    );
+
+    if (!freelancerExists[0]) {
+      logger.warn(`Freelancer not found with ID: ${freelancerId}`);
+      return next(new AppError("Freelancer not found", 404));
     }
 
     const { rows: afterBeforeData } = await query(`
@@ -711,22 +791,18 @@ ORDER BY service_type`, [freelancerId]);
       }
     }
 
-    logger.info(`Successfully fetched freelancer data for ID: ${freelancerId}`);
+    logger.info(`Successfully fetched impact data for freelancer ID: ${freelancerId}`);
 
-    // Send response with all fetched data
     return res.status(200).json({
       status: "success",
       data: {
-        freelancer: freelancerData[0],
-        portfolio: portfolioData,
-        impact: afterBeforeData,
-        services: freelancerServices.length > 0 ? freelancerServices : []
+        impact: afterBeforeData
       }
     });
 
   } catch (error) {
-    logger.error("Error fetching freelancer by ID:", error);
-    return next(new AppError("Failed to fetch freelancer by ID", 500));
+    logger.error("Error fetching freelancer impact data:", error);
+    return next(new AppError("Failed to fetch freelancer impact data", 500));
   }
 }
 
@@ -750,4 +826,4 @@ const addFreelancerToWhitelist = async (req, res, next) => {
   }
 }
 
-module.exports = { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, addFreelancerToWhitelist };
+module.exports = { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist };

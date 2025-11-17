@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, addFreelancerToWhitelist } = require('../controller');
+const { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist } = require('../controller');
 const upload = require('../../config/multer');
 
 /**
@@ -213,6 +213,55 @@ router.get('/freelancers', getAllFreelancers);
  *                           type: string
  *                         profile_image_url:
  *                           type: string
+ *                     services:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           service_id:
+ *                             type: string
+ *                           service_type:
+ *                             type: string
+ *                           service_description:
+ *                             type: string
+ *                           service_price:
+ *                             type: number
+ *                           delivery_time:
+ *                             type: string
+ *       404:
+ *         description: Freelancer not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/freelancers/:id', getFreelancerById);
+
+/**
+ * @swagger
+ * /user-profile/freelancers/{id}/portfolio:
+ *   get:
+ *     summary: Get freelancer portfolio by ID
+ *     tags: [User Profile]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Freelancer ID
+ *     responses:
+ *       200:
+ *         description: Freelancer portfolio retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
  *                     portfolio:
  *                       type: array
  *                       items:
@@ -236,7 +285,61 @@ router.get('/freelancers', getAllFreelancers);
  *       500:
  *         description: Server error
  */
-router.get('/freelancers/:id', getFreelancerById);
+router.get('/freelancers/:id/portfolio', getFreelancerPortfolio);
+
+/**
+ * @swagger
+ * /user-profile/freelancers/{id}/impact:
+ *   get:
+ *     summary: Get freelancer impact (before/after) data by ID
+ *     tags: [User Profile]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Freelancer ID
+ *     responses:
+ *       200:
+ *         description: Freelancer impact data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     impact:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           service_type:
+ *                             type: string
+ *                           impact_items:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 impact_id:
+ *                                   type: string
+ *                                 before_service_url:
+ *                                   type: string
+ *                                 after_service_url:
+ *                                   type: string
+ *                                 impact_metric:
+ *                                   type: string
+ *       404:
+ *         description: Freelancer not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/freelancers/:id/impact', getFreelancerImpact);
 
 /**
  * @swagger
