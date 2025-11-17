@@ -259,11 +259,11 @@ const editProfile = async (req, res, next) => {
     if (thumbnail_image_url) {
       // Fetch current thumbnail URL from database
       const { rows: currentData } = await query(
-        "SELECT profile_image_url FROM freelancer WHERE user_id = $1",
+        "SELECT freelancer_thumbnail_image FROM freelancer WHERE user_id = $1",
         [user.user_id]
       );
 
-      const currentThumbnailUrl = currentData[0]?.profile_image_url;
+      const currentThumbnailUrl = currentData[0]?.freelancer_thumbnail_image;
 
       // Check if thumbnail URL is different from the one in DB
       if (currentThumbnailUrl !== thumbnail_image_url) {
@@ -300,11 +300,11 @@ const editProfile = async (req, res, next) => {
     let updateQuery, updateParams;
     if (newThumbnailUrl) {
       updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5, profile_image_url=$6 WHERE user_id=$7
-       RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, profile_image_url`;
+       RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
       updateParams = [freelancer_fullname, freelancer_email, date_of_birth, phone_number, profile_title, newThumbnailUrl, user.user_id];
     } else {
       updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5 WHERE user_id=$6
-       RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, profile_image_url`;
+       RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
       updateParams = [freelancer_fullname, freelancer_email, date_of_birth, phone_number, profile_title, user.user_id];
     }
 
@@ -497,12 +497,14 @@ const getAllFreelancers = async (req, res, next) => {
 // ✅ GET FREELANCER BY ID
 const getFreelancerById = async (req, res, next) => {
   logger.info("Fetching freelancer by ID");
+
   try {
     const freelancerId = req.params.id;
     const { rows: freelancerData } = await query(
-      "SELECT freelancer_id, freelancer_full_name, profile_title, profile_image_url FROM freelancer WHERE freelancer_id = $1",
+      "SELECT freelancer_full_name, profile_title, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
       [freelancerId]
     );
+
     const { rows: portfolioData } = await query(
       `SELECT 
     portfolio_item_service_type,
@@ -513,15 +515,50 @@ const getFreelancerById = async (req, res, next) => {
             'portfolio_item_description', portfolio_item_description
         )
     ) as portfolio_items
-FROM portfolio 
-WHERE freelancer_id = $1
+FROM (
+    SELECT 
+        portfolio_item_service_type,
+        portfolio_id,
+        portfolio_item_url,
+        portfolio_item_description,
+        ROW_NUMBER() OVER (PARTITION BY portfolio_item_service_type ORDER BY portfolio_id) as rn
+    FROM portfolio 
+    WHERE freelancer_id = $1
+) subquery
+WHERE rn <= 3
 GROUP BY portfolio_item_service_type
-ORDER BY portfolio_item_service_type;`,
+ORDER BY portfolio_item_service_type`,
       [freelancerId]
     );
+
     const { rows: afterBeforeData } = await query(`
-      SELECT`)
+      SELECT 
+    service_type,
+    json_agg(
+        json_build_object(
+            'impact_id', impact_id,
+            'before_service_url', before_service_url,
+            'after_service_url', after_service_url,
+            'impact_metric', impact_metric
+        )
+    ) as impact_items
+FROM (
+    SELECT 
+        service_type,
+        impact_id,
+        before_service_url,
+        after_service_url,
+        impact_metric,
+        ROW_NUMBER() OVER (PARTITION BY service_type ORDER BY impact_id) as rn
+    FROM impact 
+    WHERE freelancer_id = $1
+) subquery
+WHERE rn <= 3
+GROUP BY service_type
+ORDER BY service_type`,[freelancerId]);
+
     logger.debug("Freelancer ID:", freelancerId);
+
   } catch (error) {
     logger.error("Error fetching freelancer by ID:", error);
     return next(new AppError("Failed to fetch freelancer by ID", 500));
@@ -548,4 +585,4 @@ const addFreelancerToWhitelist = async (req, res, next) => {
   }
 }
 
-module.exports = { getUserProfile, editProfile, getAllFreelancers, getFreelancerById,addFreelancerToWhitelist };
+module.exports = { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, addFreelancerToWhitelist };
