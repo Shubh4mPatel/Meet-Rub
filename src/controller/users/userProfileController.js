@@ -499,14 +499,80 @@ const getFreelancerById = async (req, res, next) => {
   logger.info("Fetching freelancer by ID");
 
   try {
-    const freelancerId = req.params.id;
+    const freelancerId = req.params?.id;
+
+    // Validate freelancer ID parameter
+    if (!freelancerId) {
+      logger.warn("Freelancer ID parameter is missing");
+      return next(new AppError("Freelancer ID is required", 400));
+    }
+
     const { rows: freelancerData } = await query(
-      "SELECT freelancer_full_name, profile_title, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
+      "SELECT freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
+      [freelancerId]
+    );
+
+    // Check if freelancer exists
+    if (!freelancerData[0]) {
+      logger.warn(`Freelancer not found with ID: ${freelancerId}`);
+      return next(new AppError("Freelancer not found", 404));
+    }
+
+    // Generate presigned URL for profile image if it exists
+    if (freelancerData[0].profile_image_url) {
+      try {
+        const parts = freelancerData[0].profile_image_url.split("/");
+        if (parts.length >= 4) {
+          const bucketName = parts[2];
+          const objectName = parts.slice(3).join("/");
+
+          const signedUrl = await minioClient.presignedGetObject(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancerData[0].profile_image_url = signedUrl;
+        } else {
+          logger.warn(`Invalid profile image URL format: ${freelancerData[0].profile_image_url}`);
+          freelancerData[0].profile_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for profile image: ${error}`);
+        freelancerData[0].profile_image_url = null;
+      }
+    }
+
+    // Generate presigned URL for thumbnail image if it exists
+    if (freelancerData[0].freelancer_thumbnail_image) {
+      try {
+        const thumbParts = freelancerData[0].freelancer_thumbnail_image.split("/");
+        if (thumbParts.length >= 4) {
+          const thumbBucketName = thumbParts[2];
+          const thumbObjectName = thumbParts.slice(3).join("/");
+          const thumbSignedUrl = await minioClient.presignedGetObject(
+            thumbBucketName,
+            thumbObjectName,
+            expirySeconds
+          );
+          freelancerData[0].freelancer_thumbnail_image = thumbSignedUrl;
+        } else {
+          logger.warn(`Invalid thumbnail image URL format: ${freelancerData[0].freelancer_thumbnail_image}`);
+          freelancerData[0].freelancer_thumbnail_image = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for thumbnail image: ${error}`);
+        freelancerData[0].freelancer_thumbnail_image = null;
+      }
+    }
+
+    const { rows: freelancerServices } = await query(
+      `SELECT service_id, service_type, service_description, service_price, delivery_time
+       FROM services WHERE freelancer_id = $1`,
       [freelancerId]
     );
 
     const { rows: portfolioData } = await query(
-      `SELECT 
+      `SELECT
     portfolio_item_service_type,
     json_agg(
         json_build_object(
@@ -516,13 +582,13 @@ const getFreelancerById = async (req, res, next) => {
         )
     ) as portfolio_items
 FROM (
-    SELECT 
+    SELECT
         portfolio_item_service_type,
         portfolio_id,
         portfolio_item_url,
         portfolio_item_description,
         ROW_NUMBER() OVER (PARTITION BY portfolio_item_service_type ORDER BY portfolio_id) as rn
-    FROM portfolio 
+    FROM portfolio
     WHERE freelancer_id = $1
 ) subquery
 WHERE rn <= 3
@@ -531,8 +597,41 @@ ORDER BY portfolio_item_service_type`,
       [freelancerId]
     );
 
+    // Process portfolio items with proper async/await
+    for (const portfolio of portfolioData) {
+      if (portfolio.portfolio_items && Array.isArray(portfolio.portfolio_items)) {
+        portfolio.portfolio_items = await Promise.all(
+          portfolio.portfolio_items.map(async (item) => {
+            try {
+              if (item.portfolio_item_url) {
+                const parts = item.portfolio_item_url.split("/");
+                if (parts.length >= 4) {
+                  const bucketName = parts[2];
+                  const objectName = parts.slice(3).join("/");
+                  const signedUrl = await minioClient.presignedGetObject(
+                    bucketName,
+                    objectName,
+                    expirySeconds
+                  );
+                  item.portfolio_item_url = signedUrl;
+                } else {
+                  logger.warn(`Invalid portfolio URL format: ${item.portfolio_item_url}`);
+                  item.portfolio_item_url = null;
+                }
+              }
+              return item;
+            } catch (error) {
+              logger.error(`Error generating signed URL for portfolio item: ${error}`);
+              item.portfolio_item_url = null;
+              return item;
+            }
+          })
+        );
+      }
+    }
+
     const { rows: afterBeforeData } = await query(`
-      SELECT 
+      SELECT
     service_type,
     json_agg(
         json_build_object(
@@ -543,21 +642,87 @@ ORDER BY portfolio_item_service_type`,
         )
     ) as impact_items
 FROM (
-    SELECT 
+    SELECT
         service_type,
         impact_id,
         before_service_url,
         after_service_url,
         impact_metric,
         ROW_NUMBER() OVER (PARTITION BY service_type ORDER BY impact_id) as rn
-    FROM impact 
+    FROM impact
     WHERE freelancer_id = $1
 ) subquery
 WHERE rn <= 3
 GROUP BY service_type
-ORDER BY service_type`,[freelancerId]);
+ORDER BY service_type`, [freelancerId]);
 
-    logger.debug("Freelancer ID:", freelancerId);
+    // Process impact items with proper async/await
+    for (const impact of afterBeforeData) {
+      if (impact.impact_items && Array.isArray(impact.impact_items)) {
+        impact.impact_items = await Promise.all(
+          impact.impact_items.map(async (item) => {
+            try {
+              let beforeSignedUrl = null;
+              let afterSignedUrl = null;
+
+              // Process before_service_url
+              if (item.before_service_url) {
+                const beforeParts = item.before_service_url.split("/");
+                if (beforeParts.length >= 4) {
+                  const beforeBucketName = beforeParts[2];
+                  const beforeObjectName = beforeParts.slice(3).join("/");
+                  beforeSignedUrl = await minioClient.presignedGetObject(
+                    beforeBucketName,
+                    beforeObjectName,
+                    expirySeconds
+                  );
+                } else {
+                  logger.warn(`Invalid before URL format: ${item.before_service_url}`);
+                }
+              }
+
+              // Process after_service_url
+              if (item.after_service_url) {
+                const afterParts = item.after_service_url.split("/");
+                if (afterParts.length >= 4) {
+                  const afterBucketName = afterParts[2];
+                  const afterObjectName = afterParts.slice(3).join("/");
+                  afterSignedUrl = await minioClient.presignedGetObject(
+                    afterBucketName,
+                    afterObjectName,
+                    expirySeconds
+                  );
+                } else {
+                  logger.warn(`Invalid after URL format: ${item.after_service_url}`);
+                }
+              }
+
+              item.before_service_url = beforeSignedUrl;
+              item.after_service_url = afterSignedUrl;
+              return item;
+            } catch (error) {
+              logger.error(`Error generating signed URLs for impact item: ${error}`);
+              item.before_service_url = null;
+              item.after_service_url = null;
+              return item;
+            }
+          })
+        );
+      }
+    }
+
+    logger.info(`Successfully fetched freelancer data for ID: ${freelancerId}`);
+
+    // Send response with all fetched data
+    return res.status(200).json({
+      status: "success",
+      data: {
+        freelancer: freelancerData[0],
+        portfolio: portfolioData,
+        impact: afterBeforeData,
+        services: freelancerServices.length > 0 ? freelancerServices : []
+      }
+    });
 
   } catch (error) {
     logger.error("Error fetching freelancer by ID:", error);
@@ -568,7 +733,7 @@ ORDER BY service_type`,[freelancerId]);
 const addFreelancerToWhitelist = async (req, res, next) => {
   // Implementation goes here
   try {
-    user = req.user;
+    const user = req.user;
     const freelancerId = req.params.id;
     await query(
       "INSERT INTO whitelist (user_id, freelancer_id,created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
