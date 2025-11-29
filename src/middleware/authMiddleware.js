@@ -1,10 +1,9 @@
 const jwt = require('jsonwebtoken');
 const {query} = require('../../config/dbConfig'); // Adjust path as needed
-const { headerKey } = require('../../config/apiHeader');
 
-const { logger } = require('../../utils/logger');
+const { getLogger } = require('../../utils/logger');
 
-
+const logger =getLogger('middleware-logger')
 
 // Middleware to refresh access token using refresh token
 const refreshAccessToken = async (req, res, next) => {
