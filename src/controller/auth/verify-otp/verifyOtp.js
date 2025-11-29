@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-const query = require("../../../../config/dbConfig");
+const { query,pool } = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
 const { decryptId } = require("../../../../config/encryptDecryptId");
 const { logger } = require("../../../../utils/logger");
@@ -34,6 +34,8 @@ const verifyOtpSchema = Joi.object({
 
 const verifyOtpAndProcess = async (req, res, next) => {
   // Validate req.body
+  console.log("hi");
+
   const { error } = verifyOtpSchema.validate(req.body, { abortEarly: false });
   if (error) {
     return res.status(400).json({
@@ -46,6 +48,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
   const { UserData } = req.body;
   email = email?.trim();
   otp = otp?.trim();
+  const userName = UserData.firstName + " " + UserData.lastName;
+  const currentTimestamp = new Date().toUTCString();
 
   try {
     // const decryptedPassword = decryptId(encryptedPassword)?.trim();
@@ -96,18 +100,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
         });
       }
 
-      const currentTimestamp = new Date().toUTCString();
-
-      const { rows: newUserResMeetRub } = await query(
-        "INSERT INTO users (user_email, user_role, user_password, user_name, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-        [email.toLowerCase(), role, hashedPassword, userName, currentTimestamp] // Include gender here
-      );
-
-      await query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
-        email,
-        type,
-      ]);
       if (role === "freelancer") {
+        logger.info(userName);
         const {
           firstName,
           lastName,
@@ -135,6 +129,24 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
         try {
           await client.query("BEGIN");
+
+          
+
+          const { rows: newUserResMeetRub } = await client.query(
+            "INSERT INTO users (user_email, user_role, user_password, user_name, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            [
+              email.toLowerCase(),
+              role,
+              hashedPassword,
+              userName,
+              currentTimestamp,
+            ] 
+          );
+
+          await client.query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
+            email,
+            type,
+          ]);
 
           // Upload file to MinIO first
           console.log("bucket", objectName);
@@ -169,7 +181,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING *`,
             [
-              newUserResMeetRub[0].user_id,
+              newUserResMeetRub[0].id,
               profileTitle,
               govIdType,
               govIdUrl,
@@ -189,7 +201,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           // Insert all services
           for (const service of serviceOffred) {
             await client.query(
-              "INSERT INTO services (freelancer_id, sercvice_category, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+              "INSERT INTO services (freelancer_id, services_name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
               [
                 freelancer[0].freelancer_id,
                 service,
@@ -200,16 +212,16 @@ const verifyOtpAndProcess = async (req, res, next) => {
           }
 
           // Commit transaction
-          await client.query("COMMIT");
-
+          
           logger.info("User registration successful", { email });
-
-          sendEmailNotification(
-            email,
-            userRegistrationSubject,
-            userRegistrationHtml,
-            false
-          );
+          
+          // sendEmailNotification(
+            //   email,
+            //   userRegistrationSubject,
+            //   userRegistrationHtml,
+            //   false
+            // );
+            await client.query("COMMIT");
         } catch (error) {
           // Rollback transaction on error
           await client.query("ROLLBACK");
@@ -240,6 +252,22 @@ const verifyOtpAndProcess = async (req, res, next) => {
         try {
           await client.query("BEGIN");
 
+          const { rows: newUserResMeetRub } = await client.query(
+            "INSERT INTO users (user_email, user_role, user_password, user_name, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            [
+              email.toLowerCase(),
+              role,
+              hashedPassword,
+              userName,
+              currentTimestamp,
+            ] 
+          );
+
+          await client.query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
+            email,
+            type,
+          ]);
+
           // Insert creator record
           const { rows: creator } = await client.query(
             `INSERT INTO creators 
@@ -256,7 +284,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *`,
             [
-              newUserResMeetRub[0].user_id,
+              newUserResMeetRub[0].id,
               firstName,
               lastName,
               niche,
@@ -268,16 +296,18 @@ const verifyOtpAndProcess = async (req, res, next) => {
           );
 
           // Commit transaction
-          await client.query("COMMIT");
-
+          
           logger.info("Creator registration successful", { email });
+          // userRegistrationSubject
+          
+          // sendEmailNotification(
+            //   email,
+            //   userRegistrationSubject,
+            //   userRegistrationHtml,
+            //   false
+            // );
 
-          sendEmailNotification(
-            email,
-            userRegistrationSubject,
-            userRegistrationHtml,
-            false
-          );
+            await client.query("COMMIT");
         } catch (error) {
           // Rollback transaction on error
           await client.query("ROLLBACK");

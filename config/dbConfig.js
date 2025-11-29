@@ -33,4 +33,4 @@ pool.connect((err, client, release) => {
     });
 });
 
-module.exports ={query: pool.query.bind(pool),client:pool};
+module.exports ={query: pool.query.bind(pool),pool:pool};
