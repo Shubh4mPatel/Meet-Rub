@@ -144,9 +144,9 @@ router.post("/login", loginUser, setTokenCookies, (req, res) => {
  *       401:
  *         description: Unauthorized
  */
-router.post('/refresh', refreshAccessToken, (req, res) => {
-  res.status(200).json({ message: 'Access token refreshed' });
-});
+// router.post('/refresh', refreshAccessToken, (req, res) => {
+//   res.status(200).json({ message: 'Access token refreshed' });
+// });
 
 /**
  * @swagger

@@ -5,43 +5,6 @@ const { headerKey } = require('../../config/apiHeader');
 const { logger } = require('../../utils/logger');
 
 
-// Middleware to verify access token
-const verifyAccessToken = async (req, res, next) => {
-    try {
-        // Get token from cookie or Authorization header
-        let token = req.cookies?.AccessToken ||
-            req.headers.authorization?.replace('Bearer ', '');
-
-        if (!token) {
-            return res.status(401).json({ error: 'Access token required' });
-        }
-
-        // Verify the token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        // Add user info to request object
-        await query(
-            `UPDATE UserSessionLogs
-             SET logout_time = NOW()
-             WHERE id = (
-                 SELECT id FROM UserSessionLogs
-                 WHERE user_id = $1 AND logout_time IS NULL
-                 ORDER BY login_time DESC
-                 LIMIT 1
-             )`,
-            [req.user.user_id]
-        );
-        req.user = decoded;
-        next();
-    } catch (error) {
-        if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({ error: 'Access token expired' });
-        } else if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({ error: 'Invalid access token' });
-        }
-        return res.status(500).json({ error: 'Token verification failed' });
-    }
-};
 
 // Middleware to refresh access token using refresh token
 const refreshAccessToken = async (req, res, next) => {
@@ -168,7 +131,6 @@ const logout = async (req, res, next) => {
 };
 
 module.exports = {
-    verifyAccessToken,
     refreshAccessToken,
     authenticateUser,
     requireRole,
