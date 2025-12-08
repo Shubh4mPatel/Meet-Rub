@@ -1,5 +1,6 @@
 const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
+const adminController = require('../controller/razor-pay-controllers/adminController')
 const router = expess.Router()
 
 /**
@@ -159,6 +160,21 @@ router.post('/addServices', addServices)
  *         description: Forbidden - Admin role required
  */
 router.get('/service-requests', getUserServiceRequestsToAdmin)
+
+
+router.get('/escrow', adminController.getEscrowTransactions);
+router.post('/escrow/:id/release', adminController.releasePayment);
+
+// Payout management
+router.get('/payouts', adminController.getAllPayouts);
+router.get('/payouts/:id', adminController.getPayoutDetails);
+
+// Platform statistics
+router.get('/stats', adminController.getPlatformStats);
+
+// Platform settings
+router.put('/commission', adminController.updateCommission);
+
 
 
 module.exports = router

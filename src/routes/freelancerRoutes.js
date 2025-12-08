@@ -1,5 +1,6 @@
 const express = require('express');
 const upload = require('../../config/multer');
+const freelancerController = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
@@ -405,5 +406,10 @@ router.put('/portfolio/update-protfolio', updateFreelancerPortfolio)
  *         description: Portfolio item not found
  */
 router.delete('/portfolio/delete-protfolios', deleteFreelancerPortfolio)
+
+
+router.get('/payouts', freelancerController.getMyPayouts);
+router.get('/earnings', freelancerController.getEarningsSummary);
+
 
 module.exports = router 
