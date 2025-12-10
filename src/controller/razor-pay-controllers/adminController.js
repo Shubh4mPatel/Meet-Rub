@@ -2,9 +2,9 @@ const paymentService = require('../../razor-pay-services/paymentService');
 const payoutService = require('../../razor-pay-services/payoutService');
 const {pool:db} = require('../../../config/dbConfig');
 
-class AdminController {
+// class AdminController {
   // Get all escrow transactions
-  async getEscrowTransactions(req, res) {
+  const getEscrowTransactions = async (req, res) => {
     try {
       const status = req.query.status || 'HELD';
       const transactions = await paymentService.getEscrowTransactions(status);
@@ -20,7 +20,7 @@ class AdminController {
   }
 
   // Release payment to freelancer
-  async releasePayment(req, res) {
+  const releasePayment = async (req, res) => {
     try {
       const transactionId = req.params.id;
       const adminId = req.user.id;
@@ -69,7 +69,7 @@ class AdminController {
   }
 
   // Get all payouts
-  async getAllPayouts(req, res) {
+  const getAllPayouts = async (req, res) => {
     try {
       const status = req.query.status;
       
@@ -104,7 +104,7 @@ class AdminController {
   }
 
   // Get payout details
-  async getPayoutDetails(req, res) {
+  const getPayoutDetails = async (req, res) => {
     try {
       const payoutId = req.params.id;
       const payout = await payoutService.getPayout(payoutId);
@@ -121,7 +121,7 @@ class AdminController {
   }
 
   // Get platform statistics
-  async getPlatformStats(req, res) {
+  const getPlatformStats = async (req, res) => {
     try {
       // Total transactions
       const [totalTransactions] = await db.query(
@@ -173,7 +173,7 @@ class AdminController {
   }
 
   // Update platform commission percentage
-  async updateCommission(req, res) {
+  const updateCommission = async (req, res) => {
     try {
       const { percentage } = req.body;
 
@@ -195,6 +195,13 @@ class AdminController {
       res.status(500).json({ error: 'Failed to update commission' });
     }
   }
-}
 
-module.exports = new AdminController();
+
+module.exports ={
+  getEscrowTransactions,
+  releasePayment,
+  getAllPayouts,
+  getPayoutDetails,
+  getPlatformStats,
+  updateCommission
+}
