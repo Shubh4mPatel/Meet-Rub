@@ -1,0 +1,41 @@
+# Dependency directories
+# These will be installed fresh in the container via npm ci
+node_modules
+
+# Git files - not needed in production container
+.git
+.gitignore
+
+# Environment files - should be provided via Docker secrets/env vars
+# Never bake secrets into the image
+.env
+.env.local
+.env.*.local
+
+# Logs - containers should log to stdout/stderr
+logs
+*.log
+npm-debug.log*
+
+# Development files
+nodemon.json
+.vscode
+.idea
+
+# Documentation
+README.md
+*.md
+
+# Test files
+test
+*.test.js
+__tests__
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Package manager files (except lock file)
+package-lock.json is kept, but npm cache is ignored
+.npm
+.yarn
