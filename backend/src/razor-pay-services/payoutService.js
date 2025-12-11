@@ -1,5 +1,5 @@
-const db = require('../config/database');
-const razorpay = require('../config/razorpay');
+const {pool:db} = require('../../config/dbConfig');
+const razorpay = require('../../config/razorpay');
 
 class PayoutService {
   // Create fund account for freelancer

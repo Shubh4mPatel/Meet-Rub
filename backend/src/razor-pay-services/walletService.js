@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const {pool:db} = require('../../config/dbConfig');
 
 class WalletService {
   // Create wallet for new user

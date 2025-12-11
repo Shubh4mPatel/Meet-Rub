@@ -1,6 +1,6 @@
 const {pool:db} = require('../../config/dbConfig');
 
-const razorpay = require('../config/razorpay');
+const razorpay = require('../../config/razorpay');
 const walletService = require('./walletService');
 const crypto = require('crypto');
 
