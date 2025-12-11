@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
     container_name: meetrub-backend
     ports:
-      - "5000:5000"  # Map host port 3000 to container port 3000
+      - "5000:5000"  # Map host port 5000 to container port 5000
     env_file:
       - ./.env
     volumes:
@@ -19,7 +19,7 @@ services:
         condition: service_healthy  # Wait for RabbitMQ to be healthy
     restart: unless-stopped  # Restart container unless manually stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -28,7 +28,7 @@ services:
   # Notification Worker Service (Email, In-App, etc.)
   worker:
     build:
-      context: ./workers
+      context: ./worker
       dockerfile: Dockerfile
     container_name: meetrub-worker
     env_file:
