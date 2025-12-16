@@ -60,13 +60,28 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Freelancer Basic Info");
         const { rows } = await query(
-          "SELECT freelancer_full_name, date_of_birth, phone_number, profile_title, freelancer_email FROM freelancer WHERE user_id = $1",
+          "SELECT freelancer_full_name, date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
         if (!rows[0]) {
           logger.warn("No freelancer basic info found");
           return next(new AppError("Freelancer profile not found", 404));
+        }
+
+        // Generate presigned URL for thumbnail image if it exists
+        if (rows[0].freelancer_thumbnail_image) {
+          const parts = rows[0].freelancer_thumbnail_image.split("/");
+          const bucketName = parts[2];
+          const objectName = parts.slice(3).join("/");
+
+          const signedUrl = await minioClient.presignedGetObject(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+
+          rows[0].freelancer_thumbnail_image = signedUrl;
         }
 
         return res.status(200).json({
