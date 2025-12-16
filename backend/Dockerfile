@@ -32,6 +32,9 @@ COPY . .
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
+# Create logs directory with proper permissions
+RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
+
 # Change ownership of the /app directory to the nodejs user
 # This ensures the backend process can read/write files if needed
 RUN chown -R nodejs:nodejs /app
