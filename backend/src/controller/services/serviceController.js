@@ -1,4 +1,4 @@
-const { query } = require("../../../config/dbConfig");
+const { query, pool } = require("../../../config/dbConfig");
 const AppError = require("../../../utils/appError");
 const { logger } = require("../../../utils/logger");
 const { minioClient } = require("../../../config/minio");
@@ -102,6 +102,7 @@ const addServicesByFreelancer = async (req, res, next) => {
 // ✅ Freelancer Update their service
 const updateServiceByFreelancer = async (req, res, next) => {
   logger.info("Freelancer updating service");
+  const client = await pool.connect();
   try {
     const { service, price, description, serviceId, deliveryDuration } = req.body;
     const user = req.user;
@@ -112,28 +113,40 @@ const updateServiceByFreelancer = async (req, res, next) => {
       return next(new AppError("Please provide valid information", 400));
     }
 
-    const { rows } = await query(
-      `UPDATE services 
-       SET service_name=$1, price=$2, description=$3, updated_at=$4 ,=$5
+    // Begin transaction
+    await client.query('BEGIN');
+    logger.debug("Transaction started for service update");
+
+    const { rows } = await client.query(
+      `UPDATE services
+       SET service_name=$1, price=$2, description=$3, updated_at=$4, delivery_duration=$5
        WHERE id=$6 AND freelancer_id=$7
        RETURNING *`,
       [service, price, description, new Date(), deliveryDuration, serviceId, freelancer_id]
     );
 
     if (!rows.length) {
-      logger.warn("Service not found or unauthorized");
+      await client.query('ROLLBACK');
+      logger.warn("Service not found or unauthorized - transaction rolled back");
       return next(new AppError("Service not found", 404));
     }
 
-    logger.info("Service updated successfully");
+    // Commit transaction
+    await client.query('COMMIT');
+    logger.info("Service updated successfully - transaction committed");
+
     return res.status(200).json({
       status: "success",
       message: "Service updated successfully",
       data: rows[0],
     });
   } catch (error) {
-    logger.error("Failed to update service:", error);
+    await client.query('ROLLBACK');
+    logger.error("Failed to update service - transaction rolled back:", error);
     return next(new AppError("Failed to update service", 500));
+  } finally {
+    client.release();
+    logger.debug("Database connection released");
   }
 };
 
