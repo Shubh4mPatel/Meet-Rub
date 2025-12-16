@@ -40,10 +40,10 @@ RUN chown -R nodejs:nodejs /app
 # All subsequent commands and the final process will run as this user
 USER nodejs
 
-# Expose port 3000 for the backend API server
+# Expose port 7000 for the backend API server
 # This is documentation - it doesn't actually publish the port
 # Actual port publishing happens with 'docker run -p' or docker-compose ports
-EXPOSE 5000
+EXPOSE 7000
 
 # Set environment to production
 # Some npm packages behave differently in production vs development
