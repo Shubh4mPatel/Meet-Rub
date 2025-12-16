@@ -53,7 +53,7 @@ ENV NODE_ENV=production
 # The command to run when the container starts
 # Uses node directly instead of npm for better signal handling
 # src/server.js is your main entry point
-CMD ["nodemon", "src/server.js"]
+CMD ["node", "src/server.js"]
 
 # Health check (optional but recommended)
 # Docker will periodically check if the container is healthy

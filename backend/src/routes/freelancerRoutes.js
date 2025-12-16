@@ -2,6 +2,7 @@ const express = require('express');
 const upload = require('../../config/multer');
 const {getMyPayouts,getEarningsSummary } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
+const  { requireRole } =  require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
 
