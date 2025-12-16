@@ -1,6 +1,5 @@
 const { query } = require("../../../config/dbConfig");
 const AppError = require("../../../utils/appError");
-const { decodedToken } = require("../../../utils/helper");
 const { logger } = require("../../../utils/logger");
 const { minioClient } = require("../../../config/minio");
 
@@ -72,20 +71,20 @@ const addServices = async (req, res, next) => {
 const addServicesByFreelancer = async (req, res, next) => {
   logger.info("Freelancer adding service");
   try {
-    const { service, price, description } = req.body;
+    const { service, price, description, deliveryDuration } = req.body;
     const user = req.user;
     const freelancer_id = user?.roleWiseId;
 
-    if (!service) {
-      logger.warn("Service type missing");
-      return next(new AppError("Service type is required", 400));
+    if (!service || !price || !description || !deliveryDuration) {
+      logger.warn("Missing required fields");
+      return next(new AppError("Service, price, description, and delivery duration are required", 400));
     }
 
     const { rows } = await query(
-      `INSERT INTO services (freelancer_id, service_name, description, price, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO services (freelancer_id, service_name, description, price, created_at, updated_at,delivery_duration)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [freelancer_id, service, description, price, new Date(), new Date()]
+      [freelancer_id, service, description, price, new Date(), new Date(),deliveryDuration]
     );
 
     logger.info("Service added successfully");
@@ -104,21 +103,21 @@ const addServicesByFreelancer = async (req, res, next) => {
 const updateServiceByFreelancer = async (req, res, next) => {
   logger.info("Freelancer updating service");
   try {
-    const { service, price, description, serviceId } = req.body;
+    const { service, price, description, serviceId, deliveryDuration } = req.body;
     const user = req.user;
     const freelancer_id = user?.roleWiseId;
 
-    if (!serviceId || !service) {
+    if (!serviceId || !service || !price || !description || !deliveryDuration) {
       logger.warn("Missing required fields");
       return next(new AppError("Please provide valid information", 400));
     }
 
     const { rows } = await query(
       `UPDATE services 
-       SET service_name=$1, price=$2, description=$3, updated_at=$4 
-       WHERE id=$5 AND freelancer_id=$6 
+       SET service_name=$1, price=$2, description=$3, updated_at=$4 ,=$5
+       WHERE id=$6 AND freelancer_id=$7
        RETURNING *`,
-      [service, price, description, new Date(), serviceId, freelancer_id]
+      [service, price, description, new Date(), deliveryDuration, serviceId, freelancer_id]
     );
 
     if (!rows.length) {
