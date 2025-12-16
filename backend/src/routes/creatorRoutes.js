@@ -1,5 +1,5 @@
 const express = require('express');
-const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion } = require('../controller');
+const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion, addFreelancerToWhitelist } = require('../controller');
 const router = express.Router();
 
 /**
@@ -142,5 +142,43 @@ router.get('/service-requests', getUserServiceRequests);
  *         description: Forbidden - Creator role required
  */
 router.get('/service-requests/:requestId/suggestions', getUserServiceRequestsSuggestion);
+
+/**
+ * @swagger
+ * /user-profile/creator/whitelist:
+ *   post:
+ *     summary: Add freelancer to user's whitelist
+ *     tags: [User Profile]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Freelancer ID to add to whitelist
+ *     responses:
+ *       200:
+ *         description: Freelancer added to whitelist successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Freelancer added to whitelist successfully
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.post('/whitelist', addFreelancerToWhitelist);
+
 
 module.exports = router;

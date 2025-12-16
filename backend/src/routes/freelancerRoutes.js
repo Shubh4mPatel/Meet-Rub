@@ -1,8 +1,8 @@
 const express = require('express');
 const upload = require('../../config/multer');
-const freelancerController = require('../controller/razor-pay-controllers/freelancerController');
+const {getMyPayouts,getEarningsSummary } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
-const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio } = require('../controller');
+const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
 
 /**
@@ -42,7 +42,7 @@ const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelanc
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.post('/portfolio/upload-after-before', upload.fields([
+router.post('/portfolio/upload-after-before',requireRole(['freelancer']), upload.fields([
     {
         name: 'before',
         maxCount: 1
@@ -83,7 +83,7 @@ router.post('/portfolio/upload-after-before', upload.fields([
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.get('/portfolio/get-after-before', getBeforeAfter)
+router.get('/portfolio/get-after-before',  getBeforeAfter)
 
 /**
  * @swagger
@@ -113,7 +113,7 @@ router.get('/portfolio/get-after-before', getBeforeAfter)
  *       404:
  *         description: Images not found
  */
-router.delete('/portfolio/delete-after-before', deleteBeforeAfter)
+router.delete('/portfolio/delete-after-before',requireRole(['freelancer']), deleteBeforeAfter)
 
 /**
  * @swagger
@@ -152,7 +152,7 @@ router.delete('/portfolio/delete-after-before', deleteBeforeAfter)
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.post('/add-services', addServicesByFreelancer)
+router.post('/add-services', requireRole(['freelancer']), addServicesByFreelancer)
 
 /**
  * @swagger
@@ -186,7 +186,7 @@ router.post('/add-services', addServicesByFreelancer)
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.get('/get-services', getServicesByFreelaner)
+router.get('/get-services', requireRole(['freelancer']), getServicesByFreelaner)
 
 /**
  * @swagger
@@ -216,7 +216,7 @@ router.get('/get-services', getServicesByFreelaner)
  *       404:
  *         description: Service not found
  */
-router.delete('/delete-services', deleteServiceByFreelancer)
+router.delete('/delete-services', requireRole(['freelancer']), deleteServiceByFreelancer)
 
 /**
  * @swagger
@@ -257,7 +257,7 @@ router.delete('/delete-services', deleteServiceByFreelancer)
  *       404:
  *         description: Service not found
  */
-router.put('/update-service', updateServiceByFreelancer)
+router.put('/update-service', requireRole(['freelancer']), updateServiceByFreelancer)
 
 /**
  * @swagger
@@ -293,7 +293,7 @@ router.put('/update-service', updateServiceByFreelancer)
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.get('/portfolio/get-protfolio', getPortfolioByFreelancerId)
+router.get('/portfolio/get-protfolio', requireRole(['freelancer']), getPortfolioByFreelancerId)
 
 /**
  * @swagger
@@ -333,7 +333,7 @@ router.get('/portfolio/get-protfolio', getPortfolioByFreelancerId)
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.post('/portfolio/add-protfolio', addFreelancerPortfolio)
+router.post('/portfolio/add-protfolio', requireRole(['freelancer']), addFreelancerPortfolio)
 
 /**
  * @swagger
@@ -375,7 +375,7 @@ router.post('/portfolio/add-protfolio', addFreelancerPortfolio)
  *       404:
  *         description: Portfolio item not found
  */
-router.put('/portfolio/update-protfolio', updateFreelancerPortfolio)
+router.put('/portfolio/update-protfolio', requireRole(['freelancer']), updateFreelancerPortfolio)
 
 /**
  * @swagger
@@ -405,11 +405,283 @@ router.put('/portfolio/update-protfolio', updateFreelancerPortfolio)
  *       404:
  *         description: Portfolio item not found
  */
-router.delete('/portfolio/delete-protfolios', deleteFreelancerPortfolio)
+router.delete('/portfolio/delete-protfolios', requireRole(['freelancer']), deleteFreelancerPortfolio)
+
+/**
+ * @swagger
+ * /user-profile/freelancers:
+ *   get:
+ *     summary: Get all freelancers with pagination, search and filters
+ *     tags: [User Profile]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by freelancer name
+ *       - in: query
+ *         name: minPrice
+ *         schema:
+ *           type: number
+ *           default: 0
+ *         description: Minimum service price filter
+ *       - in: query
+ *         name: maxPrice
+ *         schema:
+ *           type: number
+ *         description: Maximum service price filter
+ *       - in: query
+ *         name: serviceType
+ *         schema:
+ *           type: array
+ *           items:
+ *             type: string
+ *         description: Filter by service types (can be multiple)
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [toprated, newest]
+ *           default: newest
+ *         description: Sort freelancers by rating or creation date
+ *       - in: query
+ *         name: deliveryTime
+ *         schema:
+ *           type: string
+ *         description: Filter by delivery time (e.g., "2-3 days")
+ *     responses:
+ *       200:
+ *         description: Freelancers retrieved successfully with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     freelancers:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           freelancer_id:
+ *                             type: string
+ *                           freelancer_full_name:
+ *                             type: string
+ *                           profile_title:
+ *                             type: string
+ *                           profile_image_url:
+ *                             type: string
+ *                           rating:
+ *                             type: number
+ *                           service_type:
+ *                             type: string
+ *                           service_price:
+ *                             type: number
+ *                           delivery_time:
+ *                             type: string
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         currentPage:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
+ *                         totalItems:
+ *                           type: integer
+ *                         itemsPerPage:
+ *                           type: integer
+ *       500:
+ *         description: Server error
+ */
+router.get('/freelancers', getAllFreelancers);
+
+/**
+ * @swagger
+ * /user-profile/freelancers/{id}:
+ *   get:
+ *     summary: Get freelancer details by ID
+ *     tags: [User Profile]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Freelancer ID
+ *     responses:
+ *       200:
+ *         description: Freelancer details retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     freelancer:
+ *                       type: object
+ *                       properties:
+ *                         freelancer_id:
+ *                           type: string
+ *                         freelancer_full_name:
+ *                           type: string
+ *                         profile_title:
+ *                           type: string
+ *                         profile_image_url:
+ *                           type: string
+ *                     services:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           service_id:
+ *                             type: string
+ *                           service_type:
+ *                             type: string
+ *                           service_description:
+ *                             type: string
+ *                           service_price:
+ *                             type: number
+ *                           delivery_time:
+ *                             type: string
+ *       404:
+ *         description: Freelancer not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/freelancers/:id', getFreelancerById);
+
+/**
+ * @swagger
+ * /user-profile/freelancers/{id}/portfolio:
+ *   get:
+ *     summary: Get freelancer portfolio by ID
+ *     tags: [User Profile]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Freelancer ID
+ *     responses:
+ *       200:
+ *         description: Freelancer portfolio retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     portfolio:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           portfolio_item_service_type:
+ *                             type: string
+ *                           portfolio_items:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 portfolio_id:
+ *                                   type: string
+ *                                 portfolio_item_url:
+ *                                   type: string
+ *                                 portfolio_item_description:
+ *                                   type: string
+ *       404:
+ *         description: Freelancer not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/freelancers/:id/portfolio', getFreelancerPortfolio);
+
+/**
+ * @swagger
+ * /user-profile/freelancers/{id}/impact:
+ *   get:
+ *     summary: Get freelancer impact (before/after) data by ID
+ *     tags: [User Profile]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Freelancer ID
+ *     responses:
+ *       200:
+ *         description: Freelancer impact data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     impact:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           service_type:
+ *                             type: string
+ *                           impact_items:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 impact_id:
+ *                                   type: string
+ *                                 before_service_url:
+ *                                   type: string
+ *                                 after_service_url:
+ *                                   type: string
+ *                                 impact_metric:
+ *                                   type: string
+ *       404:
+ *         description: Freelancer not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/freelancers/:id/impact', getFreelancerImpact);
 
 
-router.get('/payouts', freelancerController.getMyPayouts);
-router.get('/earnings', freelancerController.getEarningsSummary);
+
+router.get('/payouts', getMyPayouts);
+router.get('/earnings', getEarningsSummary);
 
 
 module.exports = router 

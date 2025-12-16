@@ -12,7 +12,7 @@ const { authenticateUser, requireRole } = require('../middleware/authMiddleware'
 router.use('/auth', authroutes);
 router.use('/user-profile', authenticateUser, userProfileRoutes);
 router.use('/admin', authenticateUser, requireRole(['admin']), adminRoutes)
-router.use('/freelancer', authenticateUser, requireRole(['freelancer']), freelancerRoutes)
+router.use('/freelancer', authenticateUser, freelancerRoutes)
 router.use('/creator', authenticateUser, requireRole(['creator']), creatorRoutes)
 router.use('/payments',authenticateUser, paymentRoutes);
 router.use('/wallet', authenticateUser, walletRoutes);
