@@ -9,6 +9,8 @@ services:
       - "5000:5000"  # Map host port 5000 to container port 5000
     env_file:
       - ./.env
+    environment:
+      - DOCKER_ENV=true
     volumes:
       # Mount logs directory to persist logs outside container
       - ./backend/logs:/app/logs
@@ -33,6 +35,8 @@ services:
     container_name: meetrub-worker
     env_file:
       - ./.env
+    environment:
+      - DOCKER_ENV=true
     networks:
       - meetrub-network
     depends_on:
@@ -53,6 +57,7 @@ services:
       - ./.env
     environment:
       - PORT=4000
+      - DOCKER_ENV=true
     volumes:
       # Mount logs directory to persist logs outside container
       - ./chat-server/logs:/app/logs

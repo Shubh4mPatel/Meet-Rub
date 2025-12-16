@@ -2,7 +2,12 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const dotenv = require('dotenv');
-dotenv.config();
+
+// Load .env file only if not running in Docker (Docker Compose injects env vars directly)
+if (!process.env.DOCKER_ENV) {
+  dotenv.config();
+}
+
 const socketConfig = require('../config/socketConfig');
 const { logger } = require('../utils/logger');
 const { manageLogFiles } = require('../cron/logmanager');

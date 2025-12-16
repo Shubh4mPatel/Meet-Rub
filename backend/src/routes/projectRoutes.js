@@ -3,7 +3,7 @@ const router = express.Router();
 const projectController = require('../controller/razor-pay-controllers/projectController');
 
 // Create project (clients only)
-router.post('/', isClient, projectController.createProject);
+router.post('/',  projectController.createProject);
 
 // Get projects
 router.get('/', projectController.getMyProjects);
@@ -13,6 +13,6 @@ router.get('/:id', projectController.getProject);
 router.put('/:id/status', projectController.updateProjectStatus);
 
 // Delete project (clients only)
-router.delete('/:id', isClient, projectController.deleteProject);
+router.delete('/:id',  projectController.deleteProject);
 
 module.exports = router;
