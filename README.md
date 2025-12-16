@@ -1,103 +1,272 @@
 # Meet-Rub
 
-A real-time meeting and chat application with notification services.
+A real-time meeting and chat application with microservices architecture for scalable communication and notification delivery.
 
-## Architecture
+## Table of Contents
 
-This application consists of multiple microservices:
+- [Architecture Overview](#architecture-overview)
+- [System Flow](#system-flow)
+- [Technology Stack](#technology-stack)
+- [Prerequisites](#prerequisites)
+- [Setup Instructions](#setup-instructions)
+- [Running the Application](#running-the-application)
+- [Service Management](#service-management)
+- [Accessing Services](#accessing-services)
+- [Troubleshooting](#troubleshooting)
 
-- **Backend API**: RESTful API server (Port 5000)
-- **Chat Server**: WebSocket server for real-time messaging (Port 4000)
-- **Worker Service**: Notification worker for email, in-app notifications, etc.
-- **RabbitMQ**: Message queue for async communication (Ports 5672, 15672)
-- **Redis**: In-memory cache and session store (Port 6379)
+## Architecture Overview
 
-## Quick Start
+Meet-Rub is built using a microservices architecture with the following components:
 
-1. **Clone the repository** (if not already done)
-2. **Create a `.env` file** in the root directory (see Environment Setup below)
-3. **Start all services:**
-   ```bash
-   docker-compose up -d
-   ```
-4. **Check service status:**
-   ```bash
-   docker-compose ps
-   ```
-5. **Access the application:**
-   - Backend: http://localhost:5000/api/v1/health
-   - Chat Server: http://localhost:4000/health
-   - RabbitMQ UI: http://localhost:15672
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         Client Layer                         │
+│                  (Web/Mobile Applications)                   │
+└──────────────────┬─────────────────┬────────────────────────┘
+                   │                 │
+                   │                 │
+        ┌──────────▼─────────┐  ┌───▼──────────────┐
+        │   Backend API      │  │   Chat Server    │
+        │   (Port 7000)      │  │   (Port 7001)    │
+        │   - REST API       │  │   - WebSocket    │
+        │   - Authentication │  │   - Real-time    │
+        │   - Business Logic │  │   - Messaging    │
+        └──────┬─────────┬───┘  └────┬─────────────┘
+               │         │            │
+               │         │            │
+        ┌──────▼─────────▼────────────▼─────┐
+        │         RabbitMQ (5672)            │
+        │       Message Queue/Broker         │
+        │   - Async Task Distribution        │
+        │   - Event Publishing               │
+        └──────┬────────────────────────────┘
+               │
+        ┌──────▼────────────┐
+        │  Worker Service   │
+        │  - Email Sending  │
+        │  - Notifications  │
+        │  - Async Tasks    │
+        └───────────────────┘
+
+        ┌──────────────────────────────────┐
+        │   Redis (Port 6378)              │
+        │   - Caching                      │
+        │   - Session Storage              │
+        │   - Queue Management (BullMQ)    │
+        └──────────────────────────────────┘
+```
+
+### Services
+
+1. **Backend API (Port 7000)**
+   - RESTful API server built with Express.js
+   - Handles authentication, authorization, and business logic
+   - Manages user data, meetings, and application state
+   - Publishes events to RabbitMQ for async processing
+   - Uses Redis for caching and session management
+
+2. **Chat Server (Port 7001)**
+   - WebSocket server using Socket.IO
+   - Provides real-time bidirectional communication
+   - Handles chat messages, presence, and notifications
+   - Integrated with Redis for scaling and session sync
+
+3. **Worker Service**
+   - Background job processor
+   - Consumes messages from RabbitMQ queues
+   - Handles email delivery, push notifications, and async tasks
+   - Uses BullMQ for reliable job processing
+
+4. **RabbitMQ (Ports 5672, 15672)**
+   - Message broker for async communication
+   - Enables decoupled service architecture
+   - Ensures reliable message delivery
+   - Management UI available at port 15672
+
+5. **Redis (Port 6378)**
+   - In-memory data store
+   - Caching layer for improved performance
+   - Session storage for authenticated users
+   - BullMQ queue backend for job processing
+
+## System Flow
+
+### 1. User Authentication Flow
+```
+User → Backend API (7000) → JWT Token → Store in Redis
+                           ↓
+                    Send to Client
+```
+
+### 2. Meeting Creation Flow
+```
+User → Backend API (7000) → Create Meeting → Publish Event → RabbitMQ
+                           ↓                                    ↓
+                    Save to Database                    Worker Service
+                           ↓                                    ↓
+                    Return Meeting ID            Send Email Notifications
+```
+
+### 3. Real-time Chat Flow
+```
+User → Chat Server (7001) via WebSocket → Validate JWT
+                           ↓
+                    Store Message → Redis Cache
+                           ↓
+                    Broadcast to Room Participants
+                           ↓
+                    Publish to RabbitMQ → Worker → Push Notifications
+```
+
+### 4. Notification Flow
+```
+Event Trigger → Backend/Chat → RabbitMQ Queue → Worker Service
+                                                       ↓
+                                              Process Notification
+                                                       ↓
+                                    ┌─────────────────┴─────────────────┐
+                                    │                                   │
+                              Email Service                      In-App Notification
+                            (via Nodemailer)                    (via WebSocket)
+```
+
+## Technology Stack
+
+### Backend Services
+- **Runtime**: Node.js
+- **Framework**: Express.js (v5)
+- **Real-time**: Socket.IO (v4)
+- **Database**: PostgreSQL (with pg driver)
+- **Message Queue**: RabbitMQ (amqplib)
+- **Cache**: Redis (ioredis, redis)
+- **Job Queue**: BullMQ
+
+### Security & Authentication
+- **JWT**: jsonwebtoken
+- **Encryption**: bcrypt, crypto-js
+- **Security Headers**: helmet
+- **Rate Limiting**: express-rate-limit
+
+### Utilities
+- **Validation**: Joi
+- **File Processing**: multer, jszip
+- **Email**: nodemailer
+- **Logging**: winston, morgan
+- **Scheduling**: node-cron
+- **Object Storage**: MinIO
+
+### DevOps
+- **Containerization**: Docker & Docker Compose
+- **Process Management**: nodemon (dev)
+- **API Documentation**: Swagger (swagger-jsdoc, swagger-ui-express)
 
 ## Prerequisites
 
 Before running the application, ensure you have the following installed:
 
-- [Docker](https://docs.docker.com/get-docker/) (version 20.10 or higher)
-- [Docker Compose](https://docs.docker.com/compose/install/) (version 2.0 or higher)
+### Required Software
+- **Docker**: Version 20.10 or higher
+  - [Download Docker Desktop](https://docs.docker.com/get-docker/)
+- **Docker Compose**: Version 2.0 or higher
+  - Included with Docker Desktop
 
-Verify installation:
+### Verify Installation
 ```bash
 docker --version
 docker-compose --version
 ```
 
-## Environment Setup
-
-1. Create a `.env` file in the root directory with the following variables:
-
-```env
-# RabbitMQ Configuration
-RABBITMQ_USER=your_rabbitmq_username
-RABBITMQ_PASSWORD=your_rabbitmq_password
-
-# Redis Configuration
-REDIS_PASSWORD=your_redis_password
-
-# Database Configuration (if using PostgreSQL)
-# POSTGRES_USER=meetrub
-# POSTGRES_PASSWORD=your_postgres_password
-# POSTGRES_DB=meetrub
-
-# Application Configuration
-NODE_ENV=production
-PORT=5000
-
-# Add other application-specific environment variables here
-# JWT_SECRET=your_jwt_secret
-# API_KEY=your_api_key
-# etc.
+Expected output example:
+```
+Docker version 24.0.0
+Docker Compose version 2.20.0
 ```
 
-2. Update the values with your actual credentials and configuration.
+### System Requirements
+- **RAM**: Minimum 4GB (8GB recommended)
+- **Disk Space**: At least 5GB free
+- **OS**: Windows 10/11, macOS, or Linux
 
-**Important Notes:**
-- `RABBITMQ_USER` and `RABBITMQ_PASSWORD` are required for docker-compose
-- Special characters in `RABBITMQ_URL` must be URL-encoded (e.g., `@` → `%40`)
-- Use `redis` as `REDIS_HOST` (not `127.0.0.1`) for Docker networking
-- Use `rabbitmq` as hostname in connection URLs for Docker networking
+## Setup Instructions
 
-## Running with Docker Compose
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd Meet-Rub
+```
+
+### 2. Environment Configuration
+Create a `.env` file in the root directory. This file should contain your environment-specific configuration variables for:
+- Database credentials
+- RabbitMQ credentials
+- Redis password
+- JWT secrets
+- API keys
+- Email service configuration
+
+**Note**: Ensure `.env` is added to `.gitignore` and never committed to version control.
+
+### 3. Directory Structure
+```
+Meet-Rub/
+├── backend/              # Backend API service
+│   ├── src/             # Source code
+│   ├── logs/            # Application logs
+│   ├── Dockerfile       # Docker configuration
+│   └── package.json     # Dependencies
+├── chat-server/          # WebSocket chat service
+│   ├── src/             # Source code
+│   ├── logs/            # Application logs
+│   ├── Dockerfile       # Docker configuration
+│   └── package.json     # Dependencies
+├── worker/               # Background worker service
+│   ├── worker.js        # Main worker file
+│   ├── Dockerfile       # Docker configuration
+│   └── package.json     # Dependencies
+├── docker-compose.yml    # Docker orchestration
+├── .env                  # Environment variables (create this)
+└── README.md            # This file
+```
+
+## Running the Application
 
 ### Start All Services
 
-To start all services in detached mode (background):
-
+Start all services in detached mode (background):
 ```bash
 docker-compose up -d
 ```
 
-To start with logs visible (useful for debugging):
-
+Start with visible logs (useful for debugging):
 ```bash
 docker-compose up
 ```
 
-### Check Service Status
+### First-Time Setup
+On first run, Docker will:
+1. Pull required images (RabbitMQ, Redis)
+2. Build custom images for backend, chat-server, and worker
+3. Create network and volumes
+4. Start all services with health checks
 
+This may take 5-10 minutes depending on your internet connection.
+
+### Check Service Status
 ```bash
 docker-compose ps
 ```
+
+Expected output:
+```
+NAME                 STATUS              PORTS
+meetrub-backend      Up (healthy)        0.0.0.0:7000->7000/tcp
+meetrub-chat         Up (healthy)        0.0.0.0:7001->7001/tcp
+meetrub-worker       Up
+meetrub-rabbitmq     Up (healthy)        5672/tcp, 15672/tcp
+meetrub-redis        Up (healthy)        0.0.0.0:6378->6378/tcp
+```
+
+## Service Management
 
 ### View Logs
 
@@ -111,8 +280,6 @@ View logs for a specific service:
 docker-compose logs -f backend
 docker-compose logs -f chat-server
 docker-compose logs -f worker
-docker-compose logs -f rabbitmq
-docker-compose logs -f redis
 ```
 
 ### Stop Services
@@ -127,9 +294,9 @@ Stop and remove containers:
 docker-compose down
 ```
 
-Stop and remove containers, volumes, and images:
+Stop and remove containers with volumes (clears all data):
 ```bash
-docker-compose down -v --rmi all
+docker-compose down -v
 ```
 
 ### Restart Services
@@ -142,12 +309,12 @@ docker-compose restart
 Restart a specific service:
 ```bash
 docker-compose restart backend
+docker-compose restart chat-server
 ```
 
 ### Rebuild Services
 
-If you make changes to the code or Dockerfile:
-
+If you make code changes:
 ```bash
 docker-compose up -d --build
 ```
@@ -161,162 +328,167 @@ docker-compose up -d --build backend
 
 Once all services are running:
 
-- **Backend API**: http://localhost:5000
-- **Backend Health Check**: http://localhost:5000/api/v1/health
-- **Chat Server**: http://localhost:4000
-- **Chat Health Check**: http://localhost:4000/health
+### Application Services
+- **Backend API**: http://localhost:7000
+- **Backend Health Check**: http://localhost:7000/api/v1/health
+- **Chat Server**: http://localhost:7001
+- **Chat Server Health Check**: http://localhost:7001/health
+
+### Infrastructure Services
 - **RabbitMQ Management UI**: http://localhost:15672
-  - Username: Value from `RABBITMQ_USER` in `.env`
-  - Password: Value from `RABBITMQ_PASSWORD` in `.env`
-- **Redis**: localhost:6379 (requires password from `.env`)
+  - Access with credentials from your `.env` file
+- **Redis**: localhost:6378
+  - Requires password from `.env` file
+
+### Health Checks
+All services include health check endpoints to monitor status:
+```bash
+# Backend health
+curl http://localhost:7000/api/v1/health
+
+# Chat server health
+curl http://localhost:7001/health
+```
 
 ## Troubleshooting
 
-### RabbitMQ Authentication Error
+### Services Won't Start
 
-If you see errors like:
-```
-Error: Handshake terminated by server: 403 (ACCESS-REFUSED)
-PLAIN login refused: user 'admin' - invalid credentials
-```
-
-**Solutions:**
-
-1. **Ensure `.env` has the required variables:**
-   ```env
-   RABBITMQ_USER=admin
-   RABBITMQ_PASSWORD=admin@123
-   RABBITMQ_URL=amqp://admin:admin%40123@rabbitmq:5672/
-   ```
-   Note: Special characters in passwords must be URL-encoded (e.g., `@` becomes `%40`)
-
-2. **Recreate RabbitMQ container:**
-   ```bash
-   docker-compose down -v
-   docker-compose up -d
-   ```
-   The `-v` flag removes volumes, which clears old user credentials.
-
-3. **Verify RabbitMQ is using the correct credentials:**
-   ```bash
-   docker-compose logs rabbitmq | grep -i "default user"
-   ```
-
-### Redis Connection Error
-
-If services can't connect to Redis, ensure:
-
-1. **`.env` uses Docker network hostname:**
-   ```env
-   REDIS_HOST=redis  # NOT 127.0.0.1 or localhost
-   REDIS_PORT=6379
-   REDIS_PASSWORD=root@123
-   ```
-
-2. **Redis is healthy:**
-   ```bash
-   docker-compose ps redis
-   docker exec -it meetrub-redis redis-cli -a root@123 ping
-   ```
-
-### Service Won't Start
-
-Check if ports are already in use:
+**Check port conflicts:**
 ```bash
 # Windows
-netstat -ano | findstr :5000
-netstat -ano | findstr :4000
-netstat -ano | findstr :5672
-netstat -ano | findstr :6379
+netstat -ano | findstr :7000
+netstat -ano | findstr :7001
+netstat -ano | findstr :6378
 
 # Linux/Mac
-lsof -i :5000
-lsof -i :4000
-lsof -i :5672
-lsof -i :6379
+lsof -i :7000
+lsof -i :7001
+lsof -i :6378
 ```
 
-### View Service Health
+**Solution**: Stop any processes using these ports or modify port mappings in `docker-compose.yml`
 
-Check health status of all services:
+### View Service Health
 ```bash
 docker-compose ps
 ```
 
-Inspect a specific container:
+Check detailed container status:
 ```bash
 docker inspect meetrub-backend
 docker inspect meetrub-chat
-docker inspect meetrub-rabbitmq
-docker inspect meetrub-redis
-```
-
-### Clear All Data and Start Fresh
-
-```bash
-# Stop all services
-docker-compose down
-
-# Remove volumes (this deletes all data)
-docker-compose down -v
-
-# Remove all images
-docker-compose down -v --rmi all
-
-# Start fresh
-docker-compose up -d --build
 ```
 
 ### Access Container Shell
 
-If you need to debug inside a container:
+For debugging inside a container:
 ```bash
 docker exec -it meetrub-backend sh
 docker exec -it meetrub-chat sh
 docker exec -it meetrub-worker sh
-docker exec -it meetrub-rabbitmq sh
-docker exec -it meetrub-redis sh
 ```
 
 ### Check Container Logs for Errors
-
 ```bash
 docker-compose logs backend | grep -i error
 docker-compose logs chat-server | grep -i error
 docker-compose logs worker | grep -i error
 ```
 
-## Development Mode
+### RabbitMQ Connection Issues
 
-For development with hot-reload, you may want to mount your source code as volumes. Add this to your `docker-compose.yml` under each service:
+If services can't connect to RabbitMQ:
+1. Check RabbitMQ is healthy: `docker-compose ps rabbitmq`
+2. Verify credentials in `.env` file match
+3. Recreate containers: `docker-compose down -v && docker-compose up -d`
 
-```yaml
-volumes:
-  - ./backend:/app
-  - /app/node_modules
+### Redis Connection Issues
+
+If services can't connect to Redis:
+1. Check Redis is healthy: `docker-compose ps redis`
+2. Verify Redis password in `.env` file
+3. Test connection:
+   ```bash
+   docker exec -it meetrub-redis redis-cli -p 6378 -a <password> ping
+   ```
+
+### Clear All Data and Start Fresh
+
+Complete reset:
+```bash
+# Stop all services and remove volumes
+docker-compose down -v
+
+# Remove all images (optional)
+docker-compose down -v --rmi all
+
+# Start fresh
+docker-compose up -d --build
 ```
+
+### Network Issues
+
+All services communicate through `meetrub-network`. If experiencing connectivity:
+1. Check network exists: `docker network ls | grep meetrub`
+2. Inspect network: `docker network inspect meetrub-network`
+3. Recreate: `docker-compose down && docker-compose up -d`
 
 ## Data Persistence
 
 The following data is persisted using Docker volumes:
 
-- **RabbitMQ**: Message queue data in `rabbitmq-data` volume
-- **Redis**: Cache and session data in `redis-data` volume
-- **Logs**: Application logs in `./backend/logs` and `./chat-server/logs`
+- **RabbitMQ Data**: `rabbitmq-data` volume
+  - Stores message queues and exchanges
+- **Redis Data**: `redis-data` volume
+  - Stores cached data and sessions
+- **Application Logs**:
+  - `./backend/logs` - Backend API logs
+  - `./chat-server/logs` - Chat server logs
 
-To backup volumes:
+### Backup Volumes
 ```bash
+# Backup RabbitMQ data
 docker run --rm -v rabbitmq-data:/data -v $(pwd):/backup alpine tar czf /backup/rabbitmq-backup.tar.gz -C /data .
+
+# Backup Redis data
 docker run --rm -v redis-data:/data -v $(pwd):/backup alpine tar czf /backup/redis-backup.tar.gz -C /data .
 ```
 
-## Network
+## Development Mode
 
-All services communicate through a shared Docker network called `meetrub-network`. This allows services to communicate using container names as hostnames (e.g., `backend` can connect to `rabbitmq:5672`).
+For local development with hot-reload:
+
+1. Install dependencies locally in each service:
+```bash
+cd backend && npm install
+cd ../chat-server && npm install
+cd ../worker && npm install
+```
+
+2. Run services locally:
+```bash
+# Terminal 1 - Backend
+cd backend && npm run dev
+
+# Terminal 2 - Chat Server
+cd chat-server && npm run dev
+
+# Terminal 3 - Worker
+cd worker && npm run dev
+```
+
+3. Ensure RabbitMQ and Redis are still running via Docker:
+```bash
+docker-compose up -d rabbitmq redis
+```
 
 ## Additional Resources
 
 - [Docker Documentation](https://docs.docker.com/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
+- [Node.js Documentation](https://nodejs.org/docs/)
+- [Express.js Guide](https://expressjs.com/)
+- [Socket.IO Documentation](https://socket.io/docs/)
 - [RabbitMQ Documentation](https://www.rabbitmq.com/documentation.html)
 - [Redis Documentation](https://redis.io/documentation)
