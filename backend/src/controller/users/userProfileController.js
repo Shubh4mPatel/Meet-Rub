@@ -947,4 +947,7 @@ const addFreelancerToWhitelist = async (req, res, next) => {
   }
 }
 
+const getUserProfileProgress = async (req, res, next) => {
+  // Implementation goes here
+}
 module.exports = { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist };
