@@ -7,6 +7,8 @@ const freelancerRoutes = require('./freelancerRoutes')
 const creatorRoutes = require('./creatorRoutes')
 const paymentRoutes = require('./paymentRoutes');
 const walletRoutes = require('./walletRoutes');
+const projectRoutes = require('./projectRoutes');
+const webhookRoutes = require('./webhookRoutes');
 const { authenticateUser, requireRole } = require('../middleware/authMiddleware');
 
 router.use('/auth', authroutes);
@@ -16,6 +18,8 @@ router.use('/freelancer', authenticateUser, freelancerRoutes)
 router.use('/creator', authenticateUser, requireRole(['creator']), creatorRoutes)
 router.use('/payments',authenticateUser, paymentRoutes);
 router.use('/wallet', authenticateUser, walletRoutes);
+router.use('/projects', authenticateUser, projectRoutes);
+router.use('/webhooks', webhookRoutes);
 
 
 module.exports = router;
