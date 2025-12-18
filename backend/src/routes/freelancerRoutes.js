@@ -679,9 +679,141 @@ router.get('/freelancers/:id/portfolio', getFreelancerPortfolio);
  */
 router.get('/freelancers/:id/impact', getFreelancerImpact);
 
-
-
+/**
+ * @swagger
+ * /freelancer/payouts:
+ *   get:
+ *     summary: Get my payouts
+ *     description: Retrieve all payouts for the authenticated freelancer including status and transaction details
+ *     tags: [Freelancer Payouts]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Payouts retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 count:
+ *                   type: integer
+ *                   example: 5
+ *                 payouts:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       transaction_id:
+ *                         type: string
+ *                       amount:
+ *                         type: number
+ *                       status:
+ *                         type: string
+ *                         enum: [QUEUED, PENDING, PROCESSING, PROCESSED, FAILED]
+ *                       razorpay_payout_id:
+ *                         type: string
+ *                       created_at:
+ *                         type: string
+ *                         format: date-time
+ *                       processed_at:
+ *                         type: string
+ *                         format: date-time
+ *             example:
+ *               count: 5
+ *               payouts:
+ *                 - id: "789"
+ *                   transaction_id: "456"
+ *                   amount: 1000
+ *                   status: PROCESSED
+ *                   razorpay_payout_id: payout_XXXXXXXXXXXXXX
+ *                   created_at: "2024-01-16T10:30:00Z"
+ *                   processed_at: "2024-01-16T11:00:00Z"
+ *                 - id: "790"
+ *                   transaction_id: "457"
+ *                   amount: 2000
+ *                   status: PENDING
+ *                   razorpay_payout_id: payout_YYYYYYYYYYYYYY
+ *                   created_at: "2024-01-17T14:20:00Z"
+ *                   processed_at: null
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Freelancer role required
+ *       500:
+ *         description: Internal server error
+ */
 router.get('/payouts', getMyPayouts);
+
+/**
+ * @swagger
+ * /freelancer/earnings:
+ *   get:
+ *     summary: Get earnings summary
+ *     description: Retrieve comprehensive earnings summary including completed, pending, and processing amounts for the authenticated freelancer
+ *     tags: [Freelancer Payouts]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Earnings summary retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 completed_earnings:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                       description: Number of completed transactions
+ *                     total:
+ *                       type: number
+ *                       description: Total completed earnings amount
+ *                 pending_release:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                       description: Number of transactions held in escrow
+ *                     total:
+ *                       type: number
+ *                       description: Total amount pending release
+ *                 processing:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                       description: Number of released transactions being processed
+ *                     total:
+ *                       type: number
+ *                       description: Total amount being processed
+ *                 total_lifetime_earnings:
+ *                   type: number
+ *                   description: Total lifetime earnings (completed only)
+ *             example:
+ *               completed_earnings:
+ *                 count: 50
+ *                 total: 45000
+ *               pending_release:
+ *                 count: 5
+ *                 total: 4500
+ *               processing:
+ *                 count: 3
+ *                 total: 2700
+ *               total_lifetime_earnings: 45000
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Freelancer role required
+ *       500:
+ *         description: Internal server error
+ */
 router.get('/earnings', getEarningsSummary);
 
 
