@@ -267,7 +267,7 @@ router.get('/escrow', adminController.getEscrowTransactions);
  *             examples:
  *               invalidStatus:
  *                 value:
- *                   error: Cannot release payment. Transaction status: COMPLETED
+ *                  error: "Cannot release payment. Transaction status: COMPLETED"
  *               projectNotCompleted:
  *                 value:
  *                   error: Project must be completed before releasing payment

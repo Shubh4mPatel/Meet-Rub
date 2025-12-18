@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const walletController = require('../controller/razor-pay-controllers/walletController');
+const {getBalance,createLoadOrder,verifyLoadPayment,getTransactions,getTransaction} = require('../controller/razor-pay-controllers/walletController');
 
 /**
  * @swagger
@@ -44,7 +44,7 @@ const walletController = require('../controller/razor-pay-controllers/walletCont
  *       500:
  *         description: Internal server error
  */
-router.get('/balance', walletController.getBalance);
+router.get('/balance', getBalance);
 
 /**
  * @swagger
@@ -128,7 +128,7 @@ router.get('/balance', walletController.getBalance);
  *       500:
  *         description: Internal server error
  */
-router.post('/load/create-order', walletController.createLoadOrder);
+router.post('/load/create-order', createLoadOrder);
 
 /**
  * @swagger
@@ -196,7 +196,7 @@ router.post('/load/create-order', walletController.createLoadOrder);
  *       500:
  *         description: Internal server error
  */
-router.post('/load/verify', walletController.verifyLoadPayment);
+router.post('/load/verify', verifyLoadPayment);
 
 /**
  * @swagger
@@ -275,7 +275,7 @@ router.post('/load/verify', walletController.verifyLoadPayment);
  *       500:
  *         description: Internal server error
  */
-router.get('/transactions', walletController.getTransactions);
+router.get('/transactions', getTransactions);
 
 /**
  * @swagger
@@ -344,6 +344,6 @@ router.get('/transactions', walletController.getTransactions);
  *       500:
  *         description: Internal server error
  */
-router.get('/transactions/:id', walletController.getTransaction);
+router.get('/transactions/:id', getTransaction);
 
 module.exports = router;
