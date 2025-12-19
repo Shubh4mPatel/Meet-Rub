@@ -225,26 +225,36 @@ const editProfile = async (req, res, next) => {
           return next(new AppError("social_platform_type must be either 'youtube' or 'instagram'", 400));
         }
 
-        const { rows } = await query(
-          `UPDATE creators
-           SET first_name=$1, last_name=$2, full_name=$3, phone_number=$4,
-               social_platform_type=$5, social_links=$6, niche=$7, updated_at=CURRENT_TIMESTAMP
-           WHERE user_id=$8
-           RETURNING first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche`,
-          [first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche, user.user_id]
-        );
+        // Start transaction
+        await query("BEGIN");
+        try {
+          const { rows } = await query(
+            `UPDATE creators
+             SET first_name=$1, last_name=$2, full_name=$3, phone_number=$4,
+                 social_platform_type=$5, social_links=$6, niche=$7, updated_at=CURRENT_TIMESTAMP
+             WHERE user_id=$8
+             RETURNING first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche`,
+            [first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche, user.user_id]
+          );
 
-        if (!rows[0]) {
-          logger.warn("Creator not found for update");
-          return next(new AppError("Creator profile not found", 404));
+          if (!rows[0]) {
+            await query("ROLLBACK");
+            logger.warn("Creator not found for update");
+            return next(new AppError("Creator profile not found", 404));
+          }
+
+          // Commit transaction
+          await query("COMMIT");
+          logger.info("Creator basic info updated successfully");
+          return res.status(200).json({
+            status: "success",
+            message: "Creator profile updated successfully",
+            data: rows[0]
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
         }
-
-        logger.info("Creator basic info updated successfully");
-        return res.status(200).json({
-          status: "success",
-          message: "Creator profile updated successfully",
-          data: rows[0]
-        });
       }
 
       // Creators don't support other types
@@ -270,17 +280,26 @@ const editProfile = async (req, res, next) => {
           return next(new AppError("All bank details required", 400));
         }
 
-        const { rows } = await query(
-          "UPDATE freelancer SET freelancer_full_name=$1, bank_account_no=$2, bank_name=$3, bank_ifsc_code=$4, bank_branch_name=$5 WHERE user_id=$6 RETURNING *",
-          [freelancer_fullname, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, user.user_id]
-        );
+        // Start transaction
+        await query("BEGIN");
+        try {
+          const { rows } = await query(
+            "UPDATE freelancer SET freelancer_full_name=$1, bank_account_no=$2, bank_name=$3, bank_ifsc_code=$4, bank_branch_name=$5 WHERE user_id=$6 RETURNING *",
+            [freelancer_fullname, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, user.user_id]
+          );
 
-        logger.info("Bank details updated successfully");
-        return res.status(200).json({
-          status: "success",
-          message: "Bank details updated successfully",
-          data: rows[0],
-        });
+          // Commit transaction
+          await query("COMMIT");
+          logger.info("Bank details updated successfully");
+          return res.status(200).json({
+            status: "success",
+            message: "Bank details updated successfully",
+            data: rows[0],
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
+        }
       }
 
       if (type === "govtId") {
@@ -299,20 +318,36 @@ const editProfile = async (req, res, next) => {
         const objectName = `${folder}/${fileName}`;
         const gov_id_url = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 
-        await minioClient.putObject(BUCKET_NAME, objectName, req.file.buffer, req.file.size, {
-          "Content-Type": req.file.mimetype
-        });
+        // Start transaction
+        await query("BEGIN");
+        try {
+          await minioClient.putObject(BUCKET_NAME, objectName, req.file.buffer, req.file.size, {
+            "Content-Type": req.file.mimetype
+          });
 
-        await query(
-          "UPDATE freelancer SET gov_id_type=$1, gov_id_url=$2, gov_id_number=$3 WHERE user_id=$4",
-          [gov_id_type, gov_id_url, gov_id_number, user.user_id]
-        );
+          const {rows:freelancerGovInfo} = await query(
+            "UPDATE freelancer SET gov_id_type=$1, gov_id_url=$2, gov_id_number=$3 WHERE user_id=$4 returning gov_id_type, gov_id_url, gov_id_number",
+            [gov_id_type, gov_id_url, gov_id_number, user.user_id]
+          );
 
-        logger.info("Govt ID updated successfully");
-        return res.status(200).json({
-          status: "success",
-          message: "Government ID updated successfully",
-        });
+          const signedUrl = await minioClient.presignedGetObject(
+            BUCKET_NAME,
+            objectName,
+            expirySeconds
+          );
+
+          // Commit transaction
+          await query("COMMIT");
+          logger.info("Govt ID updated successfully");
+          return res.status(200).json({
+            status: "success",
+            message: "Government ID updated successfully",
+            data :freelancerGovInfo[0].gov_id_url ? {...freelancerGovInfo[0], gov_id_url: signedUrl} : freelancerGovInfo[0]
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
+        }
       }
 
       if (type === "profileImage") {
@@ -329,105 +364,140 @@ const editProfile = async (req, res, next) => {
         const objectName = `${folder}/${fileName}`;
         const profile_url = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 
-        await minioClient.putObject(
-          BUCKET_NAME,
-          objectName,
-          req.file.buffer,
-          req.file.size,
-          { "Content-Type": req.file.mimetype }
-        );
+        // Start transaction
+        await query("BEGIN");
+        try {
+          await minioClient.putObject(
+            BUCKET_NAME,
+            objectName,
+            req.file.buffer,
+            req.file.size,
+            { "Content-Type": req.file.mimetype }
+          );
 
-        await query("UPDATE freelancer SET profile_image_url=$1 WHERE user_id=$2", [
-          profile_url,
-          user.user_id,
-        ]);
+          await query("UPDATE freelancer SET profile_image_url=$1 WHERE user_id=$2", [
+            profile_url,
+            user.user_id,
+          ]);
 
-        logger.info("Profile image updated successfully");
-        return res.status(200).json({
-          status: "success",
-          message: "Profile image updated successfully",
-        });
+          // Generate presigned URL for the uploaded image
+          const signedUrl = await minioClient.presignedGetObject(
+            BUCKET_NAME,
+            objectName,
+            expirySeconds
+          );
+
+          // Commit transaction
+          await query("COMMIT");
+          logger.info("Profile image updated successfully");
+          return res.status(200).json({
+            status: "success",
+            message: "Profile image updated successfully",
+            data: {
+              profile_image_url: signedUrl
+            }
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
+        }
       }
 
       if (type === "basicInfo") {
         // ✅ FREELANCER BASIC DETAILS UPDATE
         logger.info("Updating Freelancer Basic Info");
         const {
-          freelancer_fullname,
-          freelancer_email,
-          date_of_birth,
-          phone_number,
-          profile_title,
-          thumbnail_image_url
+          freelancerFullName,
+          freelancerEmail,
+          dateOfBirth,
+          phoneNumber,
+          profileTitle,
+          thumbnailImageUrl
         } = userData;
 
-        if (!freelancer_fullname || !freelancer_email || !date_of_birth || !phone_number || !profile_title) {
+        if (!freelancerFullName || !freelancerEmail || !dateOfBirth || !phoneNumber || !profileTitle) {
           logger.warn("Missing basicInfo fields");
           return next(new AppError("All basic info fields required", 400));
         }
 
-        // Check if thumbnail file needs to be uploaded
-        let newThumbnailUrl = null;
-        if (thumbnail_image_url) {
-          // Fetch current thumbnail URL from database
-          const { rows: currentData } = await query(
-            "SELECT freelancer_thumbnail_image FROM freelancer WHERE user_id = $1",
-            [user.user_id]
-          );
-
-          const currentThumbnailUrl = currentData[0]?.freelancer_thumbnail_image;
-
-          // Check if thumbnail URL is different from the one in DB
-          if (currentThumbnailUrl !== thumbnail_image_url) {
-            // URL has changed, check if file is uploaded
-            if (!req.file) {
-              logger.warn("Thumbnail URL changed but no file uploaded");
-              return next(new AppError("Thumbnail file is required when URL changes", 400));
-            }
-
-            logger.info("Thumbnail URL changed, uploading new file to MinIO");
-
-            const fileExt = path.extname(req.file.originalname);
-            const fileName = `${crypto.randomUUID()}${fileExt}`;
-            const folder = "freelancer-profile-image";
-            const objectName = `${folder}/${fileName}`;
-            newThumbnailUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
-
-            // Upload to MinIO
-            await minioClient.putObject(
-              BUCKET_NAME,
-              objectName,
-              req.file.buffer,
-              req.file.size,
-              { "Content-Type": req.file.mimetype }
+        // Start transaction
+        await query("BEGIN");
+        try {
+          // Check if thumbnail file needs to be uploaded
+          let newThumbnailUrl = null;
+          let signedUrl = null;
+          if (thumbnailImageUrl) {
+            // Fetch current thumbnail URL from database
+            const { rows: currentData } = await query(
+              "SELECT freelancer_thumbnail_image FROM freelancer WHERE user_id = $1",
+              [user.user_id]
             );
 
-            logger.info("New thumbnail uploaded successfully to MinIO");
-          } else {
-            logger.info("Thumbnail URL unchanged, skipping upload");
+            const currentThumbnailUrl = currentData[0]?.freelancer_thumbnail_image;
+
+            // Check if thumbnail URL is different from the one in DB
+            if (currentThumbnailUrl !== thumbnailImageUrl) {
+              // URL has changed, check if file is uploaded
+              if (!req.file) {
+                await query("ROLLBACK");
+                logger.warn("Thumbnail URL changed but no file uploaded");
+                return next(new AppError("Thumbnail file is required when URL changes", 400));
+              }
+
+              logger.info("Thumbnail URL changed, uploading new file to MinIO");
+
+              const fileExt = path.extname(req.file.originalname);
+              const fileName = `${crypto.randomUUID()}${fileExt}`;
+              const folder = "freelancer-profile-image";
+              const objectName = `${folder}/${fileName}`;
+              newThumbnailUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+
+              // Upload to MinIO
+              await minioClient.putObject(
+                BUCKET_NAME,
+                objectName,
+                req.file.buffer,
+                req.file.size,
+                { "Content-Type": req.file.mimetype }
+              );
+
+              signedUrl = await minioClient.presignedGetObject(
+                BUCKET_NAME,
+                objectName,
+                expirySeconds
+              );
+              logger.info("New thumbnail uploaded successfully to MinIO");
+            } else {
+              logger.info("Thumbnail URL unchanged, skipping upload");
+            }
           }
+
+          // Update database with or without new thumbnail URL
+          let updateQuery, updateParams;
+          if (newThumbnailUrl) {
+            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5, profile_image_url=$6 WHERE user_id=$7
+             RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
+            updateParams = [freelancerFullName, freelancerEmail, dateOfBirth, phoneNumber, profileTitle, newThumbnailUrl, user.user_id];
+          } else {
+            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5 WHERE user_id=$6
+             RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
+            updateParams = [freelancerFullName, freelancerEmail, dateOfBirth, phoneNumber, profileTitle, user.user_id];
+          }
+
+          const { rows } = await query(updateQuery, updateParams);
+
+          // Commit transaction
+          await query("COMMIT");
+          logger.info("Freelancer basic info updated successfully");
+          return res.status(200).json({
+            status: "success",
+            message: "Profile updated successfully",
+            data: rows[0].freelancer_thumbnail_image ? { ...rows[0], freelancer_thumbnail_image: signedUrl || rows[0].freelancer_thumbnail_image } : rows[0],
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
         }
-
-        // Update database with or without new thumbnail URL
-        let updateQuery, updateParams;
-        if (newThumbnailUrl) {
-          updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5, profile_image_url=$6 WHERE user_id=$7
-           RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
-          updateParams = [freelancer_fullname, freelancer_email, date_of_birth, phone_number, profile_title, newThumbnailUrl, user.user_id];
-        } else {
-          updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5 WHERE user_id=$6
-           RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
-          updateParams = [freelancer_fullname, freelancer_email, date_of_birth, phone_number, profile_title, user.user_id];
-        }
-
-        const { rows } = await query(updateQuery, updateParams);
-
-        logger.info("Freelancer basic info updated successfully");
-        return res.status(200).json({
-          status: "success",
-          message: "Profile updated successfully",
-          data: rows[0]
-        });
       }
 
       logger.warn("Invalid type parameter for freelancer:", type);
@@ -958,43 +1028,44 @@ const getUserProfileProgress = async (req, res, next) => {
       GovtID: 0,
       Portfolio: 0
     }
-    const {rows:freelancerRows} = await query(
+    const { rows: freelancerRows } = await query(
       "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_url, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name FROM freelancer WHERE user_id=$1",
       [user.user_id]
     );
-    if(freelancerRows.length>0){
+    if (freelancerRows.length > 0) {
       const freelancer = freelancerRows[0];
-      if(freelancer.date_of_birth && freelancer.phone_number && freelancer.profile_title && freelancer.profile_image_url&&freelancer.freelancer_thumbnail_image){
-        freelancerProgressWeights.ProfileInfo+=40;
+      if (freelancer.date_of_birth && freelancer.phone_number && freelancer.profile_title && freelancer.profile_image_url && freelancer.freelancer_thumbnail_image) {
+        freelancerProgressWeights.ProfileInfo += 40;
       }
-      if(freelancer.gov_id_url){
-        freelancerProgressWeights.GovtID+=20;
+      if (freelancer.gov_id_url) {
+        freelancerProgressWeights.GovtID += 20;
       }
-      if(freelancer.bank_account_no && freelancer.bank_name && freelancer.bank_ifsc_code && freelancer.bank_branch_name){
-        freelancerProgressWeights.BankDetails+=20;
+      if (freelancer.bank_account_no && freelancer.bank_name && freelancer.bank_ifsc_code && freelancer.bank_branch_name) {
+        freelancerProgressWeights.BankDetails += 20;
       }
     }
-    const {rows:freelancerServices} = await query(
+    const { rows: freelancerServices } = await query(
       "SELECT service_id FROM services WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1)",
       [user.user_id]
     );
-    if(freelancerServices.length>0){
-      freelancerProgressWeights.Services=20;
+    if (freelancerServices.length > 0) {
+      freelancerProgressWeights.Services = 20;
     }
-    const {rows:freelancerPortfolio} = await query(
+    const { rows: freelancerPortfolio } = await query(
       "SELECT portfolio_id FROM portfolio WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1)",
       [user.user_id]
     );
-    if(freelancerPortfolio.length>0){
-      freelancerProgressWeights.Portfolio=20;
-    }  
+    if (freelancerPortfolio.length > 0) {
+      freelancerProgressWeights.Portfolio = 20;
+    }
   }
-    catch (error) {
+  catch (error) {
     logger.error("Error calculating profile progress:", error);
     return next(new AppError("Failed to calculate profile progress", 500));
   }
 }
 
-module.exports = { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist,
+module.exports = {
+  getUserProfile, editProfile, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist,
   getUserProfileProgress
- };
+};
