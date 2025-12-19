@@ -5,6 +5,7 @@ const router = express.Router();
 const  { requireRole } =  require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
+const { getUserProfileProgress } = require('../controller/users/userProfileController');
 
 /**
  * @swagger
@@ -816,5 +817,7 @@ router.get('/payouts', getMyPayouts);
  */
 router.get('/earnings', getEarningsSummary);
 
+
+router.get('/profile-progress', requireRole(['freelancer']), getUserProfileProgress);
 
 module.exports = router 

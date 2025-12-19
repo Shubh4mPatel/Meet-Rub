@@ -948,6 +948,54 @@ const addFreelancerToWhitelist = async (req, res, next) => {
 }
 
 const getUserProfileProgress = async (req, res, next) => {
-  // Implementation goes here
+  logger.info("Calculating user profile completion progress");
+  try {
+    const user = req.user;
+    const freelancerProgressWeights = {
+      ProfileInfo: 0,
+      Services: 0,
+      BankDetails: 0,
+      GovtID: 0,
+      Portfolio: 0
+    }
+
+    const {rows:freelancerRows} = await query(
+      "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_url, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name FROM freelancer WHERE user_id=$1",
+      [user.user_id]
+    );
+    if(freelancerRows.length>0){
+      const freelancer = freelancerRows[0];
+      if(freelancer.date_of_birth && freelancer.phone_number && freelancer.profile_title && freelancer.profile_image_url&&freelancer.freelancer_thumbnail_image){
+        freelancerProgressWeights.ProfileInfo+=40;
+      }
+      if(freelancer.gov_id_url){
+        freelancerProgressWeights.GovtID+=20;
+      }
+      if(freelancer.bank_account_no && freelancer.bank_name && freelancer.bank_ifsc_code && freelancer.bank_branch_name){
+        freelancerProgressWeights.BankDetails+=20;
+      }
+    }
+    const {rows:freelancerServices} = await query(
+      "SELECT service_id FROM services WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1)",
+      [user.user_id]
+    );
+    if(freelancerServices.length>0){
+      freelancerProgressWeights.Services=20;
+    }
+    const {rows:freelancerPortfolio} = await query(
+      "SELECT portfolio_id FROM portfolio WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1)",
+      [user.user_id]
+    );
+    if(freelancerPortfolio.length>0){
+      freelancerProgressWeights.Portfolio=20;
+    }
+    
+  }
+    catch (error) {
+    logger.error("Error calculating profile progress:", error);
+    return next(new AppError("Failed to calculate profile progress", 500));
+  }
 }
-module.exports = { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist };
+module.exports = { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist,
+  getUserProfileProgress
+ };
