@@ -9,8 +9,16 @@ const expirySeconds = 4 * 60 * 60; // 4 hours
 const getServices = async (req, res, next) => {
   logger.info("Fetching available services");
   try {
+    const service = req.query.service;
+    const searchTerm = service ? service.trim() : '';
+    const sql = searchTerm
+      ? 'SELECT service_type FROM available_services WHERE service_type ILIKE $1 ORDER BY service_type ASC Limit 10'
+      : 'SELECT service_type FROM available_services ORDER BY service_type ASC Limit 10';
+    const params = searchTerm ? [`%${searchTerm}%`] : [];
+
     const { rows: services } = await query(
-      "SELECT service_type FROM available_services"
+      sql,
+      params
     );
     logger.debug(`Total available services found: ${services.length}`);
 
@@ -84,7 +92,7 @@ const addServicesByFreelancer = async (req, res, next) => {
       `INSERT INTO services (freelancer_id, service_name, description, price, created_at, updated_at,delivery_duration)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [freelancer_id, service, description, price, new Date(), new Date(),deliveryDuration]
+      [freelancer_id, service, description, price, new Date(), new Date(), deliveryDuration]
     );
 
     logger.info("Service added successfully");
