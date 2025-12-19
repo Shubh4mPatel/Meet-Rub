@@ -13,7 +13,7 @@ const getServices = async (req, res, next) => {
     const searchTerm = service ? service.trim() : '';
     const sql = searchTerm
       ? 'SELECT service_type FROM available_services WHERE service_type ILIKE $1 ORDER BY service_type ASC Limit 10'
-      : 'SELECT service_type FROM available_services ORDER BY service_type ASC Limit 10';
+      : 'SELECT service_type FROM available_services ORDER BY service_type ASC ';
     const params = searchTerm ? [`%${searchTerm}%`] : [];
 
     const { rows: services } = await query(
