@@ -958,7 +958,6 @@ const getUserProfileProgress = async (req, res, next) => {
       GovtID: 0,
       Portfolio: 0
     }
-
     const {rows:freelancerRows} = await query(
       "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_url, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name FROM freelancer WHERE user_id=$1",
       [user.user_id]
@@ -988,8 +987,7 @@ const getUserProfileProgress = async (req, res, next) => {
     );
     if(freelancerPortfolio.length>0){
       freelancerProgressWeights.Portfolio=20;
-    }
-    
+    }  
   }
     catch (error) {
     logger.error("Error calculating profile progress:", error);
