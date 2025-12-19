@@ -994,6 +994,7 @@ const getUserProfileProgress = async (req, res, next) => {
     return next(new AppError("Failed to calculate profile progress", 500));
   }
 }
+
 module.exports = { getUserProfile, editProfile, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist,
   getUserProfileProgress
  };
