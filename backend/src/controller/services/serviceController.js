@@ -210,7 +210,7 @@ const getServicesByFreelaner = async (req, res, next) => {
       logger.warn("No services found for freelancer");
       return res.status(204).json({
         status: "success",
-        message: "No services found",
+        message: "No services found"
       });
     }
 

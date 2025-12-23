@@ -119,7 +119,7 @@ router.delete('/portfolio/delete-after-before',requireRole(['freelancer']), dele
 
 /**
  * @swagger
- * /freelancer/add-services:
+ * /freelancer/add-service:
  *   post:
  *     summary: Add services offered by freelancer
  *     tags: [Freelancer Services]
@@ -154,7 +154,7 @@ router.delete('/portfolio/delete-after-before',requireRole(['freelancer']), dele
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.post('/add-services', requireRole(['freelancer']), addServicesByFreelancer)
+router.post('/add-service', requireRole(['freelancer']), addServicesByFreelancer)
 
 /**
  * @swagger
