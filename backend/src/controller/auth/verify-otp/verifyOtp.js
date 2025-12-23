@@ -29,6 +29,8 @@ const verifyOtpSchema = Joi.object({
       .pattern(/^\+?[1-9]\d{1,14}$/) // Must be a valid E.164 phone number
       .optional(),
     govIdType: Joi.string().optional(),
+    bio: Joi.string().optional(),
+    socialLinks: Joi.array().items(Joi.string().uri()).optional(),
   }).optional(),
 });
 
@@ -64,8 +66,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
     if (otpRes.rows.length === 0) {
       return res.status(400).json({
         status: "fail",
-        error: "Invalid or expired OTP",
-        errorCode: 5024,
+        error: "Invalid or expired OTP"
+        
       });
     }
 
@@ -73,8 +75,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
     if (!isOtpValid) {
       return res.status(400).json({
         status: "fail",
-        error: "Invalid OTP",
-        errorCode: 5023,
+        error: "Invalid OTP"
       });
     }
 
