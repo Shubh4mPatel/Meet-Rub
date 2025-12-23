@@ -163,7 +163,7 @@ router.post("/login", loginUser, setTokenCookies, (req, res) => {
  *       401:
  *         description: Unauthorized
  */
-router.post('/logout', authenticateUser, logout);
+router.get('/logout', authenticateUser, logout);
 
 
 module.exports = router;

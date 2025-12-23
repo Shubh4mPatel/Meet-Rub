@@ -104,7 +104,7 @@ const logout = async (req, res, next) => {
         //   [req.user.user_id]
         // );
         const refreshToken = req.cookies?.RefreshToken;
-        await addApiToRedis(req.user.user_id, 'Logout', "Logout", refreshToken);
+        // await addApiToRedis(req.user.user_id, 'Logout', "Logout", refreshToken);
         if (refreshToken) {
             // Remove refresh token from database
             await query("DELETE FROM refresh_tokens WHERE token = $1", [refreshToken]);
@@ -112,17 +112,17 @@ const logout = async (req, res, next) => {
 
         res.clearCookie('AccessToken', { path: '/' });
         res.clearCookie('RefreshToken', { path: '/' });
-        await query(
-            `UPDATE UserSessionLogs
-            SET logout_time = NOW()
-            WHERE id = (
-                SELECT id FROM UserSessionLogs
-                WHERE user_id = $1 AND logout_time IS NULL
-                ORDER BY login_time DESC
-                LIMIT 1
-            )`,
-            [req.user.user_id]
-        );
+        // await query(
+        //     `UPDATE UserSessionLogs
+        //     SET logout_time = NOW()
+        //     WHERE id = (
+        //         SELECT id FROM UserSessionLogs
+        //         WHERE user_id = $1 AND logout_time IS NULL
+        //         ORDER BY login_time DESC
+        //         LIMIT 1
+        //     )`,
+        //     [req.user.user_id]
+        // );
         res.status(200).json({ message: 'Logged out successfully' });
     } catch (error) {
         res.status(500).json({ error: 'Logout failed' });
