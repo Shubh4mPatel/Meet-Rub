@@ -1,0 +1,1599 @@
+{
+	"info": {
+		"_postman_id": "meet-rub-api-collection-v2",
+		"name": "Meet-Rub Complete API Collection",
+		"description": "Complete and accurate API collection for Meet-Rub platform - Freelancer marketplace with payment processing, escrow, and wallet functionality. Base URL: http://localhost:3000/api",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:7000/api",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_email",
+			"value": "user@example.com",
+			"type": "string"
+		},
+		{
+			"key": "freelancer_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "project_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "service_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "transaction_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Send OTP",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{user_email}}\",\n  \"type\": \"email-verification\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/send-otp",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "send-otp"]
+						},
+						"description": "Send OTP to user's email for authentication. Type can be 'email-verification' or 'password-reset'."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP - Freelancer Registration",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "otp",
+									"value": "123456",
+									"type": "text"
+								},
+								{
+									"key": "email",
+									"value": "{{user_email}}",
+									"type": "text"
+								},
+								{
+									"key": "type",
+									"value": "email-verification",
+									"type": "text"
+								},
+								{
+									"key": "encryptedPassword",
+									"value": "password123",
+									"type": "text"
+								},
+								{
+									"key": "role",
+									"value": "freelancer",
+									"type": "text"
+								},
+								{
+									"key": "UserData",
+									"value": "{\"firstName\":\"John\",\"lastName\":\"Doe\",\"dateOfBirth\":\"1990-01-01\",\"profileTitle\":\"Web Developer\",\"serviceOffred\":[\"Web Development\",\"UI/UX Design\"],\"niche\":[\"Technology\",\"Design\"],\"govId\":\"ABC123456\",\"phoneNumber\":\"+919876543210\",\"govIdType\":\"aadhar\",\"bio\":\"Experienced developer\",\"socialLinks\":[\"https://linkedin.com/in/johndoe\"]}",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": [],
+									"description": "Government ID document (required for freelancer)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/verify-otp",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "verify-otp"]
+						},
+						"description": "Verify OTP and complete freelancer registration. Sets authentication cookies."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP - Creator Registration",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "otp",
+									"value": "123456",
+									"type": "text"
+								},
+								{
+									"key": "email",
+									"value": "creator@example.com",
+									"type": "text"
+								},
+								{
+									"key": "type",
+									"value": "email-verification",
+									"type": "text"
+								},
+								{
+									"key": "encryptedPassword",
+									"value": "password123",
+									"type": "text"
+								},
+								{
+									"key": "role",
+									"value": "creator",
+									"type": "text"
+								},
+								{
+									"key": "UserData",
+									"value": "{\"firstName\":\"Jane\",\"lastName\":\"Smith\",\"niche\":[\"Gaming\",\"Tech\"],\"bio\":\"Content creator specializing in gaming\",\"socialLinks\":[\"https://youtube.com/@janecreator\"]}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/verify-otp",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "verify-otp"]
+						},
+						"description": "Verify OTP and complete creator registration. Sets authentication cookies."
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "Login with email and password. Returns httpOnly cookies with accessToken and refreshToken."
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "logout"]
+						},
+						"description": "Logout and clear authentication cookies"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for OTP-based registration, login, and logout"
+		},
+		{
+			"name": "2. User Profile",
+			"item": [
+				{
+					"name": "Get Profile - Basic Info (Freelancer)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user-profile/getProfile?type=basicInfo",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "getProfile"],
+							"query": [
+								{
+									"key": "type",
+									"value": "basicInfo",
+									"description": "basicInfo, profileImage, govtId, bankDetails"
+								}
+							]
+						},
+						"description": "Get user's basic profile information (Freelancer)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile - Profile Image",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user-profile/getProfile?type=profileImage",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "getProfile"],
+							"query": [
+								{
+									"key": "type",
+									"value": "profileImage"
+								}
+							]
+						},
+						"description": "Get user's profile image URL with presigned access"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile - Govt ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user-profile/getProfile?type=govtId",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "getProfile"],
+							"query": [
+								{
+									"key": "type",
+									"value": "govtId"
+								}
+							]
+						},
+						"description": "Get government ID information"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile - Bank Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user-profile/getProfile?type=bankDetails",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "getProfile"],
+							"query": [
+								{
+									"key": "type",
+									"value": "bankDetails"
+								}
+							]
+						},
+						"description": "Get bank account details (Freelancer only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Profile - Basic Info (Freelancer)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "type",
+									"value": "basicInfo",
+									"type": "text"
+								},
+								{
+									"key": "userData",
+									"value": "{\"freelancerFullName\":\"John Updated Doe\",\"dateOfBirth\":\"1990-01-01\",\"phoneNumber\":\"+919876543210\",\"profileTitle\":\"Senior Web Developer\"}",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": [],
+									"disabled": true,
+									"description": "Optional: New thumbnail image"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/user-profile/editProfile",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "editProfile"]
+						},
+						"description": "Update freelancer's basic profile information"
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Profile - Bank Details (Freelancer)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "type",
+									"value": "bankDetails",
+									"type": "text"
+								},
+								{
+									"key": "userData",
+									"value": "{\"bankAccountNo\":\"1234567890\",\"bankName\":\"HDFC Bank\",\"bankIFSCCode\":\"HDFC0001234\",\"bankBranchName\":\"Mumbai Main\"}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/user-profile/editProfile",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "editProfile"]
+						},
+						"description": "Update bank account details for payout"
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Profile - Govt ID (Freelancer)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "type",
+									"value": "govtId",
+									"type": "text"
+								},
+								{
+									"key": "userData",
+									"value": "{\"gov_id_type\":\"aadhar\",\"gov_id_number\":\"123456789012\"}",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": [],
+									"description": "New government ID document"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/user-profile/editProfile",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "editProfile"]
+						},
+						"description": "Update government ID document"
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Profile - Profile Image (Freelancer)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "type",
+									"value": "profileImage",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": [],
+									"description": "New profile picture"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/user-profile/editProfile",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "editProfile"]
+						},
+						"description": "Update profile picture"
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Profile - Basic Info (Creator)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "type",
+									"value": "basicInfo",
+									"type": "text"
+								},
+								{
+									"key": "userData",
+									"value": "{\"first_name\":\"Jane\",\"last_name\":\"Smith\",\"phone_number\":\"+919876543210\",\"social_platform_type\":\"youtube\",\"social_links\":[\"https://youtube.com/@jane\"],\"niche\":[\"Gaming\"]}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/user-profile/editProfile",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "editProfile"]
+						},
+						"description": "Update creator's basic profile information"
+					},
+					"response": []
+				},
+				{
+					"name": "Browse All Freelancers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user-profile/freelancers?page=1&limit=10&sortBy=newest",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "freelancers"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "search",
+									"value": "web developer",
+									"disabled": true
+								},
+								{
+									"key": "minPrice",
+									"value": "0",
+									"disabled": true
+								},
+								{
+									"key": "maxPrice",
+									"value": "10000",
+									"disabled": true
+								},
+								{
+									"key": "serviceType",
+									"value": "Web Development",
+									"disabled": true
+								},
+								{
+									"key": "sortBy",
+									"value": "newest",
+									"description": "newest or toprated"
+								},
+								{
+									"key": "deliveryTime",
+									"value": "2-3 days",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Browse all freelancers with pagination, search, and filters"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Freelancer By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user-profile/freelancers/{{freelancer_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "freelancers", "{{freelancer_id}}"]
+						},
+						"description": "Get detailed information about a specific freelancer including their services"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Freelancer Portfolio",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user-profile/freelancers/{{freelancer_id}}/portfolio",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "freelancers", "{{freelancer_id}}", "portfolio"]
+						},
+						"description": "Get portfolio items for a specific freelancer"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Freelancer Impact (Before/After)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user-profile/freelancers/{{freelancer_id}}/impact",
+							"host": ["{{base_url}}"],
+							"path": ["user-profile", "freelancers", "{{freelancer_id}}", "impact"]
+						},
+						"description": "Get before/after impact data for a specific freelancer"
+					},
+					"response": []
+				}
+			],
+			"description": "User profile management and freelancer browsing endpoints"
+		},
+		{
+			"name": "3. Freelancer Management",
+			"item": [
+				{
+					"name": "Services",
+					"item": [
+						{
+							"name": "Add Service",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"service\": \"Web Development\",\n  \"price\": 5000,\n  \"description\": \"Full stack web development with React and Node.js. Includes responsive design, API integration, and database setup.\",\n  \"deliveryDuration\": \"5-7 days\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/freelancer/add-service",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "add-service"]
+								},
+								"description": "Add a new service offering (Freelancer role required)"
+							},
+							"response": []
+						},
+						{
+							"name": "Get My Services",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/freelancer/get-services",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "get-services"]
+								},
+								"description": "Get all services offered by the authenticated freelancer"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Service",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"serviceId\": \"{{service_id}}\",\n  \"service\": \"Advanced Web Development\",\n  \"price\": 7500,\n  \"description\": \"Full stack web development with React, Node.js, AWS deployment, and CI/CD setup.\",\n  \"deliveryDuration\": \"7-10 days\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/freelancer/update-service",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "update-service"]
+								},
+								"description": "Update an existing service (Freelancer role required)"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Service",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"id\": \"{{service_id}}\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/freelancer/delete-services",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "delete-services"]
+								},
+								"description": "Delete a service (Freelancer role required)"
+							},
+							"response": []
+						}
+					],
+					"description": "Manage freelancer service offerings"
+				},
+				{
+					"name": "Portfolio",
+					"item": [
+						{
+							"name": "Get My Portfolio",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/freelancer/portfolio/get-protfolio",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "portfolio", "get-protfolio"]
+								},
+								"description": "Get all portfolio items organized by service type"
+							},
+							"response": []
+						},
+						{
+							"name": "Add Portfolio Items",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "type",
+											"value": "image",
+											"type": "text",
+											"description": "image or video"
+										},
+										{
+											"key": "serviceType",
+											"value": "Web Development",
+											"type": "text"
+										},
+										{
+											"key": "itemDescription",
+											"value": "E-commerce website with payment gateway integration",
+											"type": "text"
+										},
+										{
+											"key": "files",
+											"type": "file",
+											"src": []
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/freelancer/portfolio/add-protfolio",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "portfolio", "add-protfolio"]
+								},
+								"description": "Add new portfolio items (images or videos)"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Portfolio Item",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "url",
+											"value": "current-portfolio-item-url",
+											"type": "text",
+											"description": "Current portfolio item URL to update"
+										},
+										{
+											"key": "type",
+											"value": "image",
+											"type": "text"
+										},
+										{
+											"key": "file",
+											"type": "file",
+											"src": []
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/freelancer/portfolio/update-protfolio",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "portfolio", "update-protfolio"]
+								},
+								"description": "Update an existing portfolio item"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Portfolio Items",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"urls\": [\n    \"portfolio-url-1\",\n    \"portfolio-url-2\"\n  ]\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/freelancer/portfolio/delete-protfolios",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "portfolio", "delete-protfolios"]
+								},
+								"description": "Delete one or more portfolio items"
+							},
+							"response": []
+						}
+					],
+					"description": "Manage portfolio items"
+				},
+				{
+					"name": "Before/After Impact",
+					"item": [
+						{
+							"name": "Get My Before/After",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/freelancer/portfolio/get-after-before?page=1&limit=10",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "portfolio", "get-after-before"],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "10"
+										}
+									]
+								},
+								"description": "Get all before/after impact items with pagination"
+							},
+							"response": []
+						},
+						{
+							"name": "Upload Before/After",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "before",
+											"type": "file",
+											"src": [],
+											"description": "Before image"
+										},
+										{
+											"key": "after",
+											"type": "file",
+											"src": [],
+											"description": "After image"
+										},
+										{
+											"key": "serviceType",
+											"value": "Video Editing",
+											"type": "text"
+										},
+										{
+											"key": "matric",
+											"value": "Increased engagement by 200% with professional editing",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/freelancer/portfolio/upload-after-before",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "portfolio", "upload-after-before"]
+								},
+								"description": "Upload before and after images showing impact (Freelancer role required)"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Before/After",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"id\": \"1\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/freelancer/portfolio/delete-after-before",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "portfolio", "delete-after-before"]
+								},
+								"description": "Delete before/after images by ID (Freelancer role required)"
+							},
+							"response": []
+						}
+					],
+					"description": "Manage before/after impact showcase"
+				},
+				{
+					"name": "Earnings & Payouts",
+					"item": [
+						{
+							"name": "Get My Payouts",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/freelancer/payouts",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "payouts"]
+								},
+								"description": "Get all payouts with status and transaction details"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Earnings Summary",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/freelancer/earnings",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "earnings"]
+								},
+								"description": "Get comprehensive earnings summary including completed, pending, and processing amounts"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Profile Progress",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/freelancer/profile-progress",
+									"host": ["{{base_url}}"],
+									"path": ["freelancer", "profile-progress"]
+								},
+								"description": "Get profile completion progress"
+							},
+							"response": []
+						}
+					],
+					"description": "View earnings, payouts, and profile completion"
+				}
+			],
+			"description": "Freelancer-specific management endpoints (requires Freelancer role)"
+		},
+		{
+			"name": "4. Creator Management",
+			"item": [
+				{
+					"name": "Create Service Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"service\": \"Video Editing\",\n  \"details\": \"Need professional video editing for YouTube content. 10-15 minute videos, includes color grading, audio enhancement, transitions, and b-roll integration.\",\n  \"budget\": 5000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/creator/service-request",
+							"host": ["{{base_url}}"],
+							"path": ["creator", "service-request"]
+						},
+						"description": "Create a new service request for freelancers to bid on (Creator role required)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Service Requests",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/creator/service-requests",
+							"host": ["{{base_url}}"],
+							"path": ["creator", "service-requests"]
+						},
+						"description": "Get all service requests created by the authenticated creator"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Service Request Suggestions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/creator/service-requests/1/suggestions",
+							"host": ["{{base_url}}"],
+							"path": ["creator", "service-requests", "1", "suggestions"]
+						},
+						"description": "Get freelancer suggestions for a specific service request"
+					},
+					"response": []
+				},
+				{
+					"name": "Add Freelancer to Whitelist",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"id\": \"{{freelancer_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/creator/whitelist",
+							"host": ["{{base_url}}"],
+							"path": ["creator", "whitelist"]
+						},
+						"description": "Add a freelancer to your whitelist for preferred collaboration"
+					},
+					"response": []
+				}
+			],
+			"description": "Creator-specific endpoints for managing service requests (requires Creator role)"
+		},
+		{
+			"name": "5. Admin",
+			"item": [
+				{
+					"name": "User Management",
+					"item": [
+						{
+							"name": "Approve User Profile",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"userEmail\": \"user@example.com\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/admin/userApproval",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "userApproval"]
+								},
+								"description": "Approve a user profile for platform access (Admin only)"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Services Management",
+					"item": [
+						{
+							"name": "Get All Services",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/admin/getServices?service=web",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "getServices"],
+									"query": [
+										{
+											"key": "service",
+											"value": "web",
+											"description": "Optional search term"
+										}
+									]
+								},
+								"description": "Get all available service types with optional search (Admin only)"
+							},
+							"response": []
+						},
+						{
+							"name": "Add Services",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"serviceType\": [\n    \"Web Development\",\n    \"Mobile App Development\",\n    \"UI/UX Design\",\n    \"Video Editing\",\n    \"Content Writing\",\n    \"SEO Services\",\n    \"Social Media Marketing\"\n  ]\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/admin/addServices",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "addServices"]
+								},
+								"description": "Add new service types to the platform (Admin only)"
+							},
+							"response": []
+						},
+						{
+							"name": "Get All Service Requests",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/admin/service-requests",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "service-requests"]
+								},
+								"description": "Get all active service requests from creators (Admin only)"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Escrow Management",
+					"item": [
+						{
+							"name": "Get Escrow Transactions",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/admin/escrow?status=HELD",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "escrow"],
+									"query": [
+										{
+											"key": "status",
+											"value": "HELD",
+											"description": "HELD, RELEASED, COMPLETED"
+										}
+									]
+								},
+								"description": "Get all escrow transactions with optional status filter (Admin only)"
+							},
+							"response": []
+						},
+						{
+							"name": "Release Escrow Payment",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/admin/escrow/{{transaction_id}}/release",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "escrow", "{{transaction_id}}", "release"]
+								},
+								"description": "Release escrow payment to freelancer after project completion verification (Admin only)"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Payout Management",
+					"item": [
+						{
+							"name": "Get All Payouts",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/admin/payouts?status=PROCESSED",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "payouts"],
+									"query": [
+										{
+											"key": "status",
+											"value": "PROCESSED",
+											"description": "QUEUED, PENDING, PROCESSING, PROCESSED, FAILED"
+										}
+									]
+								},
+								"description": "Get all freelancer payouts with optional status filter (Admin only)"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Payout Details",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/admin/payouts/789",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "payouts", "789"]
+								},
+								"description": "Get detailed information about a specific payout (Admin only)"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Platform Settings",
+					"item": [
+						{
+							"name": "Get Platform Stats",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/admin/stats",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "stats"]
+								},
+								"description": "Get comprehensive platform statistics (Admin only)"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Commission Percentage",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"percentage\": 10\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/admin/commission",
+									"host": ["{{base_url}}"],
+									"path": ["admin", "commission"]
+								},
+								"description": "Update platform commission percentage (0-100) (Admin only)"
+							},
+							"response": []
+						}
+					]
+				}
+			],
+			"description": "Admin-only endpoints for platform management (requires Admin role)"
+		},
+		{
+			"name": "6. Projects",
+			"item": [
+				{
+					"name": "Create Project",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"freelancer_id\": \"{{freelancer_id}}\",\n  \"title\": \"Website Redesign\",\n  \"description\": \"Complete redesign of company website with modern UI/UX. Includes homepage, about page, services page, and contact form.\",\n  \"amount\": 5000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/projects",
+							"host": ["{{base_url}}"],
+							"path": ["projects"]
+						},
+						"description": "Create a new project with a freelancer"
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Projects",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/projects?status=IN_PROGRESS",
+							"host": ["{{base_url}}"],
+							"path": ["projects"],
+							"query": [
+								{
+									"key": "status",
+									"value": "IN_PROGRESS",
+									"description": "CREATED, IN_PROGRESS, COMPLETED, CANCELLED"
+								}
+							]
+						},
+						"description": "Get all projects for the authenticated user (as client or freelancer)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Project Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/projects/{{project_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["projects", "{{project_id}}"]
+						},
+						"description": "Get detailed information about a specific project"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Project Status",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"COMPLETED\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/projects/{{project_id}}/status",
+							"host": ["{{base_url}}"],
+							"path": ["projects", "{{project_id}}", "status"]
+						},
+						"description": "Update project status. Only freelancer can mark COMPLETED, only client can CANCEL."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Project",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/projects/{{project_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["projects", "{{project_id}}"]
+						},
+						"description": "Delete a project (only client can delete, and only if no transactions exist)"
+					},
+					"response": []
+				}
+			],
+			"description": "Project management endpoints for clients and freelancers"
+		},
+		{
+			"name": "7. Payments",
+			"item": [
+				{
+					"name": "Pay from Wallet",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": \"{{project_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/payments/pay-wallet",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "pay-wallet"]
+						},
+						"description": "Pay for a project using wallet balance. Funds are held in escrow. (Creator role required)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Payment Order (Razorpay)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": \"{{project_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/payments/create-order",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "create-order"]
+						},
+						"description": "Create a Razorpay payment order for a project (Creator role required)"
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Payment (Razorpay)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"razorpay_order_id\": \"order_NXmjDYHG5hKfZ9\",\n  \"razorpay_payment_id\": \"pay_NXmjE8XXXXXXXXX\",\n  \"razorpay_signature\": \"9d3b8f7c6e5a4b3c2d1e0f9g8h7i6j5k\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/payments/verify",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "verify"]
+						},
+						"description": "Verify Razorpay payment signature and hold funds in escrow (Creator role required)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Transaction Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/payments/transactions/{{transaction_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "transactions", "{{transaction_id}}"]
+						},
+						"description": "Get details of a specific payment transaction"
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Transactions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/payments/my-transactions",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "my-transactions"]
+						},
+						"description": "Get all payment transactions for the authenticated user (as client or freelancer)"
+					},
+					"response": []
+				}
+			],
+			"description": "Payment processing with Razorpay integration and escrow system"
+		},
+		{
+			"name": "8. Wallet",
+			"item": [
+				{
+					"name": "Get Wallet Balance",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/wallet/balance",
+							"host": ["{{base_url}}"],
+							"path": ["wallet", "balance"]
+						},
+						"description": "Get current wallet balance, currency, and status"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Wallet Load Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 5000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/wallet/load/create-order",
+							"host": ["{{base_url}}"],
+							"path": ["wallet", "load", "create-order"]
+						},
+						"description": "Create a Razorpay order to add funds to wallet (Min: 100, Max: 100000)"
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Wallet Load Payment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"razorpay_order_id\": \"order_NXmjDYHG5hKfZ9\",\n  \"razorpay_payment_id\": \"pay_NXmjE8XXXXXXXXX\",\n  \"razorpay_signature\": \"9d3b8f7c6e5a4b3c2d1e0f9g8h7i6j5k\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/wallet/load/verify",
+							"host": ["{{base_url}}"],
+							"path": ["wallet", "load", "verify"]
+						},
+						"description": "Verify Razorpay payment and credit amount to wallet"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Wallet Transactions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/wallet/transactions?limit=50&offset=0",
+							"host": ["{{base_url}}"],
+							"path": ["wallet", "transactions"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Get paginated list of all wallet transactions"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Single Wallet Transaction",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/wallet/transactions/1",
+							"host": ["{{base_url}}"],
+							"path": ["wallet", "transactions", "1"]
+						},
+						"description": "Get details of a specific wallet transaction by ID"
+					},
+					"response": []
+				}
+			],
+			"description": "Wallet management for loading funds and tracking transactions"
+		},
+		{
+			"name": "9. Webhooks",
+			"item": [
+				{
+					"name": "Razorpay Webhook",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Razorpay-Signature",
+								"value": "webhook-signature"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"event\": \"payment.captured\",\n  \"payload\": {\n    \"payment\": {\n      \"entity\": {\n        \"id\": \"pay_XXXXXXXXXXXXXX\",\n        \"amount\": 100000,\n        \"currency\": \"INR\",\n        \"status\": \"captured\",\n        \"order_id\": \"order_YYYYYYYYYY\",\n        \"method\": \"card\",\n        \"captured\": true\n      }\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/webhooks/razorpay",
+							"host": ["{{base_url}}"],
+							"path": ["webhooks", "razorpay"]
+						},
+						"description": "Razorpay webhook endpoint for payment notifications (verified via signature)"
+					},
+					"response": []
+				}
+			],
+			"description": "Webhook endpoints for payment gateway callbacks"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}
