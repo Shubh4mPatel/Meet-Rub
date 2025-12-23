@@ -26,7 +26,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((origin) =>
   origin.trim()
 );
 const corsOptions = {
-  origin: function (origin, callback) {
+  origin:process.env.NODE_ENV=='production'?function (origin, callback) {
     // Allow requests with no origin (like mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
 
@@ -36,7 +36,7 @@ const corsOptions = {
       // Use standard Error instead of AppError if AppError isn't defined
       callback(new Error(`Origin ${origin} not allowed by CORS policy`), false);
     }
-  },
+  }:'*',
   credentials: true, // Required for cookies/auth
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [

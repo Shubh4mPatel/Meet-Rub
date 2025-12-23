@@ -268,11 +268,10 @@ const editProfile = async (req, res, next) => {
         logger.info("Updating Freelancer Bank Details");
 
         const {
-          freelancer_fullname,
-          bank_account_no,
-          bank_name,
-          bank_ifsc_code,
-          bank_branch_name,
+          bankAccountNo,
+          bankName,
+          bankIFSCCode,
+          bankBranchName,
         } = userData;
 
         if (!freelancer_fullname || !bank_account_no || !bank_name || !bank_ifsc_code || !bank_branch_name) {
@@ -408,14 +407,13 @@ const editProfile = async (req, res, next) => {
         logger.info("Updating Freelancer Basic Info");
         const {
           freelancerFullName,
-          freelancerEmail,
           dateOfBirth,
           phoneNumber,
           profileTitle,
           thumbnailImageUrl
         } = userData;
 
-        if (!freelancerFullName || !freelancerEmail || !dateOfBirth || !phoneNumber || !profileTitle) {
+        if (!freelancerFullName  || !dateOfBirth || !phoneNumber || !profileTitle) {
           logger.warn("Missing basicInfo fields");
           return next(new AppError("All basic info fields required", 400));
         }
@@ -475,13 +473,13 @@ const editProfile = async (req, res, next) => {
           // Update database with or without new thumbnail URL
           let updateQuery, updateParams;
           if (newThumbnailUrl) {
-            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5, profile_image_url=$6 WHERE user_id=$7
+            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, profile_image_url=$5 WHERE user_id=$6
              RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
-            updateParams = [freelancerFullName, freelancerEmail, dateOfBirth, phoneNumber, profileTitle, newThumbnailUrl, user.user_id];
+            updateParams = [freelancerFullName,  dateOfBirth, phoneNumber, profileTitle, newThumbnailUrl, user.user_id];
           } else {
-            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, freelancer_email=$2, date_of_birth=$3, phone_number=$4, profile_title=$5 WHERE user_id=$6
+            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1,  date_of_birth=$2, phone_number=$3, profile_title=$4 WHERE user_id=$5
              RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
-            updateParams = [freelancerFullName, freelancerEmail, dateOfBirth, phoneNumber, profileTitle, user.user_id];
+            updateParams = [freelancerFullName,  dateOfBirth, phoneNumber, profileTitle, user.user_id];
           }
 
           const { rows } = await query(updateQuery, updateParams);
