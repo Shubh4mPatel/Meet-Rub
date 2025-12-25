@@ -542,7 +542,7 @@ const getAllFreelancers = async (req, res, next) => {
         f.profile_title,
         f.profile_image_url,
         f.rating,
-        s.service_type,
+        s.services_name,
         s.service_price,
         s.delivery_time,
         s.created_at
@@ -564,7 +564,7 @@ const getAllFreelancers = async (req, res, next) => {
     // Add service type filter (using IN clause for array)
     if (serviceTypes.length > 0) {
       const serviceTypeParams = serviceTypes.map((_, index) => `$${paramCount + index}`).join(',');
-      queryText += ` AND s.service_type IN (${serviceTypeParams})`;
+      queryText += ` AND s.services_name IN (${serviceTypeParams})`;
       queryParams.push(...serviceTypes);
       paramCount += serviceTypes.length;
     }
@@ -617,7 +617,7 @@ const getAllFreelancers = async (req, res, next) => {
 
     if (serviceTypes.length > 0) {
       const serviceTypeParams = serviceTypes.map((_, index) => `$${countParamIndex + index}`).join(',');
-      countQuery += ` AND s.service_type IN (${serviceTypeParams})`;
+      countQuery += ` AND s.services_name IN (${serviceTypeParams})`;
       countParams.push(...serviceTypes);
       countParamIndex += serviceTypes.length;
     }
@@ -755,7 +755,7 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerServices } = await query(
-      `SELECT id, service_type, service_description, service_price, delivery_time
+      `SELECT id, services_name, service_description, service_price, delivery_time
        FROM services WHERE freelancer_id = $1`,
       [freelancerId]
     );
@@ -901,7 +901,7 @@ const getFreelancerImpact = async (req, res, next) => {
 
     const { rows: afterBeforeData } = await query(`
       SELECT
-    service_type,
+    services_name,
     json_agg(
         json_build_object(
             'impact_id', impact_id,
@@ -912,18 +912,18 @@ const getFreelancerImpact = async (req, res, next) => {
     ) as impact_items
 FROM (
     SELECT
-        service_type,
+        services_name,
         impact_id,
         before_service_url,
         after_service_url,
         impact_metric,
-        ROW_NUMBER() OVER (PARTITION BY service_type ORDER BY impact_id) as rn
+        ROW_NUMBER() OVER (PARTITION BY services_name ORDER BY impact_id) as rn
     FROM impact
     WHERE freelancer_id = $1
 ) subquery
 WHERE rn <= 3
-GROUP BY service_type
-ORDER BY service_type`, [freelancerId]);
+GROUP BY services_name
+ORDER BY services_name`, [freelancerId]);
 
     // Process impact items with proper async/await
     for (const impact of afterBeforeData) {
