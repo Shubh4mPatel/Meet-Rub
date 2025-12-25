@@ -104,11 +104,10 @@ const logout = async (req, res, next) => {
         //   [req.user.user_id]
         // );
         const refreshToken = req.cookies?.RefreshToken;
-        // await addApiToRedis(req.user.user_id, 'Logout', "Logout", refreshToken);
-        if (refreshToken) {
-            // Remove refresh token from database
-            await query("DELETE FROM refresh_tokens WHERE token = $1", [refreshToken]);
-        }
+        // if (refreshToken) {
+        //     // Remove refresh token from database
+        //     await query("DELETE FROM refresh_tokens WHERE token = $1", [refreshToken]);
+        // }
 
         res.clearCookie('AccessToken', { path: '/' });
         res.clearCookie('RefreshToken', { path: '/' });

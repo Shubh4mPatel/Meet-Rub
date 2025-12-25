@@ -12,8 +12,7 @@ const expirySeconds = 4 * 60 * 60; // 4 hours
 const getUserProfile = async (req, res, next) => {
   logger.info("Fetching user profile");
   try {
-
-    const user = req.user
+    const user = req.user;
     logger.debug("Decoded User:", user);
     const role = user.role;
     const type = req.query.type;
@@ -46,7 +45,11 @@ const getUserProfile = async (req, res, next) => {
 
       // Creators don't have profile images, govt ID, or bank details in the creators table
       // Return appropriate error messages for unsupported types
-      if (type === "profileImage" || type === "govtId" || type === "bankDetails") {
+      if (
+        type === "profileImage" ||
+        type === "govtId" ||
+        type === "bankDetails"
+      ) {
         logger.warn(`Type ${type} not supported for creator role`);
         return next(new AppError(`${type} is not available for creators`, 400));
       }
@@ -145,8 +148,8 @@ const getUserProfile = async (req, res, next) => {
           data: {
             userGovtIdUrl: signedUrl,
             userGovtIdType: rows[0]?.gov_id_type,
-            userGovtIdNumber: rows[0]?.gov_id_number
-          }
+            userGovtIdNumber: rows[0]?.gov_id_number,
+          },
         });
       }
 
@@ -175,7 +178,6 @@ const getUserProfile = async (req, res, next) => {
     // If role is neither creator nor freelancer
     logger.warn("Unsupported user role:", role);
     return next(new AppError("Unsupported user role", 400));
-
   } catch (error) {
     logger.error("Error fetching profile:", error);
     return next(new AppError("Failed to get user profile", 500));
@@ -186,7 +188,7 @@ const getUserProfile = async (req, res, next) => {
 const editProfile = async (req, res, next) => {
   logger.info("Updating user profile");
   try {
-    const user = req.user
+    const user = req.user;
     const role = user.role;
     const { type, userData } = req.body;
 
@@ -211,18 +213,33 @@ const editProfile = async (req, res, next) => {
           phone_number,
           social_platform_type,
           social_links,
-          niche
+          niche,
         } = userData;
 
-        if (!first_name || !last_name || !phone_number || !social_platform_type) {
+        if (
+          !first_name ||
+          !last_name ||
+          !phone_number ||
+          !social_platform_type
+        ) {
           logger.warn("Missing required creator fields");
-          return next(new AppError("first_name, last_name, phone_number, and social_platform_type are required", 400));
+          return next(
+            new AppError(
+              "first_name, last_name, phone_number, and social_platform_type are required",
+              400
+            )
+          );
         }
 
         // Validate social_platform_type
-        if (!['youtube', 'instagram'].includes(social_platform_type)) {
+        if (!["youtube", "instagram"].includes(social_platform_type)) {
           logger.warn("Invalid social platform type");
-          return next(new AppError("social_platform_type must be either 'youtube' or 'instagram'", 400));
+          return next(
+            new AppError(
+              "social_platform_type must be either 'youtube' or 'instagram'",
+              400
+            )
+          );
         }
 
         // Start transaction
@@ -234,7 +251,16 @@ const editProfile = async (req, res, next) => {
                  social_platform_type=$5, social_links=$6, niche=$7, updated_at=CURRENT_TIMESTAMP
              WHERE user_id=$8
              RETURNING first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche`,
-            [first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche, user.user_id]
+            [
+              first_name,
+              last_name,
+              full_name,
+              phone_number,
+              social_platform_type,
+              social_links,
+              niche,
+              user.user_id,
+            ]
           );
 
           if (!rows[0]) {
@@ -249,7 +275,7 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Creator profile updated successfully",
-            data: rows[0]
+            data: rows[0],
           });
         } catch (error) {
           await query("ROLLBACK");
@@ -259,7 +285,12 @@ const editProfile = async (req, res, next) => {
 
       // Creators don't support other types
       logger.warn(`Type ${type} not supported for creator role`);
-      return next(new AppError(`${type} is not available for creators. Only 'basicInfo' is supported.`, 400));
+      return next(
+        new AppError(
+          `${type} is not available for creators. Only 'basicInfo' is supported.`,
+          400
+        )
+      );
     }
 
     // ✅ FREELANCER ROLE HANDLING
@@ -267,14 +298,15 @@ const editProfile = async (req, res, next) => {
       if (type === "bankDetails") {
         logger.info("Updating Freelancer Bank Details");
 
-        const {
-          bankAccountNo,
-          bankName,
-          bankIFSCCode,
-          bankBranchName,
-        } = userData;
+        const { bank_account_no, bank_name, bank_ifsc_code, bank_branch_name } =
+          userData;
 
-        if (!freelancer_fullname || !bank_account_no || !bank_name || !bank_ifsc_code || !bank_branch_name) {
+        if (
+          !bank_account_no ||
+          !bank_name ||
+          !bank_ifsc_code ||
+          !bank_branch_name
+        ) {
           logger.warn("Missing bank details fields");
           return next(new AppError("All bank details required", 400));
         }
@@ -284,7 +316,14 @@ const editProfile = async (req, res, next) => {
         try {
           const { rows } = await query(
             "UPDATE freelancer SET freelancer_full_name=$1, bank_account_no=$2, bank_name=$3, bank_ifsc_code=$4, bank_branch_name=$5 WHERE user_id=$6 RETURNING *",
-            [freelancer_fullname, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, user.user_id]
+            [
+              freelancer_fullname,
+              bank_account_no,
+              bank_name,
+              bank_ifsc_code,
+              bank_branch_name,
+              user.user_id,
+            ]
           );
 
           // Commit transaction
@@ -320,11 +359,17 @@ const editProfile = async (req, res, next) => {
         // Start transaction
         await query("BEGIN");
         try {
-          await minioClient.putObject(BUCKET_NAME, objectName, req.file.buffer, req.file.size, {
-            "Content-Type": req.file.mimetype
-          });
+          await minioClient.putObject(
+            BUCKET_NAME,
+            objectName,
+            req.file.buffer,
+            req.file.size,
+            {
+              "Content-Type": req.file.mimetype,
+            }
+          );
 
-          const {rows:freelancerGovInfo} = await query(
+          const { rows: freelancerGovInfo } = await query(
             "UPDATE freelancer SET gov_id_type=$1, gov_id_url=$2, gov_id_number=$3 WHERE user_id=$4 returning gov_id_type, gov_id_url, gov_id_number",
             [gov_id_type, gov_id_url, gov_id_number, user.user_id]
           );
@@ -341,7 +386,9 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Government ID updated successfully",
-            data :freelancerGovInfo[0].gov_id_url ? {...freelancerGovInfo[0], gov_id_url: signedUrl} : freelancerGovInfo[0]
+            data: freelancerGovInfo[0].gov_id_url
+              ? { ...freelancerGovInfo[0], gov_id_url: signedUrl }
+              : freelancerGovInfo[0],
           });
         } catch (error) {
           await query("ROLLBACK");
@@ -374,10 +421,10 @@ const editProfile = async (req, res, next) => {
             { "Content-Type": req.file.mimetype }
           );
 
-          await query("UPDATE freelancer SET profile_image_url=$1 WHERE user_id=$2", [
-            profile_url,
-            user.user_id,
-          ]);
+          await query(
+            "UPDATE freelancer SET profile_image_url=$1 WHERE user_id=$2",
+            [profile_url, user.user_id]
+          );
 
           // Generate presigned URL for the uploaded image
           const signedUrl = await minioClient.presignedGetObject(
@@ -393,8 +440,8 @@ const editProfile = async (req, res, next) => {
             status: "success",
             message: "Profile image updated successfully",
             data: {
-              profile_image_url: signedUrl
-            }
+              profile_image_url: signedUrl,
+            },
           });
         } catch (error) {
           await query("ROLLBACK");
@@ -410,10 +457,15 @@ const editProfile = async (req, res, next) => {
           dateOfBirth,
           phoneNumber,
           profileTitle,
-          thumbnailImageUrl
+          thumbnailImageUrl,
         } = userData;
 
-        if (!freelancerFullName  || !dateOfBirth || !phoneNumber || !profileTitle) {
+        if (
+          !freelancerFullName ||
+          !dateOfBirth ||
+          !phoneNumber ||
+          !profileTitle
+        ) {
           logger.warn("Missing basicInfo fields");
           return next(new AppError("All basic info fields required", 400));
         }
@@ -431,7 +483,8 @@ const editProfile = async (req, res, next) => {
               [user.user_id]
             );
 
-            const currentThumbnailUrl = currentData[0]?.freelancer_thumbnail_image;
+            const currentThumbnailUrl =
+              currentData[0]?.freelancer_thumbnail_image;
 
             // Check if thumbnail URL is different from the one in DB
             if (currentThumbnailUrl !== thumbnailImageUrl) {
@@ -439,7 +492,12 @@ const editProfile = async (req, res, next) => {
               if (!req.file) {
                 await query("ROLLBACK");
                 logger.warn("Thumbnail URL changed but no file uploaded");
-                return next(new AppError("Thumbnail file is required when URL changes", 400));
+                return next(
+                  new AppError(
+                    "Thumbnail file is required when URL changes",
+                    400
+                  )
+                );
               }
 
               logger.info("Thumbnail URL changed, uploading new file to MinIO");
@@ -475,11 +533,24 @@ const editProfile = async (req, res, next) => {
           if (newThumbnailUrl) {
             updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, profile_image_url=$5 WHERE user_id=$6
              RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
-            updateParams = [freelancerFullName,  dateOfBirth, phoneNumber, profileTitle, newThumbnailUrl, user.user_id];
+            updateParams = [
+              freelancerFullName,
+              dateOfBirth,
+              phoneNumber,
+              profileTitle,
+              newThumbnailUrl,
+              user.user_id,
+            ];
           } else {
             updateQuery = `UPDATE freelancer SET freelancer_full_name=$1,  date_of_birth=$2, phone_number=$3, profile_title=$4 WHERE user_id=$5
              RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
-            updateParams = [freelancerFullName,  dateOfBirth, phoneNumber, profileTitle, user.user_id];
+            updateParams = [
+              freelancerFullName,
+              dateOfBirth,
+              phoneNumber,
+              profileTitle,
+              user.user_id,
+            ];
           }
 
           const { rows } = await query(updateQuery, updateParams);
@@ -490,7 +561,13 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Profile updated successfully",
-            data: rows[0].freelancer_thumbnail_image ? { ...rows[0], freelancer_thumbnail_image: signedUrl || rows[0].freelancer_thumbnail_image } : rows[0],
+            data: rows[0].freelancer_thumbnail_image
+              ? {
+                  ...rows[0],
+                  freelancer_thumbnail_image:
+                    signedUrl || rows[0].freelancer_thumbnail_image,
+                }
+              : rows[0],
           });
         } catch (error) {
           await query("ROLLBACK");
@@ -505,7 +582,6 @@ const editProfile = async (req, res, next) => {
     // If role is neither creator nor freelancer
     logger.warn("Unsupported user role:", role);
     return next(new AppError("Unsupported user role", 400));
-
   } catch (error) {
     logger.error("Error updating profile:", error);
     return next(new AppError("Failed to edit user profile", 500));
@@ -522,17 +598,19 @@ const getAllFreelancers = async (req, res, next) => {
     const offset = (page - 1) * limit;
 
     // Search and filter parameters
-    const search = req.query.search || ''; // Search by freelancer name
+    const search = req.query.search || ""; // Search by freelancer name
     const minPrice = parseFloat(req.query.minPrice) || 0;
     const maxPrice = parseFloat(req.query.maxPrice) || Number.MAX_SAFE_INTEGER;
     // Handle serviceType as an array
-    const serviceTypes = req.query.serviceType ?
-      (Array.isArray(req.query.serviceType) ? req.query.serviceType : [req.query.serviceType])
+    const serviceTypes = req.query.serviceType
+      ? Array.isArray(req.query.serviceType)
+        ? req.query.serviceType
+        : [req.query.serviceType]
       : [];
 
     // Sort and delivery time filters
-    const sortBy = req.query.sortBy || 'newest'; // toprated, newest
-    const deliveryTime = req.query.deliveryTime || ''; // e.g., "2-3 days"
+    const sortBy = req.query.sortBy || "newest"; // toprated, newest
+    const deliveryTime = req.query.deliveryTime || ""; // e.g., "2-3 days"
 
     // Build the query based on filters
     let queryText = `
@@ -563,14 +641,18 @@ const getAllFreelancers = async (req, res, next) => {
 
     // Add service type filter (using IN clause for array)
     if (serviceTypes.length > 0) {
-      const serviceTypeParams = serviceTypes.map((_, index) => `$${paramCount + index}`).join(',');
+      const serviceTypeParams = serviceTypes
+        .map((_, index) => `$${paramCount + index}`)
+        .join(",");
       queryText += ` AND s.services_name IN (${serviceTypeParams})`;
       queryParams.push(...serviceTypes);
       paramCount += serviceTypes.length;
     }
 
     // Add price range filter
-    queryText += ` AND (s.service_price >= $${paramCount} AND s.service_price <= $${paramCount + 1})`;
+    queryText += ` AND (s.service_price >= $${paramCount} AND s.service_price <= $${
+      paramCount + 1
+    })`;
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
@@ -582,14 +664,16 @@ const getAllFreelancers = async (req, res, next) => {
     }
 
     // Add sorting based on sortBy parameter
-    let orderByClause = '';
+    let orderByClause = "";
     switch (sortBy) {
-      case 'toprated':
-        orderByClause = 'ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name';
+      case "toprated":
+        orderByClause =
+          "ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name";
         break;
-      case 'newest':
+      case "newest":
       default:
-        orderByClause = 'ORDER BY s.created_at DESC NULLS LAST, f.freelancer_full_name';
+        orderByClause =
+          "ORDER BY s.created_at DESC NULLS LAST, f.freelancer_full_name";
         break;
     }
 
@@ -616,13 +700,17 @@ const getAllFreelancers = async (req, res, next) => {
     }
 
     if (serviceTypes.length > 0) {
-      const serviceTypeParams = serviceTypes.map((_, index) => `$${countParamIndex + index}`).join(',');
+      const serviceTypeParams = serviceTypes
+        .map((_, index) => `$${countParamIndex + index}`)
+        .join(",");
       countQuery += ` AND s.services_name IN (${serviceTypeParams})`;
       countParams.push(...serviceTypes);
       countParamIndex += serviceTypes.length;
     }
 
-    countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${countParamIndex + 1})`;
+    countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${
+      countParamIndex + 1
+    })`;
     countParams.push(minPrice, maxPrice);
     countParamIndex += 2;
 
@@ -634,7 +722,7 @@ const getAllFreelancers = async (req, res, next) => {
     console.log("With Parameters:", queryParams);
     const [results, countResult] = await Promise.all([
       query(queryText, queryParams),
-      query(countQuery, countParams)
+      query(countQuery, countParams),
     ]);
 
     const totalCount = parseInt(countResult.rows[0].count);
@@ -644,9 +732,9 @@ const getAllFreelancers = async (req, res, next) => {
     const freelancersWithSignedUrls = await Promise.all(
       results.rows.map(async (freelancer) => {
         if (freelancer.profile_image_url) {
-          const parts = freelancer.profile_image_url.split('/');
+          const parts = freelancer.profile_image_url.split("/");
           const bucketName = parts[2];
-          const objectName = parts.slice(3).join('/');
+          const objectName = parts.slice(3).join("/");
 
           try {
             const signedUrl = await minioClient.presignedGetObject(
@@ -656,7 +744,10 @@ const getAllFreelancers = async (req, res, next) => {
             );
             freelancer.profile_image_url = signedUrl;
           } catch (error) {
-            logger.error(`Error generating signed URL for freelancer ${freelancer.user_id}:`, error);
+            logger.error(
+              `Error generating signed URL for freelancer ${freelancer.user_id}:`,
+              error
+            );
             freelancer.profile_image_url = null;
           }
         }
@@ -673,11 +764,10 @@ const getAllFreelancers = async (req, res, next) => {
           currentPage: page,
           totalPages,
           totalItems: totalCount,
-          itemsPerPage: limit
-        }
-      }
+          itemsPerPage: limit,
+        },
+      },
     });
-
   } catch (error) {
     logger.error("Error fetching freelancers:", error);
     return next(new AppError("Failed to fetch freelancers", 500));
@@ -723,7 +813,9 @@ const getFreelancerById = async (req, res, next) => {
           );
           freelancerData[0].profile_image_url = signedUrl;
         } else {
-          logger.warn(`Invalid profile image URL format: ${freelancerData[0].profile_image_url}`);
+          logger.warn(
+            `Invalid profile image URL format: ${freelancerData[0].profile_image_url}`
+          );
           freelancerData[0].profile_image_url = null;
         }
       } catch (error) {
@@ -735,7 +827,8 @@ const getFreelancerById = async (req, res, next) => {
     // Generate presigned URL for thumbnail image if it exists
     if (freelancerData[0].freelancer_thumbnail_image) {
       try {
-        const thumbParts = freelancerData[0].freelancer_thumbnail_image.split("/");
+        const thumbParts =
+          freelancerData[0].freelancer_thumbnail_image.split("/");
         if (thumbParts.length >= 4) {
           const thumbBucketName = thumbParts[2];
           const thumbObjectName = thumbParts.slice(3).join("/");
@@ -746,11 +839,15 @@ const getFreelancerById = async (req, res, next) => {
           );
           freelancerData[0].freelancer_thumbnail_image = thumbSignedUrl;
         } else {
-          logger.warn(`Invalid thumbnail image URL format: ${freelancerData[0].freelancer_thumbnail_image}`);
+          logger.warn(
+            `Invalid thumbnail image URL format: ${freelancerData[0].freelancer_thumbnail_image}`
+          );
           freelancerData[0].freelancer_thumbnail_image = null;
         }
       } catch (error) {
-        logger.error(`Error generating signed URL for thumbnail image: ${error}`);
+        logger.error(
+          `Error generating signed URL for thumbnail image: ${error}`
+        );
         freelancerData[0].freelancer_thumbnail_image = null;
       }
     }
@@ -768,15 +865,14 @@ const getFreelancerById = async (req, res, next) => {
       status: "success",
       data: {
         freelancer: freelancerData[0],
-        services: freelancerServices.length > 0 ? freelancerServices : []
-      }
+        services: freelancerServices.length > 0 ? freelancerServices : [],
+      },
     });
-
   } catch (error) {
     logger.error("Error fetching freelancer by ID:", error);
     return next(new AppError("Failed to fetch freelancer by ID", 500));
   }
-}
+};
 
 // ✅ GET FREELANCER PORTFOLIO BY ID
 const getFreelancerPortfolio = async (req, res, next) => {
@@ -830,7 +926,10 @@ ORDER BY portfolio_item_service_type`,
 
     // Process portfolio items with proper async/await
     for (const portfolio of portfolioData) {
-      if (portfolio.portfolio_items && Array.isArray(portfolio.portfolio_items)) {
+      if (
+        portfolio.portfolio_items &&
+        Array.isArray(portfolio.portfolio_items)
+      ) {
         portfolio.portfolio_items = await Promise.all(
           portfolio.portfolio_items.map(async (item) => {
             try {
@@ -846,13 +945,17 @@ ORDER BY portfolio_item_service_type`,
                   );
                   item.portfolio_item_url = signedUrl;
                 } else {
-                  logger.warn(`Invalid portfolio URL format: ${item.portfolio_item_url}`);
+                  logger.warn(
+                    `Invalid portfolio URL format: ${item.portfolio_item_url}`
+                  );
                   item.portfolio_item_url = null;
                 }
               }
               return item;
             } catch (error) {
-              logger.error(`Error generating signed URL for portfolio item: ${error}`);
+              logger.error(
+                `Error generating signed URL for portfolio item: ${error}`
+              );
               item.portfolio_item_url = null;
               return item;
             }
@@ -861,20 +964,21 @@ ORDER BY portfolio_item_service_type`,
       }
     }
 
-    logger.info(`Successfully fetched portfolio data for freelancer ID: ${freelancerId}`);
+    logger.info(
+      `Successfully fetched portfolio data for freelancer ID: ${freelancerId}`
+    );
 
     return res.status(200).json({
       status: "success",
       data: {
-        portfolio: portfolioData
-      }
+        portfolio: portfolioData,
+      },
     });
-
   } catch (error) {
     logger.error("Error fetching freelancer portfolio:", error);
     return next(new AppError("Failed to fetch freelancer portfolio", 500));
   }
-}
+};
 
 // ✅ GET FREELANCER IMPACT (BEFORE/AFTER) BY ID
 const getFreelancerImpact = async (req, res, next) => {
@@ -900,9 +1004,10 @@ const getFreelancerImpact = async (req, res, next) => {
       return next(new AppError("Freelancer not found", 404));
     }
 
-    const { rows: afterBeforeData } = await query(`
-      SELECT
-    services_name,
+    const { rows: afterBeforeData } = await query(
+      `
+  SELECT
+    service_type,
     json_agg(
         json_build_object(
             'impact_id', impact_id,
@@ -913,18 +1018,20 @@ const getFreelancerImpact = async (req, res, next) => {
     ) as impact_items
 FROM (
     SELECT
-        services_name,
+        service_type,
         impact_id,
         before_service_url,
         after_service_url,
         impact_metric,
-        ROW_NUMBER() OVER (PARTITION BY services_name ORDER BY impact_id) as rn
+        ROW_NUMBER() OVER (PARTITION BY service_type ORDER BY impact_id) as rn
     FROM impact
     WHERE freelancer_id = $1
 ) subquery
 WHERE rn <= 3
-GROUP BY services_name
-ORDER BY services_name`, [freelancerId]);
+GROUP BY service_type
+ORDER BY service_type`,
+      [freelancerId]
+    );
 
     // Process impact items with proper async/await
     for (const impact of afterBeforeData) {
@@ -947,7 +1054,9 @@ ORDER BY services_name`, [freelancerId]);
                     expirySeconds
                   );
                 } else {
-                  logger.warn(`Invalid before URL format: ${item.before_service_url}`);
+                  logger.warn(
+                    `Invalid before URL format: ${item.before_service_url}`
+                  );
                 }
               }
 
@@ -963,7 +1072,9 @@ ORDER BY services_name`, [freelancerId]);
                     expirySeconds
                   );
                 } else {
-                  logger.warn(`Invalid after URL format: ${item.after_service_url}`);
+                  logger.warn(
+                    `Invalid after URL format: ${item.after_service_url}`
+                  );
                 }
               }
 
@@ -971,7 +1082,9 @@ ORDER BY services_name`, [freelancerId]);
               item.after_service_url = afterSignedUrl;
               return item;
             } catch (error) {
-              logger.error(`Error generating signed URLs for impact item: ${error}`);
+              logger.error(
+                `Error generating signed URLs for impact item: ${error}`
+              );
               item.before_service_url = null;
               item.after_service_url = null;
               return item;
@@ -981,20 +1094,21 @@ ORDER BY services_name`, [freelancerId]);
       }
     }
 
-    logger.info(`Successfully fetched impact data for freelancer ID: ${freelancerId}`);
+    logger.info(
+      `Successfully fetched impact data for freelancer ID: ${freelancerId}`
+    );
 
     return res.status(200).json({
       status: "success",
       data: {
-        impact: afterBeforeData
-      }
+        impact: afterBeforeData,
+      },
     });
-
   } catch (error) {
     logger.error("Error fetching freelancer impact data:", error);
     return next(new AppError("Failed to fetch freelancer impact data", 500));
   }
-}
+};
 
 const addFreelancerToWhitelist = async (req, res, next) => {
   // Implementation goes here
@@ -1005,16 +1119,17 @@ const addFreelancerToWhitelist = async (req, res, next) => {
       "INSERT INTO whitelist (user_id, freelancer_id,created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
       [user.user_id, freelancerId, new Date()]
     );
-    logger.info(`Freelancer ${freelancerId} added to whitelist for user ${user.user_id}`);
+    logger.info(
+      `Freelancer ${freelancerId} added to whitelist for user ${user.user_id}`
+    );
     return res.status(200).json({
       status: "success",
-      message: "Freelancer added to whitelist successfully"
+      message: "Freelancer added to whitelist successfully",
     });
-
   } catch (error) {
     return next(new AppError("Failed to add freelancer to whitelist", 500));
   }
-}
+};
 
 const getUserProfileProgress = async (req, res, next) => {
   logger.info("Calculating user profile completion progress");
@@ -1025,21 +1140,32 @@ const getUserProfileProgress = async (req, res, next) => {
       Services: 0,
       BankDetails: 0,
       GovtID: 0,
-      Portfolio: 0
-    }
+      Portfolio: 0,
+    };
     const { rows: freelancerRows } = await query(
       "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_url, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name FROM freelancer WHERE user_id=$1",
       [user.user_id]
     );
     if (freelancerRows.length > 0) {
       const freelancer = freelancerRows[0];
-      if (freelancer.date_of_birth && freelancer.phone_number && freelancer.profile_title && freelancer.profile_image_url && freelancer.freelancer_thumbnail_image) {
+      if (
+        freelancer.date_of_birth &&
+        freelancer.phone_number &&
+        freelancer.profile_title &&
+        freelancer.profile_image_url &&
+        freelancer.freelancer_thumbnail_image
+      ) {
         freelancerProgressWeights.ProfileInfo += 40;
       }
       if (freelancer.gov_id_url) {
         freelancerProgressWeights.GovtID += 20;
       }
-      if (freelancer.bank_account_no && freelancer.bank_name && freelancer.bank_ifsc_code && freelancer.bank_branch_name) {
+      if (
+        freelancer.bank_account_no &&
+        freelancer.bank_name &&
+        freelancer.bank_ifsc_code &&
+        freelancer.bank_branch_name
+      ) {
         freelancerProgressWeights.BankDetails += 20;
       }
     }
@@ -1057,14 +1183,19 @@ const getUserProfileProgress = async (req, res, next) => {
     if (freelancerPortfolio.length > 0) {
       freelancerProgressWeights.Portfolio = 20;
     }
-  }
-  catch (error) {
+  } catch (error) {
     logger.error("Error calculating profile progress:", error);
     return next(new AppError("Failed to calculate profile progress", 500));
   }
-}
+};
 
 module.exports = {
-  getUserProfile, editProfile, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist,
-  getUserProfileProgress
+  getUserProfile,
+  editProfile,
+  getAllFreelancers,
+  getFreelancerById,
+  getFreelancerPortfolio,
+  getFreelancerImpact,
+  addFreelancerToWhitelist,
+  getUserProfileProgress,
 };
