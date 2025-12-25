@@ -89,7 +89,7 @@ const addServicesByFreelancer = async (req, res, next) => {
     }
 
     const { rows } = await query(
-      `INSERT INTO services (freelancer_id, service_name, service_description, price, created_at, updated_at,delivery_duration)
+      `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at,delivery_duration)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [freelancer_id, service, description, price, new Date(), new Date(), deliveryDuration]
@@ -127,7 +127,7 @@ const updateServiceByFreelancer = async (req, res, next) => {
 
     const { rows } = await client.query(
       `UPDATE services
-       SET service_name=$1, price=$2, service_description=$3, updated_at=$4, delivery_duration=$5
+       SET service_name=$1, service_price=$2, service_description=$3, updated_at=$4, delivery_duration=$5
        WHERE id=$6 AND freelancer_id=$7
        RETURNING *`,
       [service, price, description, new Date(), deliveryDuration, serviceId, freelancer_id]

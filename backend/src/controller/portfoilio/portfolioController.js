@@ -3,7 +3,7 @@ const AppError = require("../../../utils/appError");
 const { decodedToken } = require("../../../utils/helper");
 const { minioClient } = require("../../../config/minio");
 const path = require("path");
-const {logger} = require("../../../utils/logger");
+const { logger } = require("../../../utils/logger");
 
 const BUCKET_NAME = "freelancer-portfolios";
 const expirySeconds = 4 * 60 * 60;
@@ -11,11 +11,11 @@ const expirySeconds = 4 * 60 * 60;
 const getPortfolioByFreelancerId = async (req, res, next) => {
   logger.info("Fetching portfolio by freelancer ID");
   try {
-    const user = req.user
+    const user = req.user;
     logger.debug("Decoded user:", user);
 
     const { rows: userPortFolios } = await query(
-      `SELECT * FROM portfolio WHERE freelancer_id IN (SELECT id FROM freelancer WHERE user_id = $1);`,
+      `SELECT * FROM portfolio WHERE freelancer_id IN (SELECT freelancer_id FROM freelancer WHERE user_id = $1);`,
       [user.id]
     );
 
@@ -61,14 +61,13 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
   }
 };
 
-
 const addFreelancerPortfolio = async (req, res, next) => {
   logger.info("Adding freelancer portfolio");
   const uploadedFiles = [];
 
   try {
     const { type, serviceType, itemDescription } = req.body;
-    const user = req.user
+    const user = req.user;
     logger.debug("Request body:", req.body);
 
     if (!req.files?.length) {
@@ -109,10 +108,20 @@ const addFreelancerPortfolio = async (req, res, next) => {
     for (const fileData of uploadedFiles) {
       const { rows } = await query(
         `INSERT INTO portfolio 
-        (freelancer_id, portfolio_item_service_type, portfolio_item_url, portfolio_item_description, portfolio_item_created_at, portfolio_item_updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *`,
-        [user.id, serviceType, fileData.fileUrl, itemDescription, new Date(), new Date()]
+(freelancer_id, portfolio_item_service_type, portfolio_item_url, portfolio_item_description, portfolio_item_created_at, portfolio_item_updated_at)
+VALUES (
+  (SELECT freelancer_id FROM freelancer WHERE user_id = $1),
+  $2, $3, $4, $5, $6
+)
+RETURNING *`,
+        [
+          user.id,
+          serviceType,
+          fileData.fileUrl,
+          itemDescription,
+          new Date(),
+          new Date(),
+        ]
       );
       portfolioRecords.push(rows[0]);
     }
@@ -133,7 +142,6 @@ const addFreelancerPortfolio = async (req, res, next) => {
   }
 };
 
-
 const updateFreelancerPortfolio = async (req, res, next) => {
   logger.info("Updating freelancer portfolio");
   try {
@@ -148,15 +156,13 @@ const updateFreelancerPortfolio = async (req, res, next) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Portfolio item updated successfully"
+      message: "Portfolio item updated successfully",
     });
-
   } catch (error) {
     logger.error("Update portfolio error:", error);
     return next(new AppError("Failed to update portfolio", 500));
   }
 };
-
 
 const deleteFreelancerPortfolio = async (req, res, next) => {
   logger.info("Deleting freelancer portfolio");
@@ -172,15 +178,13 @@ const deleteFreelancerPortfolio = async (req, res, next) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Portfolio items deleted"
+      message: "Portfolio items deleted",
     });
-
   } catch (error) {
     logger.error("Delete portfolio error:", error);
     return next(new AppError("Failed to delete portfolio items", 500));
   }
 };
-
 
 module.exports = {
   getPortfolioByFreelancerId,
