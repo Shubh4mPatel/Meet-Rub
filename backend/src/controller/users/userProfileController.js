@@ -630,7 +630,8 @@ const getAllFreelancers = async (req, res, next) => {
       countQuery += ` AND s.delivery_time = $${countParamIndex}`;
       countParams.push(deliveryTime);
     }
-
+    console.log("Final Query:", queryText);
+    console.log("With Parameters:", queryParams);
     const [results, countResult] = await Promise.all([
       query(queryText, queryParams),
       query(countQuery, countParams)
@@ -806,7 +807,7 @@ const getFreelancerPortfolio = async (req, res, next) => {
     portfolio_item_service_type,
     json_agg(
         json_build_object(
-            'portfolio_id', portfolio_id,
+            'portfolio_id', portfolio_item_id,
             'portfolio_item_url', portfolio_item_url,
             'portfolio_item_description', portfolio_item_description
         )
@@ -814,10 +815,10 @@ const getFreelancerPortfolio = async (req, res, next) => {
 FROM (
     SELECT
         portfolio_item_service_type,
-        portfolio_id,
+        portfolio_item_id,
         portfolio_item_url,
         portfolio_item_description,
-        ROW_NUMBER() OVER (PARTITION BY portfolio_item_service_type ORDER BY portfolio_id) as rn
+        ROW_NUMBER() OVER (PARTITION BY portfolio_item_service_type ORDER BY portfolio_item_id) as rn
     FROM portfolio
     WHERE freelancer_id = $1
 ) subquery
