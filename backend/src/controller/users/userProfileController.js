@@ -5,7 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { logger } = require("../../../utils/logger");
 
-const BUCKET_NAME = "freelancer-documents";
+const BUCKET_NAME = "MeetRubAssets";
 const expirySeconds = 4 * 60 * 60; // 4 hours
 
 // ✅ GET USER PROFILE
@@ -352,7 +352,7 @@ const editProfile = async (req, res, next) => {
 
         const fileExt = path.extname(req.file.originalname);
         const fileName = `${crypto.randomUUID()}${fileExt}`;
-        const folder = `goverment-doc/${gov_id_type}`;
+        const folder = `freelancer/goverment-doc/${gov_id_type}`;
         const objectName = `${folder}/${fileName}`;
         const gov_id_url = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 
@@ -406,7 +406,7 @@ const editProfile = async (req, res, next) => {
 
         const fileExt = path.extname(req.file.originalname);
         const fileName = `${crypto.randomUUID()}${fileExt}`;
-        const folder = "freelancer-profile-image";
+        const folder = "freelancer/freelancer-profile-image";
         const objectName = `${folder}/${fileName}`;
         const profile_url = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 
@@ -504,7 +504,7 @@ const editProfile = async (req, res, next) => {
 
               const fileExt = path.extname(req.file.originalname);
               const fileName = `${crypto.randomUUID()}${fileExt}`;
-              const folder = "freelancer-profile-image";
+              const folder = "freelancer/freelancer-profile-thumbnail";
               const objectName = `${folder}/${fileName}`;
               newThumbnailUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 

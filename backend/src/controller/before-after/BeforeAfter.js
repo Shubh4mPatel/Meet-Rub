@@ -6,7 +6,7 @@ const {logger} = require("../../../utils/logger");
 const path = require("path");
 const crypto = require("crypto");
 
-const BUCKET_NAME = "freelancer-portfolios";
+const BUCKET_NAME = "MeetRubAssets";
 const expirySeconds = 4 * 60 * 60;
 
 const uploadBeforeAfter = async (req, res, next) => {
@@ -47,7 +47,7 @@ const uploadBeforeAfter = async (req, res, next) => {
     for (const { file, type } of filesToUpload) {
       const fileExt = path.extname(file.originalname);
       const fileName = `${crypto.randomUUID()}${fileExt}`;
-      const folder = `Impact/${user.user_id}/${type}`;
+      const folder = `freelancer/Impact/${user.user_id}/${type}`;
       const objectName = `${folder}/${fileName}`;
       const fileUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 

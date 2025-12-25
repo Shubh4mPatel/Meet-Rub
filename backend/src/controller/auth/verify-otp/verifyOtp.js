@@ -36,8 +36,6 @@ const verifyOtpSchema = Joi.object({
 
 const verifyOtpAndProcess = async (req, res, next) => {
   // Validate req.body
-  console.log("hi");
-
   const { error } = verifyOtpSchema.validate(req.body, { abortEarly: false });
   if (error) {
     return res.status(400).json({
@@ -118,10 +116,10 @@ const verifyOtpAndProcess = async (req, res, next) => {
           return next(new AppError("document is required", 400));
         }
 
-        const BUCKET_NAME = "freelancer-documents";
+        const BUCKET_NAME = "MeetRubAssets";
         const fileExt = path.extname(req.file.originalname);
         const fileName = `${crypto.randomUUID()}${fileExt}`;
-        const folder = `goverment-doc/${govIdType}`;
+        const folder = `freelancer/goverment-doc/${govIdType}`;
         const objectName = `${folder}/${fileName}`;
         const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 
@@ -150,8 +148,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           ]);
 
           // Upload file to MinIO first
-          console.log("bucket", objectName);
-          console.log("adding image to s3");
+          
           await minioClient.putObject(
             BUCKET_NAME,
             objectName,

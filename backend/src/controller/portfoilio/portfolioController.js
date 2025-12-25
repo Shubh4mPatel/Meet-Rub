@@ -5,7 +5,7 @@ const { minioClient } = require("../../../config/minio");
 const path = require("path");
 const { logger } = require("../../../utils/logger");
 
-const BUCKET_NAME = "freelancer-portfolios";
+const BUCKET_NAME = "MeetRubAssets";
 const expirySeconds = 4 * 60 * 60;
 
 const getPortfolioByFreelancerId = async (req, res, next) => {
@@ -86,7 +86,7 @@ const addFreelancerPortfolio = async (req, res, next) => {
 
       const fileExt = path.extname(file.originalname);
       const fileName = `${fileExt}`;
-      const folder = `${type}/${user.user_id}`;
+      const folder = `freelancer/portfolio/${user.user_id}`;
       const objectName = `${folder}/${fileName}`;
       const fileUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 
