@@ -755,7 +755,7 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerServices } = await query(
-      `SELECT service_id, service_type, service_description, service_price, delivery_time
+      `SELECT id, service_type, service_description, service_price, delivery_time
        FROM services WHERE freelancer_id = $1`,
       [freelancerId]
     );
@@ -1043,7 +1043,7 @@ const getUserProfileProgress = async (req, res, next) => {
       }
     }
     const { rows: freelancerServices } = await query(
-      "SELECT service_id FROM services WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1)",
+      "SELECT id FROM services WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1)",
       [user.user_id]
     );
     if (freelancerServices.length > 0) {
