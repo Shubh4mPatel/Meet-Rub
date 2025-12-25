@@ -6,7 +6,7 @@ const {logger} = require("../../../utils/logger");
 const path = require("path");
 const crypto = require("crypto");
 
-const BUCKET_NAME = "MeetRubAssets";
+const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60;
 
 const uploadBeforeAfter = async (req, res, next) => {

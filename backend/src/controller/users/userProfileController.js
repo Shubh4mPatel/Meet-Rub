@@ -5,7 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { logger } = require("../../../utils/logger");
 
-const BUCKET_NAME = "MeetRubAssets";
+const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60; // 4 hours
 
 // ✅ GET USER PROFILE

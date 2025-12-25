@@ -5,7 +5,7 @@ const { minioClient } = require("../../../config/minio");
 const path = require("path");
 const { logger } = require("../../../utils/logger");
 
-const BUCKET_NAME = "MeetRubAssets";
+const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60;
 
 const getPortfolioByFreelancerId = async (req, res, next) => {

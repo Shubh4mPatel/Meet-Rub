@@ -116,7 +116,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           return next(new AppError("document is required", 400));
         }
 
-        const BUCKET_NAME = "MeetRubAssets";
+        const BUCKET_NAME = "meet-rub-assets";
         const fileExt = path.extname(req.file.originalname);
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = `freelancer/goverment-doc/${govIdType}`;
