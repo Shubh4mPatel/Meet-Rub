@@ -4,7 +4,7 @@ const AppError = require("../../../../utils/appError");
 const jwt = require("jsonwebtoken");
 const { logger } = require('../../../../utils/logger');
 
-function generateTokens(user) {
+function generateTokens(user,roleWiseId) {
     logger.info(`Generating tokens for user ID: ${user.id}`);
 
     const payload = {
@@ -12,6 +12,7 @@ function generateTokens(user) {
         email: user.user_email,
         name: user.user_name,
         role: user.user_role,
+        roleWiseId
     };
 
     const accessToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "15m" });
@@ -59,12 +60,13 @@ const loginUser = async (req, res, next) => {
 
         logger.info(`User authenticated successfully: user_id=${user.id}`);
 
-        const { accessToken, refreshToken } = generateTokens(user);
+        const { accessToken, refreshToken } = generateTokens(user,roleWiseId);
 
         res.locals.accessToken = accessToken;
         res.locals.refreshToken = refreshToken;
         res.locals.user = {
             user_id: user.id,
+            email: user.user_email,
             name: user.user_name,
             role: user.user_role,
             roleWiseId

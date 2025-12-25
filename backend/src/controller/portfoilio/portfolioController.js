@@ -66,6 +66,7 @@ const addFreelancerPortfolio = async (req, res, next) => {
   const uploadedFiles = [];
 
   try {
+    console.log("Request body:", req.body);
     const { type, serviceType, itemDescription } = req.body;
     const user = req.user;
     logger.debug("Request body:", req.body);

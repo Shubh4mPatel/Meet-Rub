@@ -309,22 +309,29 @@ router.get('/portfolio/get-protfolio', requireRole(['freelancer']), getPortfolio
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
- *               - title
+ *               - type
+ *               - serviceType
+ *               - files
  *             properties:
- *               title:
+ *               type:
  *                 type: string
- *                 example: Modern Website Design
- *               description:
+ *                 enum: [image, video]
+ *                 example: image
+ *               serviceType:
+ *                 type: string
+ *                 example: Web Development
+ *               itemDescription:
  *                 type: string
  *                 example: A responsive modern website with clean UI
- *               images:
+ *               files:
  *                 type: array
  *                 items:
  *                   type: string
+ *                   format: binary
  *     responses:
  *       201:
  *         description: Portfolio item added successfully
@@ -335,7 +342,7 @@ router.get('/portfolio/get-protfolio', requireRole(['freelancer']), getPortfolio
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.post('/portfolio/add-protfolio', requireRole(['freelancer']), addFreelancerPortfolio)
+router.post('/portfolio/add-protfolio', requireRole(['freelancer']), upload.array('files'), addFreelancerPortfolio)
 
 /**
  * @swagger
