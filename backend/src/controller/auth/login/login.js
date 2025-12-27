@@ -12,9 +12,9 @@ function generateTokens(user,roleWiseId) {
         email: user.user_email,
         name: user.user_name,
         role: user.user_role,
-        roleWiseId
+        roleWiseId: roleWiseId
     };
-
+    console.log("Token payload:", payload);
     const accessToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "15m" });
     const refreshToken = jwt.sign({ user_id: user.id }, process.env.JWT_SECRET, { expiresIn: "4h" });
 

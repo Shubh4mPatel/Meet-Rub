@@ -11,13 +11,15 @@ const refreshAccessToken = async (req, res, next) => {
   try {
     const refreshToken = req.cookies?.RefreshToken;
 
-    logger.info("refreshToken  ", refreshToken);
+    logger.info("refreshToken: ", refreshToken);
     if (!refreshToken) {
-      return res.status(401).json({ status:'failed',message: "Refresh token required" });
+      return res
+        .status(401)
+        .json({ status: "failed", message: "Refresh token required" });
     }
     // Verify refresh token
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
-
+    logger.info("Decoded refresh token:", decoded);
     // Get user details
     const user = await query(
       `SELECT 
@@ -26,11 +28,14 @@ const refreshAccessToken = async (req, res, next) => {
 FROM users u
 LEFT JOIN freelancer f ON u.id = f.user_id AND u.user_role = 'freelancer'
 LEFT JOIN creators c ON u.id = c.user_id AND u.user_role = 'creator'
-WHERE u.id = 24`,
+WHERE u.id = $1`,
       [decoded.user_id]
     );
+    logger.info("User fetched for token refresh:", user.rows[0]);
     if (user.rows.length === 0) {
-      return res.status(401).json({ status:'failed', message: "User not found" });
+      return res
+        .status(401)
+        .json({ status: "failed", message: "User not found" });
     }
 
     // Generate new access token
@@ -60,7 +65,9 @@ WHERE u.id = 24`,
     req.user = payload;
     next();
   } catch (error) {
-    return res.status(401).json({ status:'failed', message: "Token refresh failed" });
+    return res
+      .status(401)
+      .json({ status: "failed", message: "Token refresh failed" });
   }
 };
 
@@ -85,7 +92,9 @@ const authenticateUser = async (req, res, next) => {
         // Access token expired, try to refresh
         return refreshAccessToken(req, res, next);
       } else {
-        return res.status(401).json({ status:'failed', message: "Invalid access token" });
+        return res
+          .status(401)
+          .json({ status: "failed", message: "Invalid access token" });
       }
     }
   } else {
@@ -103,7 +112,10 @@ const requireRole = (allowedRoles) => {
     if (!allowedRoles.includes(user.role)) {
       return res
         .status(403)
-        .json({status:'failed', message: "Insufficient permissions for this role" });
+        .json({
+          status: "failed",
+          message: "Insufficient permissions for this role",
+        });
     }
 
     next();
@@ -138,7 +150,7 @@ const logout = async (req, res, next) => {
     // );
     res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
-    res.status(500).json({ status:'failed',message: "Logout failed" });
+    res.status(500).json({ status: "failed", message: "Logout failed" });
   }
 };
 
