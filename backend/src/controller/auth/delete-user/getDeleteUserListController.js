@@ -1,8 +1,9 @@
 const query = require("../../../config/dbConfig");
+const AppError = require("../../../utils/appError");
 const { logger } = require('../../../utils/logger');
 
 
-const getDeleteUserListController = async (req, res) => {
+const getDeleteUserListController = async (req, res, next) => {
 
     try {
         // Pagination parameters
@@ -96,10 +97,7 @@ const getDeleteUserListController = async (req, res) => {
 
     } catch (error) {
         logger.error("Error fetching users:", error);
-        return res.status(500).json({
-            error: "Failed to fetch user list",
-            errorCode: 500
-        });
+        return next(new AppError("Failed to fetch user list", 500));
     }
 };
 

@@ -13,7 +13,7 @@ const refreshAccessToken = async (req, res, next) => {
 
     logger.info("refreshToken  ", refreshToken);
     if (!refreshToken) {
-      return res.status(401).json({ error: "Refresh token required" });
+      return res.status(401).json({ status:'failed',message: "Refresh token required" });
     }
     // Verify refresh token
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
@@ -30,7 +30,7 @@ WHERE u.id = 24`,
       [decoded.user_id]
     );
     if (user.rows.length === 0) {
-      return res.status(401).json({ error: "User not found" });
+      return res.status(401).json({ status:'failed', message: "User not found" });
     }
 
     // Generate new access token
@@ -60,7 +60,7 @@ WHERE u.id = 24`,
     req.user = payload;
     next();
   } catch (error) {
-    return res.status(401).json({ error: "Token refresh failed" });
+    return res.status(401).json({ status:'failed', message: "Token refresh failed" });
   }
 };
 
@@ -85,7 +85,7 @@ const authenticateUser = async (req, res, next) => {
         // Access token expired, try to refresh
         return refreshAccessToken(req, res, next);
       } else {
-        return res.status(401).json({ error: "Invalid access token" });
+        return res.status(401).json({ status:'failed', message: "Invalid access token" });
       }
     }
   } else {
@@ -103,7 +103,7 @@ const requireRole = (allowedRoles) => {
     if (!allowedRoles.includes(user.role)) {
       return res
         .status(403)
-        .json({ error: "Insufficient permissions for this role" });
+        .json({status:'failed', message: "Insufficient permissions for this role" });
     }
 
     next();
@@ -138,7 +138,7 @@ const logout = async (req, res, next) => {
     // );
     res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
-    res.status(500).json({ error: "Logout failed" });
+    res.status(500).json({ status:'failed',message: "Logout failed" });
   }
 };
 

@@ -1,11 +1,12 @@
 const query = require("../../../config/dbConfig"); // Change to this
+const AppError = require("../../../utils/appError");
 const sendMail = require("../../../config/email").sendMail;
 const {
   MailTemplatesHandler,
 } = require("../../../mailTemplates/MailTemplatesHandler");
 const { logger } = require('../../../utils/logger');
 
-const deleteUserRequestController = async (req, res) => {
+const deleteUserRequestController = async (req, res, next) => {
 
 
   try {
@@ -16,10 +17,7 @@ const deleteUserRequestController = async (req, res) => {
       'SELECT email, name FROM user_data WHERE id = $1', [userId]
     );
     if (users.length === 0) {
-      return res.status(404).json({
-        error: "User not found",
-        errorCode: 404
-      });
+      return next(new AppError("User not found", 404));
     }
 
     const { rows: existing } = await query(
@@ -58,10 +56,7 @@ const deleteUserRequestController = async (req, res) => {
     });
   } catch (err) {
     logger.error('Error processing delete user request:', err);
-    return res.status(500).json({
-      error: "Failed to process delete user request",
-      errorCode: 500
-    });
+    return next(new AppError("Failed to process delete user request", 500));
   }
 };
 

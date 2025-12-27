@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const {pool:db} = require('../../../config/dbConfig');
 const payoutService = require('../../razor-pay-services/payoutService');
+const AppError = require("../../../utils/appError");
 
 // Verify Razorpay webhook signature
 const verifyWebhookSignature = (body, signature) => {
@@ -98,17 +99,17 @@ const handlePayoutReversed = async (payload) => {
 }
 
 // Handle Razorpay webhooks
-const handleWebhook = async (req, res) => {
+const handleWebhook = async (req, res, next) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
 
     if (!signature) {
-      return res.status(400).json({ error: 'Missing signature' });
+      return next(new AppError('Missing signature', 400));
     }
 
     // Verify signature
     if (!verifyWebhookSignature(req.body, signature)) {
-      return res.status(400).json({ error: 'Invalid signature' });
+      return next(new AppError('Invalid signature', 400));
     }
 
     const event = req.body.event;
@@ -163,7 +164,7 @@ const handleWebhook = async (req, res) => {
       [error.message, req.body.id]
     );
 
-    res.status(500).json({ error: 'Webhook processing failed' });
+    return next(new AppError('Webhook processing failed', 500));
   }
 }
 

@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const query = require("../../../config/dbConfig"); // Change to this
+const AppError = require("../../../utils/appError");
 const { logger } = require('../../../utils/logger');
 const { decryptId } = require("../../../config/encryptDecryptId");
 const { addApiToRedis } = require('../../../utils/queueSender');
@@ -15,10 +16,7 @@ const changePasswordController = async (req, res, next) => {
     const userId = req.user.user_id;
 
     if (!userId || !oldPassword || !newPassword) {
-      return res.status(400).json({
-        error: "User ID, old password, and new password are required.",
-        errorCode: 400,
-      });
+      return next(new AppError("User ID, old password, and new password are required.", 400));
     }
 
     const decryptedOldPassword = decryptId(oldPassword);
@@ -26,16 +24,16 @@ const changePasswordController = async (req, res, next) => {
     const user = (await query('SELECT * FROM user_data WHERE id = $1', [userId])).rows[0];
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return next(new AppError('User not found', 404));
     }
 
     const passwordMatch = await bcrypt.compare(decryptedOldPassword, user.password);
     if (!passwordMatch) {
-      return res.status(405).json({ error: 'Incorrect old password.' });
+      return next(new AppError('Incorrect old password.', 400));
     }
 
     if (decryptedOldPassword === decryptedNewPassword) {
-      return res.status(406).json({ error: 'New password must be different from the old password.' });
+      return next(new AppError('New password must be different from the old password.', 400));
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -49,7 +47,7 @@ const changePasswordController = async (req, res, next) => {
     return res.status(200).json({ success: true, message: 'Password changed successfully' });
   } catch (error) {
     logger.error('Error changing password:', error);
-    return res.status(500).json({ error: 'Failed to change password' });
+    return next(new AppError('Failed to change password', 500));
   }
 };
 

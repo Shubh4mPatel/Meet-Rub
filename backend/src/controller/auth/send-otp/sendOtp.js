@@ -18,16 +18,16 @@ const otpSendApi = async (req, res, next) => {
     if (type === "password-reset") {
       if (userRes.rows.length === 0) {
         logger.warn("Password reset failed: Email not found", { email });
-        return res.status(404).json({ error: "Email not found." });
+        return next(new AppError("Email not found.", 404));
       }
     } else if (type === "email-verification") {
       if (userRes.rows.length > 0) {
         logger.warn("Email verification failed: Email already registered", { email });
-        return res.status(400).json({ error: "Email is already registered." });
+        return next(new AppError("Email is already registered.", 400));
       }
     } else {
       logger.warn("Invalid OTP type received", { type });
-      return res.status(400).json({ error: "Invalid OTP type." });
+      return next(new AppError("Invalid OTP type.", 400));
     }
 
     const otp = crypto.randomBytes(3).toString("hex");

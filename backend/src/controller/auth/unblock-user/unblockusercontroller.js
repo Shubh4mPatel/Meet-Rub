@@ -1,8 +1,9 @@
 const dbQuery = require("../../../config/dbConfig");
+const AppError = require("../../../utils/appError");
 const sendMail = require("../../../config/email").sendMail;
 const { logger } = require('../../../utils/logger');
 
-const unblockUserController = async (req, res) => {
+const unblockUserController = async (req, res, next) => {
   try {
     // Authenticate the token (assume middleware or call here)
     const actionTakerId = req.user.user_id;
@@ -12,7 +13,7 @@ const unblockUserController = async (req, res) => {
 
     const { rows: user } = await dbQuery("SELECT email, name FROM user_data WHERE id = $1", [user_id]);
     if (!user || user.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return next(new AppError('User not found', 404));
     }
 
     await dbQuery("UPDATE user_data SET is_blocked = false WHERE id = $1", [user_id]);
@@ -67,7 +68,7 @@ const unblockUserController = async (req, res) => {
     return res.status(200).json({ message: 'User unblocked successfully', success: true });
   } catch (error) {
     logger.error("Error processing Unblock user request:", error);
-    return res.status(500).json({ error: 'Error processing Unblock user request' });
+    return next(new AppError('Error processing Unblock user request', 500));
   }
 };
 

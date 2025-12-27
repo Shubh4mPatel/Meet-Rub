@@ -1,14 +1,15 @@
 const paymentService = require('../../razor-pay-services/paymentService');
 const {pool:db} = require('../../../config/dbConfig');
+const AppError = require("../../../utils/appError");
 
 // Create payment from wallet
-const payFromWallet = async (req, res) => {
+const payFromWallet = async (req, res, next) => {
   try {
     const { project_id } = req.body;
     const clientId = req.user.id;
 
     if (!project_id) {
-      return res.status(400).json({ error: 'Project ID is required' });
+      return next(new AppError('Project ID is required', 400));
     }
 
     // Verify project belongs to client
@@ -18,7 +19,7 @@ const payFromWallet = async (req, res) => {
     );
 
     if (projects.length === 0) {
-      return res.status(404).json({ error: 'Project not found' });
+      return next(new AppError('Project not found', 404));
     }
 
     const result = await paymentService.createWalletPayment(clientId, project_id);
@@ -29,18 +30,18 @@ const payFromWallet = async (req, res) => {
     });
   } catch (error) {
     console.error('Pay from wallet error:', error);
-    res.status(400).json({ error: error.message });
+    return next(new AppError(error.message, 500));
   }
 }
 
 // Create Razorpay order for service payment
-const createPaymentOrder = async (req, res) => {
+const createPaymentOrder = async (req, res, next) => {
   try {
     const { project_id } = req.body;
     const clientId = req.user.id;
 
     if (!project_id) {
-      return res.status(400).json({ error: 'Project ID is required' });
+      return next(new AppError('Project ID is required', 400));
     }
 
     const result = await paymentService.createServicePaymentOrder(clientId, project_id);
@@ -62,17 +63,17 @@ const createPaymentOrder = async (req, res) => {
     });
   } catch (error) {
     console.error('Create payment order error:', error);
-    res.status(400).json({ error: error.message });
+    return next(new AppError(error.message, 500));
   }
 }
 
 // Verify service payment
-const verifyPayment = async (req, res) => {
+const verifyPayment = async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ error: 'Missing payment details' });
+      return next(new AppError('Missing payment details', 400));
     }
 
     const result = await paymentService.processServicePayment(
@@ -87,12 +88,12 @@ const verifyPayment = async (req, res) => {
     });
   } catch (error) {
     console.error('Verify payment error:', error);
-    res.status(400).json({ error: error.message });
+    return next(new AppError(error.message, 500));
   }
 }
 
 // Get transaction details
-const getTransaction = async (req, res) => {
+const getTransaction = async (req, res, next) => {
   try {
     const transactionId = req.params.id;
     const userId = req.user.id;
@@ -100,25 +101,25 @@ const getTransaction = async (req, res) => {
     const transaction = await paymentService.getTransaction(transactionId);
 
     if (!transaction) {
-      return res.status(404).json({ error: 'Transaction not found' });
+      return next(new AppError('Transaction not found', 404));
     }
 
     // Check if user is involved in transaction
     if (transaction.client_id !== userId &&
         transaction.freelancer_id !== userId &&
         req.user.user_type !== 'ADMIN') {
-      return res.status(403).json({ error: 'Access denied' });
+      return next(new AppError('Access denied', 403));
     }
 
     res.json(transaction);
   } catch (error) {
     console.error('Get transaction error:', error);
-    res.status(500).json({ error: 'Failed to get transaction' });
+    return next(new AppError('Failed to get transaction', 500));
   }
 }
 
 // Get user's transactions
-const getMyTransactions = async (req, res) => {
+const getMyTransactions = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const userType = req.user.user_type;
@@ -129,7 +130,7 @@ const getMyTransactions = async (req, res) => {
     } else if (userType === 'FREELANCER') {
       query = 'SELECT * FROM transactions WHERE freelancer_id = ? ORDER BY created_at DESC';
     } else {
-      return res.status(400).json({ error: 'Invalid user type' });
+      return next(new AppError('Invalid user type', 400));
     }
 
     const [transactions] = await db.query(query, [userId]);
@@ -137,7 +138,7 @@ const getMyTransactions = async (req, res) => {
     res.json(transactions);
   } catch (error) {
     console.error('Get my transactions error:', error);
-    res.status(500).json({ error: 'Failed to get transactions' });
+    return next(new AppError('Failed to get transactions', 500));
   }
 }
 

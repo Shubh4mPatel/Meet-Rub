@@ -1,14 +1,15 @@
 const walletService = require('../../razor-pay-services/walletService');
 const paymentService = require('../../razor-pay-services/paymentService');
+const AppError = require("../../../utils/appError");
 
 // Get wallet balance
-const getBalance = async (req, res) => {
+const getBalance = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const wallet = await walletService.getWalletByUserId(userId);
 
     if (!wallet) {
-      return res.status(404).json({ error: 'Wallet not found' });
+      return next(new AppError('Wallet not found', 404));
     }
 
     res.json({
@@ -18,33 +19,29 @@ const getBalance = async (req, res) => {
     });
   } catch (error) {
     console.error('Get balance error:', error);
-    res.status(500).json({ error: 'Failed to get balance' });
+    return next(new AppError('Failed to get balance', 500));
   }
 }
 
 // Create order for wallet load
-const createLoadOrder = async (req, res) => {
+const createLoadOrder = async (req, res, next) => {
   try {
     const { amount } = req.body;
     const userId = req.user.id;
 
     if (!amount || amount <= 0) {
-      return res.status(400).json({ error: 'Invalid amount' });
+      return next(new AppError('Invalid amount', 400));
     }
 
     const minLoad = parseFloat(process.env.MIN_WALLET_LOAD || 100);
     const maxLoad = parseFloat(process.env.MAX_WALLET_LOAD || 100000);
 
     if (amount < minLoad) {
-      return res.status(400).json({
-        error: `Minimum wallet load amount is ${minLoad}`
-      });
+      return next(new AppError(`Minimum wallet load amount is ${minLoad}`, 400));
     }
 
     if (amount > maxLoad) {
-      return res.status(400).json({
-        error: `Maximum wallet load amount is ${maxLoad}`
-      });
+      return next(new AppError(`Maximum wallet load amount is ${maxLoad}`, 400));
     }
 
     const order = await paymentService.createWalletLoadOrder(userId, amount);
@@ -60,17 +57,17 @@ const createLoadOrder = async (req, res) => {
     });
   } catch (error) {
     console.error('Create load order error:', error);
-    res.status(500).json({ error: error.message });
+    return next(new AppError(error.message, 500));
   }
 }
 
 // Verify and process wallet load payment
-const verifyLoadPayment = async (req, res) => {
+const verifyLoadPayment = async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ error: 'Missing payment details' });
+      return next(new AppError('Missing payment details', 400));
     }
 
     const result = await paymentService.processWalletLoad(
@@ -85,12 +82,12 @@ const verifyLoadPayment = async (req, res) => {
     });
   } catch (error) {
     console.error('Verify load payment error:', error);
-    res.status(400).json({ error: error.message });
+    return next(new AppError(error.message, 500));
   }
 }
 
 // Get wallet transactions
-const getTransactions = async (req, res) => {
+const getTransactions = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const limit = parseInt(req.query.limit) || 50;
@@ -108,12 +105,12 @@ const getTransactions = async (req, res) => {
     });
   } catch (error) {
     console.error('Get transactions error:', error);
-    res.status(500).json({ error: 'Failed to get transactions' });
+    return next(new AppError('Failed to get transactions', 500));
   }
 }
 
 // Get single transaction
-const getTransaction = async (req, res) => {
+const getTransaction = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const transactionId = req.params.id;
@@ -121,13 +118,13 @@ const getTransaction = async (req, res) => {
     const transaction = await walletService.getTransactionById(transactionId, userId);
 
     if (!transaction) {
-      return res.status(404).json({ error: 'Transaction not found' });
+      return next(new AppError('Transaction not found', 404));
     }
 
     res.json(transaction);
   } catch (error) {
     console.error('Get transaction error:', error);
-    res.status(500).json({ error: 'Failed to get transaction' });
+    return next(new AppError('Failed to get transaction', 500));
   }
 }
 

@@ -1,6 +1,7 @@
 const { OAuth2Client } = require("google-auth-library");
 const jwt = require("jsonwebtoken");
 const query = require("../../../config/dbConfig");
+const AppError = require("../../../utils/appError");
 const { logger } = require('../../../utils/logger');
 const { addApiToRedis } = require("../../../utils/queueSender");
 
@@ -42,7 +43,7 @@ const googleLoginUser = async (req, res, next) => {
   try {
     const { credential } = req.body; // Google ID token
     if (!credential) {
-      return res.status(400).json({ error: "Google credential missing" });
+      return next(new AppError("Google credential missing", 400));
     }
 
     // ✅ Verify Google token
@@ -127,7 +128,7 @@ const googleLoginUser = async (req, res, next) => {
     return next();
   } catch (err) {
     logger.error("Google login error:", err);
-    return res.status(401).json({ error: "Invalid Google token", err: err.message });
+    return next(new AppError("Invalid Google token", 401));
   }
 };
 async function getGeoLocationDetails(ipAddress) {

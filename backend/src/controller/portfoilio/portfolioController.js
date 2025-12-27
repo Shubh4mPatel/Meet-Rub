@@ -15,8 +15,8 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
     logger.debug("Decoded user:", user);
 
     const { rows: userPortFolios } = await query(
-      `SELECT * FROM portfolio WHERE freelancer_id IN (SELECT freelancer_id FROM freelancer WHERE user_id = $1);`,
-      [user.id]
+      `SELECT * FROM portfolio WHERE freelancer_id =$1;`,
+      [user.roleWiseId]
     );
 
     logger.info(`Found portfolio count: ${userPortFolios.length}`);
@@ -32,6 +32,7 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
     const userPortFolioData = await userPortFolios.reduce(
       async (accPromise, curr) => {
         const acc = await accPromise;
+        console.log("Current portfolio item URL:", curr.portfolio_item_url);
         const objectName = curr.portfolio_item_url.slice(3).join("/");
         logger.debug("Generating presigned URL for:", objectName);
 
@@ -84,8 +85,8 @@ const addFreelancerPortfolio = async (req, res, next) => {
     for (const file of req.files) {
       logger.info(`Uploading file: ${file.originalname}`);
 
-      const fileExt = path.extname(file.originalname);
-      const fileName = `${fileExt}`;
+      // const fileExt = path.extname(file.originalname);
+      const fileName = `${file.originalname}`;
       const folder = `freelancer/portfolio/${user.user_id}`;
       const objectName = `${folder}/${fileName}`;
       const fileUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
@@ -111,12 +112,12 @@ const addFreelancerPortfolio = async (req, res, next) => {
         `INSERT INTO portfolio 
 (freelancer_id, portfolio_item_service_type, portfolio_item_url, portfolio_item_description, portfolio_item_created_at, portfolio_item_updated_at)
 VALUES (
-  (SELECT freelancer_id FROM freelancer WHERE user_id = $1),
+$1,
   $2, $3, $4, $5, $6
 )
 RETURNING *`,
         [
-          user.id,
+          user.roleWiseId,
           serviceType,
           fileData.fileUrl,
           itemDescription,

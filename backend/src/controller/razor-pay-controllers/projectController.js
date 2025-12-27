@@ -1,19 +1,18 @@
 const {pool:db} = require('../../../config/dbConfig');
+const AppError = require("../../../utils/appError");
 
 // Create a new project
-const createProject = async (req, res) => {
+const createProject = async (req, res, next) => {
   try {
     const clientId = req.user.id;
     const { freelancer_id, title, description, amount } = req.body;
 
     if (!freelancer_id || !title || !amount) {
-      return res.status(400).json({
-        error: 'Freelancer ID, title, and amount are required'
-      });
+      return next(new AppError('Freelancer ID, title, and amount are required', 400));
     }
 
     if (amount <= 0) {
-      return res.status(400).json({ error: 'Invalid amount' });
+      return next(new AppError('Invalid amount', 400));
     }
 
     // Verify freelancer exists
@@ -23,7 +22,7 @@ const createProject = async (req, res) => {
     );
 
     if (freelancers.length === 0) {
-      return res.status(404).json({ error: 'Freelancer not found or inactive' });
+      return next(new AppError('Freelancer not found or inactive', 404));
     }
 
     // Create project
@@ -40,12 +39,12 @@ const createProject = async (req, res) => {
     });
   } catch (error) {
     console.error('Create project error:', error);
-    res.status(500).json({ error: 'Failed to create project' });
+    return next(new AppError('Failed to create project', 500));
   }
 }
 
 // Get project details
-const getProject = async (req, res) => {
+const getProject = async (req, res, next) => {
   try {
     const projectId = req.params.id;
     const userId = req.user.id;
@@ -62,7 +61,7 @@ const getProject = async (req, res) => {
     );
 
     if (projects.length === 0) {
-      return res.status(404).json({ error: 'Project not found' });
+      return next(new AppError('Project not found', 404));
     }
 
     const project = projects[0];
@@ -71,18 +70,18 @@ const getProject = async (req, res) => {
     if (project.client_id !== userId &&
         project.freelancer_id !== userId &&
         req.user.user_type !== 'ADMIN') {
-      return res.status(403).json({ error: 'Access denied' });
+      return next(new AppError('Access denied', 403));
     }
 
     res.json(project);
   } catch (error) {
     console.error('Get project error:', error);
-    res.status(500).json({ error: 'Failed to get project' });
+    return next(new AppError('Failed to get project', 500));
   }
 }
 
 // Get user's projects
-const getMyProjects = async (req, res) => {
+const getMyProjects = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const userType = req.user.user_type;
@@ -107,7 +106,7 @@ const getMyProjects = async (req, res) => {
       query += 'p.freelancer_id = ?';
       params.push(userId);
     } else {
-      return res.status(400).json({ error: 'Invalid user type' });
+      return next(new AppError('Invalid user type', 400));
     }
 
     if (status) {
@@ -125,24 +124,24 @@ const getMyProjects = async (req, res) => {
     });
   } catch (error) {
     console.error('Get my projects error:', error);
-    res.status(500).json({ error: 'Failed to get projects' });
+    return next(new AppError('Failed to get projects', 500));
   }
 }
 
 // Update project status
-const updateProjectStatus = async (req, res) => {
+const updateProjectStatus = async (req, res, next) => {
   try {
     const projectId = req.params.id;
     const { status } = req.body;
     const userId = req.user.id;
 
     if (!status) {
-      return res.status(400).json({ error: 'Status is required' });
+      return next(new AppError('Status is required', 400));
     }
 
     const validStatuses = ['CREATED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
+      return next(new AppError('Invalid status', 400));
     }
 
     // Get project
@@ -152,7 +151,7 @@ const updateProjectStatus = async (req, res) => {
     );
 
     if (projects.length === 0) {
-      return res.status(404).json({ error: 'Project not found' });
+      return next(new AppError('Project not found', 404));
     }
 
     const project = projects[0];
@@ -160,14 +159,10 @@ const updateProjectStatus = async (req, res) => {
     // Check permissions
     if (req.user.user_type !== 'ADMIN') {
       if (status === 'COMPLETED' && project.freelancer_id !== userId) {
-        return res.status(403).json({
-          error: 'Only freelancer can mark project as completed'
-        });
+        return next(new AppError('Only freelancer can mark project as completed', 403));
       }
       if (status === 'CANCELLED' && project.client_id !== userId) {
-        return res.status(403).json({
-          error: 'Only client can cancel project'
-        });
+        return next(new AppError('Only client can cancel project', 403));
       }
     }
 
@@ -189,12 +184,12 @@ const updateProjectStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Update project status error:', error);
-    res.status(500).json({ error: 'Failed to update project status' });
+    return next(new AppError('Failed to update project status', 500));
   }
 }
 
 // Delete project (only if not paid)
-const deleteProject = async (req, res) => {
+const deleteProject = async (req, res, next) => {
   try {
     const projectId = req.params.id;
     const userId = req.user.id;
@@ -206,14 +201,14 @@ const deleteProject = async (req, res) => {
     );
 
     if (projects.length === 0) {
-      return res.status(404).json({ error: 'Project not found' });
+      return next(new AppError('Project not found', 404));
     }
 
     const project = projects[0];
 
     // Check if user is client
     if (project.client_id !== userId && req.user.user_type !== 'ADMIN') {
-      return res.status(403).json({ error: 'Only client can delete project' });
+      return next(new AppError('Only client can delete project', 403));
     }
 
     // Check if payment has been made
@@ -223,9 +218,7 @@ const deleteProject = async (req, res) => {
     );
 
     if (transactions.length > 0) {
-      return res.status(400).json({
-        error: 'Cannot delete project with associated transactions'
-      });
+      return next(new AppError('Cannot delete project with associated transactions', 400));
     }
 
     // Delete project
@@ -237,7 +230,7 @@ const deleteProject = async (req, res) => {
     });
   } catch (error) {
     console.error('Delete project error:', error);
-    res.status(500).json({ error: 'Failed to delete project' });
+    return next(new AppError('Failed to delete project', 500));
   }
 }
 

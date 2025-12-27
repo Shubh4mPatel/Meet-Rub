@@ -1,10 +1,11 @@
 const paymentService = require('../../razor-pay-services/paymentService');
 const payoutService = require('../../razor-pay-services/payoutService');
 const {pool:db} = require('../../../config/dbConfig');
+const AppError = require("../../../utils/appError");
 
 // class AdminController {
   // Get all escrow transactions
-  const getEscrowTransactions = async (req, res) => {
+  const getEscrowTransactions = async (req, res, next) => {
     try {
       const status = req.query.status || 'HELD';
       const transactions = await paymentService.getEscrowTransactions(status);
@@ -15,12 +16,12 @@ const {pool:db} = require('../../../config/dbConfig');
       });
     } catch (error) {
       console.error('Get escrow transactions error:', error);
-      res.status(500).json({ error: 'Failed to get escrow transactions' });
+      return next(new AppError('Failed to get escrow transactions', 500));
     }
   }
 
   // Release payment to freelancer
-  const releasePayment = async (req, res) => {
+  const releasePayment = async (req, res, next) => {
     try {
       const transactionId = req.params.id;
       const adminId = req.user.id;
@@ -29,13 +30,11 @@ const {pool:db} = require('../../../config/dbConfig');
       const transaction = await paymentService.getTransaction(transactionId);
 
       if (!transaction) {
-        return res.status(404).json({ error: 'Transaction not found' });
+        return next(new AppError('Transaction not found', 404));
       }
 
       if (transaction.status !== 'HELD') {
-        return res.status(400).json({ 
-          error: `Cannot release payment. Transaction status: ${transaction.status}` 
-        });
+        return next(new AppError(`Cannot release payment. Transaction status: ${transaction.status}`, 400));
       }
 
       // Check if project is completed
@@ -45,14 +44,11 @@ const {pool:db} = require('../../../config/dbConfig');
       );
 
       if (projects.length === 0) {
-        return res.status(404).json({ error: 'Project not found' });
+        return next(new AppError('Project not found', 404));
       }
 
       if (projects[0].status !== 'COMPLETED') {
-        return res.status(400).json({ 
-          error: 'Project must be completed before releasing payment',
-          project_status: projects[0].status
-        });
+        return next(new AppError('Project must be completed before releasing payment', 400));
       }
 
       // Release payment
@@ -64,17 +60,17 @@ const {pool:db} = require('../../../config/dbConfig');
       });
     } catch (error) {
       console.error('Release payment error:', error);
-      res.status(400).json({ error: error.message });
+      return next(new AppError(error.message, 500));
     }
   }
 
   // Get all payouts
-  const getAllPayouts = async (req, res) => {
+  const getAllPayouts = async (req, res, next) => {
     try {
       const status = req.query.status;
-      
+
       let query = `
-        SELECT p.*, 
+        SELECT p.*,
           t.project_id, t.total_amount, t.platform_commission,
           f.full_name as freelancer_name, f.email as freelancer_email
         FROM payouts p
@@ -83,7 +79,7 @@ const {pool:db} = require('../../../config/dbConfig');
       `;
 
       const params = [];
-      
+
       if (status) {
         query += ' WHERE p.status = ?';
         params.push(status);
@@ -99,29 +95,29 @@ const {pool:db} = require('../../../config/dbConfig');
       });
     } catch (error) {
       console.error('Get all payouts error:', error);
-      res.status(500).json({ error: 'Failed to get payouts' });
+      return next(new AppError('Failed to get payouts', 500));
     }
   }
 
   // Get payout details
-  const getPayoutDetails = async (req, res) => {
+  const getPayoutDetails = async (req, res, next) => {
     try {
       const payoutId = req.params.id;
       const payout = await payoutService.getPayout(payoutId);
 
       if (!payout) {
-        return res.status(404).json({ error: 'Payout not found' });
+        return next(new AppError('Payout not found', 404));
       }
 
       res.json(payout);
     } catch (error) {
       console.error('Get payout details error:', error);
-      res.status(500).json({ error: 'Failed to get payout details' });
+      return next(new AppError('Failed to get payout details', 500));
     }
   }
 
   // Get platform statistics
-  const getPlatformStats = async (req, res) => {
+  const getPlatformStats = async (req, res, next) => {
     try {
       // Total transactions
       const [totalTransactions] = await db.query(
@@ -168,17 +164,17 @@ const {pool:db} = require('../../../config/dbConfig');
       });
     } catch (error) {
       console.error('Get platform stats error:', error);
-      res.status(500).json({ error: 'Failed to get platform statistics' });
+      return next(new AppError('Failed to get platform statistics', 500));
     }
   }
 
   // Update platform commission percentage
-  const updateCommission = async (req, res) => {
+  const updateCommission = async (req, res, next) => {
     try {
       const { percentage } = req.body;
 
       if (!percentage || percentage < 0 || percentage > 100) {
-        return res.status(400).json({ error: 'Invalid commission percentage' });
+        return next(new AppError('Invalid commission percentage', 400));
       }
 
       await db.query(
@@ -192,7 +188,7 @@ const {pool:db} = require('../../../config/dbConfig');
       });
     } catch (error) {
       console.error('Update commission error:', error);
-      res.status(500).json({ error: 'Failed to update commission' });
+      return next(new AppError('Failed to update commission', 500));
     }
   }
 

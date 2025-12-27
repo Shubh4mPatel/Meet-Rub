@@ -1,8 +1,9 @@
 const {pool:db} = require('../../../config/dbConfig');
 const payoutService = require('../../razor-pay-services/payoutService');
+const AppError = require("../../../utils/appError");
 
 // Add/Update bank account details
-const addBankAccount = async (req, res) => {
+const addBankAccount = async (req, res, next) => {
   try {
     const freelancerId = req.user.id;
     const {
@@ -14,9 +15,7 @@ const addBankAccount = async (req, res) => {
     } = req.body;
 
     if (!bank_account_name || !bank_account_number || !bank_ifsc_code) {
-      return res.status(400).json({
-        error: 'Bank account name, number, and IFSC code are required'
-      });
+      return next(new AppError('Bank account name, number, and IFSC code are required', 400));
     }
 
     // Check if account already exists
@@ -57,12 +56,12 @@ const addBankAccount = async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Add bank account error:', error);
-    res.status(500).json({ error: 'Failed to add bank account' });
+    return next(new AppError('Failed to add bank account', 500));
   }
 }
 
 // Get bank account details
-const getBankAccount = async (req, res) => {
+const getBankAccount = async (req, res, next) => {
   try {
     const freelancerId = req.user.id;
 
@@ -75,7 +74,7 @@ const getBankAccount = async (req, res) => {
     );
 
     if (accounts.length === 0) {
-      return res.status(404).json({ error: 'Bank account not found' });
+      return next(new AppError('Bank account not found', 404));
     }
 
     // Mask account number for security
@@ -89,12 +88,12 @@ const getBankAccount = async (req, res) => {
     res.json(account);
   } catch (error) {
     console.error('Get bank account error:', error);
-    res.status(500).json({ error: 'Failed to get bank account' });
+    return next(new AppError('Failed to get bank account', 500));
   }
 }
 
 // Get freelancer's payouts
-const getMyPayouts = async (req, res) => {
+const getMyPayouts = async (req, res, next) => {
   try {
     const freelancerId = req.user.id;
     const payouts = await payoutService.getFreelancerPayouts(freelancerId);
@@ -105,12 +104,12 @@ const getMyPayouts = async (req, res) => {
     });
   } catch (error) {
     console.error('Get my payouts error:', error);
-    res.status(500).json({ error: 'Failed to get payouts' });
+    return next(new AppError('Failed to get payouts', 500));
   }
 }
 
 // Get earnings summary
-const getEarningsSummary = async (req, res) => {
+const getEarningsSummary = async (req, res, next) => {
   try {
     const freelancerId = req.user.id;
 
@@ -155,7 +154,7 @@ const getEarningsSummary = async (req, res) => {
     });
   } catch (error) {
     console.error('Get earnings summary error:', error);
-    res.status(500).json({ error: 'Failed to get earnings summary' });
+    return next(new AppError('Failed to get earnings summary', 500));
   }
 }
 

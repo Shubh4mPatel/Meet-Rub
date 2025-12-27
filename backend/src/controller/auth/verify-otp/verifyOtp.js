@@ -38,10 +38,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
   // Validate req.body
   const { error } = verifyOtpSchema.validate(req.body, { abortEarly: false });
   if (error) {
-    return res.status(400).json({
-      status: "fail",
-      message: error.details.map((detail) => detail.message),
-    });
+    return next(new AppError(error.details.map((detail) => detail.message).join(", "), 400));
   }
 
   let { email, otp, type, encryptedPassword, role } = req.body;
@@ -62,19 +59,12 @@ const verifyOtpAndProcess = async (req, res, next) => {
     );
 
     if (otpRes.rows.length === 0) {
-      return res.status(400).json({
-        status: "fail",
-        error: "Invalid or expired OTP"
-        
-      });
+      return next(new AppError("Invalid or expired OTP", 400));
     }
 
     const isOtpValid = await bcrypt.compare(otp, otpRes.rows[0].otp);
     if (!isOtpValid) {
-      return res.status(400).json({
-        status: "fail",
-        error: "Invalid OTP"
-      });
+      return next(new AppError("Invalid OTP", 400));
     }
 
     const hashedPassword = await bcrypt.hash(decryptedPassword, 10);
@@ -92,11 +82,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
       if (existingUser.rows.length > 0) {
         logger.warn("Email already registered", { email });
-        return res.status(400).json({
-          status: "fail",
-          error: "Email Alredy Register",
-          errorCode: 401,
-        });
+        return next(new AppError("Email already registered", 400));
       }
 
       if (role === "freelancer") {
@@ -330,11 +316,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
         email,
       ]);
       if (userRes.rows.length === 0) {
-        return res.status(404).json({
-          status: "fail",
-          error: "Email not found",
-          errorCode: 401,
-        });
+        return next(new AppError("Email not found", 404));
       }
 
       await query("UPDATE users SET user_password = $1 WHERE user_email = $2", [
@@ -351,11 +333,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
         message: "Password reset succefully",
       });
     } else {
-      return res.status(400).json({
-        status: "fail",
-        error: "Invalid OTP",
-        errorCode: 401,
-      });
+      return next(new AppError("Invalid OTP type", 400));
     }
   } catch (error) {
     logger.error("Error during Verification Code verification:", error);
