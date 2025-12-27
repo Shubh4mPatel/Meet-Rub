@@ -127,7 +127,7 @@
 									"key": "file",
 									"type": "file",
 									"src": [],
-									"description": "Government ID document (required for freelancer) - stored in meet-rub-assets bucket"
+									"description": "Government ID document (required for freelancer)"
 								}
 							]
 						},
@@ -136,7 +136,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["auth", "verify-otp"]
 						},
-						"description": "Verify OTP and complete freelancer registration. Sets authentication cookies. Documents are stored in meet-rub-assets bucket under freelancer/goverment-doc/{govIdType}/"
+						"description": "Verify OTP and complete freelancer registration. Sets authentication cookies."
 					},
 					"response": []
 				},
@@ -214,21 +214,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["auth", "login"]
 						},
-						"description": "Login with email and password. Returns httpOnly cookies with accessToken and refreshToken. Response includes user details with roleWiseId for role-specific operations."
-					},
-					"response": []
-				},
-				{
-					"name": "Refresh Token",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/auth/refresh",
-							"host": ["{{base_url}}"],
-							"path": ["auth", "refresh"]
-						},
-						"description": "Refresh access token using refresh token from cookies. Required when access token expires."
+						"description": "Login with email and password. Returns httpOnly cookies with accessToken and refreshToken."
 					},
 					"response": []
 				},
@@ -247,7 +233,7 @@
 					"response": []
 				}
 			],
-			"description": "Authentication endpoints for OTP-based registration, login, logout, and token refresh"
+			"description": "Authentication endpoints for OTP-based registration, login, and logout"
 		},
 		{
 			"name": "2. User Profile",
@@ -696,7 +682,7 @@
 									"host": ["{{base_url}}"],
 									"path": ["freelancer", "portfolio", "get-protfolio"]
 								},
-								"description": "Get all portfolio items organized by service type. Files are stored in meet-rub-assets bucket under freelancer/portfolio/{user_id}/"
+								"description": "Get all portfolio items organized by service type"
 							},
 							"response": []
 						},
@@ -727,8 +713,7 @@
 										{
 											"key": "files",
 											"type": "file",
-											"src": [],
-											"description": "Portfolio files (can upload multiple)"
+											"src": []
 										}
 									]
 								},
@@ -737,7 +722,7 @@
 									"host": ["{{base_url}}"],
 									"path": ["freelancer", "portfolio", "add-protfolio"]
 								},
-								"description": "Add new portfolio items (images or videos). Files stored in meet-rub-assets bucket under freelancer/portfolio/{user_id}/"
+								"description": "Add new portfolio items (images or videos)"
 							},
 							"response": []
 						},
@@ -750,34 +735,20 @@
 									"mode": "formdata",
 									"formdata": [
 										{
-											"key": "itemId",
-											"value": "1",
+											"key": "url",
+											"value": "current-portfolio-item-url",
 											"type": "text",
-											"description": "Portfolio item ID to update (optional - if not provided, new item will be added)"
+											"description": "Current portfolio item URL to update"
 										},
 										{
 											"key": "type",
 											"value": "image",
-											"type": "text",
-											"description": "image or video"
-										},
-										{
-											"key": "serviceType",
-											"value": "Web Development",
-											"type": "text",
-											"description": "Service type for the portfolio item (must match existing items if any)"
-										},
-										{
-											"key": "itemDescription",
-											"value": "Updated portfolio description",
-											"type": "text",
-											"description": "Description of the portfolio item"
+											"type": "text"
 										},
 										{
 											"key": "file",
 											"type": "file",
-											"src": [],
-											"description": "New file to replace existing or add new item"
+											"src": []
 										}
 									]
 								},
@@ -786,7 +757,7 @@
 									"host": ["{{base_url}}"],
 									"path": ["freelancer", "portfolio", "update-protfolio"]
 								},
-								"description": "Update an existing portfolio item or add a new one. If itemId is provided, it updates the existing item and deletes the old file from MinIO; otherwise, it adds a new item with proper validation. Uses database transactions for data consistency."
+								"description": "Update an existing portfolio item"
 							},
 							"response": []
 						},
@@ -809,12 +780,12 @@
 									"host": ["{{base_url}}"],
 									"path": ["freelancer", "portfolio", "delete-protfolios"]
 								},
-								"description": "Delete one or more portfolio items. Also removes files from meet-rub-assets bucket."
+								"description": "Delete one or more portfolio items"
 							},
 							"response": []
 						}
 					],
-					"description": "Manage portfolio items - files stored in meet-rub-assets bucket"
+					"description": "Manage portfolio items"
 				},
 				{
 					"name": "Before/After Impact",
@@ -839,7 +810,7 @@
 										}
 									]
 								},
-								"description": "Get all before/after impact items with pagination. Files stored in meet-rub-assets bucket."
+								"description": "Get all before/after impact items with pagination"
 							},
 							"response": []
 						},
@@ -880,7 +851,7 @@
 									"host": ["{{base_url}}"],
 									"path": ["freelancer", "portfolio", "upload-after-before"]
 								},
-								"description": "Upload before and after images showing impact (Freelancer role required). Files stored in meet-rub-assets bucket under freelancer/Impact/{user_id}/before and freelancer/Impact/{user_id}/after"
+								"description": "Upload before and after images showing impact (Freelancer role required)"
 							},
 							"response": []
 						},
@@ -908,7 +879,7 @@
 							"response": []
 						}
 					],
-					"description": "Manage before/after impact showcase - files stored in meet-rub-assets bucket"
+					"description": "Manage before/after impact showcase"
 				},
 				{
 					"name": "Earnings & Payouts",
