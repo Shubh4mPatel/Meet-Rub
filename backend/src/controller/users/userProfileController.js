@@ -781,7 +781,7 @@ const getAllFreelancers = async (req, res, next) => {
         f.profile_title,
         f.profile_image_url,
         f.rating,
-        s.services_name,
+        s.service_name,
         s.service_price,
         s.delivery_time,
         s.created_at
@@ -805,7 +805,7 @@ const getAllFreelancers = async (req, res, next) => {
       const serviceTypeParams = serviceTypes
         .map((_, index) => `$${paramCount + index}`)
         .join(",");
-      queryText += ` AND s.services_name IN (${serviceTypeParams})`;
+      queryText += ` AND s.service_name IN (${serviceTypeParams})`;
       queryParams.push(...serviceTypes);
       paramCount += serviceTypes.length;
     }
@@ -864,7 +864,7 @@ const getAllFreelancers = async (req, res, next) => {
       const serviceTypeParams = serviceTypes
         .map((_, index) => `$${countParamIndex + index}`)
         .join(",");
-      countQuery += ` AND s.services_name IN (${serviceTypeParams})`;
+      countQuery += ` AND s.service_name IN (${serviceTypeParams})`;
       countParams.push(...serviceTypes);
       countParamIndex += serviceTypes.length;
     }
