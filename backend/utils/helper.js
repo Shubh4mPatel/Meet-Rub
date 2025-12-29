@@ -21,4 +21,19 @@ function addAssetsPrefix(rawUrl) {
   u.pathname = '/' + parts.join('/');
   return u.toString();
 }
-module.exports = {  getObjectNameFromUrl, addAssetsPrefix };
+
+function getNormalUrlFromPresigned(presignedUrl) {
+  try {
+    const parsedUrl = new URL(presignedUrl);
+    // Extract just the pathname without query parameters
+    const pathname = parsedUrl.pathname;
+    // Construct the normal URL: protocol://host/pathname
+    const normalUrl = `${parsedUrl.protocol}//${parsedUrl.host}${pathname}`;
+    return normalUrl;
+  } catch (err) {
+    console.error("Invalid presigned URL:", err);
+    return null;
+  }
+}
+
+module.exports = {  getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned };

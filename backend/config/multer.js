@@ -7,7 +7,7 @@ const storage = multer.memoryStorage();
 const fileFilter = (req, file, cb) => {
   // Accept only images and videos
   const allowedMimes = [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml','image/avif',
     'video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm', 'video/x-msvideo'
   ];
   

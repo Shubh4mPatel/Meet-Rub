@@ -15,7 +15,7 @@ const { logger } = require("../utils/logger");
 const { manageLogFiles } = require("../cron/logmanager");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
-
+ 
 // Load .env file only if not running in Docker (Docker Compose injects env vars directly)
 if (!process.env.DOCKER_ENV) {
   dotenv.config();

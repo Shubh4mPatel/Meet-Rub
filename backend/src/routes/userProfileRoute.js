@@ -68,7 +68,8 @@ router.get('/getProfile', getUserProfile);
  *       401:
  *         description: Unauthorized
  */
-router.post('/editProfile', upload.single('file'), editProfile);
+// Accept any single file upload field - more flexible
+router.post('/editProfile', upload.any(), editProfile);
 
 
 
