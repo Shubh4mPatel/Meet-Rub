@@ -84,7 +84,7 @@ const getUserProfile = async (req, res, next) => {
             const signedUrl = await Promise.race([
               minioClient.presignedGetObject(bucketName, objectName, expirySeconds),
               new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('MinIO presignedGetObject timeout')), 10000)
+                setTimeout(() => reject(new Error('MinIO presignedGetObject timeout')), 5000)
               )
             ]);
 
