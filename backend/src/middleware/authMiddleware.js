@@ -58,7 +58,7 @@ WHERE u.id = $1`,
       maxAge: ACCESS_TOKEN_DURATION,
       httpOnly:  false,
       secure: false, // ensure the cookie is sent over HTTPS in production
-      sameSite: isProduction ? "None" : "lax", // required for cross-site cookies
+      sameSite: isProduction ?  "lax":"None", // required for cross-site cookies
       path: "/",
     });
 

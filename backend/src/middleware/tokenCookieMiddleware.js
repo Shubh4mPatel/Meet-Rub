@@ -12,7 +12,7 @@ function setTokenCookies(req, res, next) {
       maxAge: ACCESS_TOKEN_DURATION_WEB,
       httpOnly: false,
       secure: isHttps,
-      sameSite: isProduction ? "None" : "lax",
+      sameSite: isProduction ?  "lax":"None",
       path: "/",
     });
   }
@@ -21,7 +21,7 @@ function setTokenCookies(req, res, next) {
       maxAge: REFRESH_TOKEN_DURATION_WEB,
       httpOnly:  false,
       secure: isHttps,
-      sameSite: isProduction ? "None" : "lax",
+      sameSite: isProduction ?  "lax":"None",
       path: "/",
     });
   }
