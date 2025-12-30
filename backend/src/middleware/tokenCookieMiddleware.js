@@ -1,3 +1,5 @@
+const { none } = require("../../config/multer");
+
 function setTokenCookies(req, res, next) {
     const isProduction = process.env.NODE_ENV === 'production';
     // const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV !== 'production';
@@ -10,7 +12,7 @@ function setTokenCookies(req, res, next) {
             maxAge: ACCESS_TOKEN_DURATION_WEB,
             httpOnly: isProduction ? true : false,
             secure: isHttps,
-            sameSite: 'lax',
+            sameSite: isProduction ? 'lax' : none,
             path: '/',
         });
     }
@@ -21,7 +23,7 @@ function setTokenCookies(req, res, next) {
             maxAge: REFRESH_TOKEN_DURATION_WEB,
             httpOnly: isProduction ? true : false,
             secure: isHttps,
-            sameSite: 'lax',
+            sameSite:isProduction ? 'lax' : none,
             path: '/',
         });
     }

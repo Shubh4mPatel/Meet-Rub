@@ -25,7 +25,7 @@ if (!process.env.DOCKER_ENV) {
 const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((origin) =>
   origin.trim()
 );
-logger.info("Allowed Origins for CORS:", allowedOrigins);
+logger.info("Allowed Origins for CORS:", allowedOrigins,process.env.NODE_ENV);
 const corsOptions = {
   origin:process.env.NODE_ENV=='production'?function (origin, callback) {
     // Allow requests with no origin (like mobile apps, Postman, etc.)
