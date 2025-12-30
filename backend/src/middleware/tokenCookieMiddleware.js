@@ -12,17 +12,16 @@ function setTokenCookies(req, res, next) {
       maxAge: ACCESS_TOKEN_DURATION_WEB,
       httpOnly: isProduction ? true : false,
       secure: isHttps,
-      sameSite: isProduction ? none : "lax",
+      sameSite: isProduction ? "None" : "lax",
       path: "/",
     });
   }
   if (res.locals.refreshToken) {
-    console.log();
     res.cookie("RefreshToken", res.locals.refreshToken, {
       maxAge: REFRESH_TOKEN_DURATION_WEB,
       httpOnly: isProduction ? true : false,
       secure: isHttps,
-      sameSite: isProduction ? none : "lax",
+      sameSite: isProduction ? "None" : "lax",
       path: "/",
     });
   }
