@@ -10,7 +10,7 @@ function setTokenCookies(req, res, next) {
   if (res.locals.accessToken) {
     res.cookie("AccessToken", res.locals.accessToken, {
       maxAge: ACCESS_TOKEN_DURATION_WEB,
-      httpOnly: isProduction ? true : false,
+      httpOnly: false,
       secure: isHttps,
       sameSite: isProduction ? "None" : "lax",
       path: "/",
@@ -19,7 +19,7 @@ function setTokenCookies(req, res, next) {
   if (res.locals.refreshToken) {
     res.cookie("RefreshToken", res.locals.refreshToken, {
       maxAge: REFRESH_TOKEN_DURATION_WEB,
-      httpOnly: isProduction ? true : false,
+      httpOnly:  false,
       secure: isHttps,
       sameSite: isProduction ? "None" : "lax",
       path: "/",

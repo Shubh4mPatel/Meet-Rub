@@ -56,8 +56,8 @@ WHERE u.id = $1`,
     const isProduction = process.env.NODE_ENV === "production";
     res.cookie("AccessToken", newAccessToken, {
       maxAge: ACCESS_TOKEN_DURATION,
-      httpOnly: isProduction ? true : false,
-      secure: isProduction, // ensure the cookie is sent over HTTPS in production
+      httpOnly:  false,
+      secure: false, // ensure the cookie is sent over HTTPS in production
       sameSite: isProduction ? "None" : "lax", // required for cross-site cookies
       path: "/",
     });
