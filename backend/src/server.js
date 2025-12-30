@@ -64,6 +64,7 @@ const corsOptions = {
 
 const app = express();
 const serverWithSocket = http.createServer(app);
+app.use(cors(corsOptions));
 // const io = socketIo(serverWithSocket, socketConfig);
 
 // Initialize socket handling
@@ -74,9 +75,8 @@ const serverWithSocket = http.createServer(app);
 // app.set("socketHelpers", socketHelpers);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-app.use(cors(corsOptions));
 // app.use(helmet());
+
 app.use(helmet());
 
 // Now, specifically override the policies that are causing issues
