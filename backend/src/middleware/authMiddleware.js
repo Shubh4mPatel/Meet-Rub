@@ -58,7 +58,7 @@ WHERE u.id = $1`,
       maxAge: ACCESS_TOKEN_DURATION,
       httpOnly: isProduction ? true : false,
       secure: isProduction, // ensure the cookie is sent over HTTPS in production
-      sameSite: isProduction ? 'lax' : none, // required for cross-site cookies
+      sameSite: isProduction ? none : "lax", // required for cross-site cookies
       path: "/",
     });
 
@@ -110,12 +110,10 @@ const requireRole = (allowedRoles) => {
     const user = req.user;
 
     if (!allowedRoles.includes(user.role)) {
-      return res
-        .status(403)
-        .json({
-          status: "failed",
-          message: "Insufficient permissions for this role",
-        });
+      return res.status(403).json({
+        status: "failed",
+        message: "Insufficient permissions for this role",
+      });
     }
 
     next();
