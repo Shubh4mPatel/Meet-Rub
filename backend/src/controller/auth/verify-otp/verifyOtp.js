@@ -223,10 +223,14 @@ const verifyOtpAndProcess = async (req, res, next) => {
           client.release();
         }
       } else if (role === "creator") {
-        const { firstName, lastName, niche, bio, socialLinks } = UserData;
+        const { firstName, lastName, niche, socialLinks,socialPlatformType } = UserData;
 
-        // Validate required fields for creator
-        if (!firstName || !lastName || !niche || !bio) {
+        // Validate required fields for creator"
+        if(!socialPlatformType || ['youtube', 'instagram'].includes(socialPlatformType)=== false){
+          return next(new AppError("Invalid or missing social platform type", 400));
+        }
+
+        if (!firstName || !lastName || !niche || !Array.isArray(niche) || niche.length === 0) {
           return next(new AppError("Missing required fields for creator", 400));
         }
 
@@ -260,7 +264,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
               first_name,
               last_name,
               niche,
-              bio,
+              social_platform_type,
               social_links,
               created_at,
               updated_at
@@ -272,7 +276,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
               firstName,
               lastName,
               niche,
-              bio,
+              socialPlatformType,
               socialLinks || null,
               currentDateTime,
               currentDateTime,
@@ -305,6 +309,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
         email,
         type,
       ]);
+
       logger.info("OTP entry deleted after success");
 
       return res.status(200).json({
