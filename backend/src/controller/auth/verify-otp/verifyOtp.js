@@ -271,7 +271,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
               newUserResMeetRub[0].id,
               firstName,
               lastName,
-              JSON.stringify(niche),  // ✅ Stringify the array
+              niche,  // ✅ Stringify the array
               socialLinks ? JSON.stringify(socialLinks) : null,  // ✅ Stringify if exists
               currentDateTime,
               currentDateTime,
