@@ -10,6 +10,7 @@ const path = require("path"); // CommonJS
 const { minioClient } = require("../../../../config/minio");
 const Joi = require("joi"); // Add Joi for validation
 const crypto = require("crypto");
+const { validateFile } = require("../../../../utils/helper");
 
 // Define validation schema
 const verifyOtpSchema = Joi.object({
@@ -102,18 +103,22 @@ const verifyOtpAndProcess = async (req, res, next) => {
         if (!req.file) {
           return next(new AppError("document is required", 400));
         }
+        const isvalidFileType = validateFile(req.file, ["image/jpeg", "image/png", "image/avif","image/webp"], 5);
 
-        const BUCKET_NAME = "meet-rub-assets";
-        const fileExt = path.extname(req.file.originalname);
-        const fileName = `${crypto.randomUUID()}${fileExt}`;
-        const folder = `freelancer/goverment-doc/${govIdType}`;
-        const objectName = `${folder}/${fileName}`;
-        const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+          if (!isvalidFileType.valid) {
+            return next(new AppError(isvalidFileType.error, 400));
+          }
+          const BUCKET_NAME = "meet-rub-assets";
+          const fileExt = path.extname(req.file.originalname);
+          const fileName = `${crypto.randomUUID()}${fileExt}`;
+          const folder = `freelancer/goverment-doc/${govIdType}`;
+          const objectName = `${folder}/${fileName}`;
+          const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 
-        // Start transaction
-        const client = await pool.connect();
+          // Start transaction
+          const client = await pool.connect();
 
-        try {
+          try {
           await client.query("BEGIN");
 
 

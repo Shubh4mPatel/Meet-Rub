@@ -9,6 +9,8 @@ services:
       - "7000:7000"  # Map host port 7000 to container port 7000
     env_file:
       - ./.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # ADD THIS LINE
     environment:
       - DOCKER_ENV=true
       - PORT=7000

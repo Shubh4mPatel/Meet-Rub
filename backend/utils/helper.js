@@ -36,4 +36,23 @@ function getNormalUrlFromPresigned(presignedUrl) {
   }
 }
 
-module.exports = {  getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned };
+function validateFile(file, allowedTypes, maxSizeMB) {
+  if (!file) {
+    return { valid: false, error: "No file provided" };
+  }
+
+  const fileType = file.type; // MIME type
+  const fileSizeMB = file.size / (1024 * 1024);
+
+  if (!allowedTypes.includes(fileType)) {
+    return { valid: false, error: "Invalid file type" };
+  }
+
+  if (fileSizeMB > maxSizeMB) {
+    return { valid: false, error: "File is too large" };
+  }
+
+  return { valid: true };
+}
+
+module.exports = {  getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile};
