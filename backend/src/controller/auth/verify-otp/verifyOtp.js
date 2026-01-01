@@ -44,7 +44,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
   }
 
   let { email, otp, type, encryptedPassword, role } = req.body;
-  const { UserData } = req.body;
+  const { userData } = req.body;
+  const UserData = json.parse(userData || "{}");
   email = email?.trim();
   otp = otp?.trim();
   const userName = UserData.firstName + " " + UserData.lastName;
