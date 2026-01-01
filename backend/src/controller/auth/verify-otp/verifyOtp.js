@@ -199,7 +199,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
           for (const service of parsedServiceOffered) {
             await client.query(
-              "INSERT INTO services (freelancer_id, services_name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+              "INSERT INTO services (freelancer_id, service_name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
               [freelancer[0].freelancer_id, service, currentTimestamp, currentTimestamp]
             );
           }
