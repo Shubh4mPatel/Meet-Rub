@@ -6,56 +6,90 @@ const { logger } = require("../../../../utils/logger");
 const {
   sendEmailNotification,
 } = require("../../../../producer/notificationProducer");
-const path = require("path"); // CommonJS
+const path = require("path");
 const { minioClient } = require("../../../../config/minio");
-const Joi = require("joi"); // Add Joi for validation
+const Joi = require("joi");
 const crypto = require("crypto");
 const { validateFile } = require("../../../../utils/helper");
 
-// Define validation schema
-const verifyOtpSchema = Joi.object({
+// Base schema for common fields
+const baseSchema = {
   email: Joi.string().email().required(),
   otp: Joi.string().required(),
   type: Joi.string().valid("email-verification", "password-reset").required(),
   encryptedPassword: Joi.string().required(),
   role: Joi.string().valid("freelancer", "creator").optional(),
-  UserData: Joi.object({
-    firstName: Joi.string().optional(),
-    lastName: Joi.string().optional(),
-    dateOfBirth: Joi.date().less("now").iso().optional(), // Must be a valid date in the past
-    profileTitle: Joi.string().optional(),
-    serviceOffred: Joi.array().items(Joi.string()).optional(),
-    niche: Joi.array().items(Joi.string()).optional(), // Changed to array of strings
-    govId: Joi.string().optional(),
-    phoneNumber: Joi.string()
-      .pattern(/^\+?[1-9]\d{1,14}$/) // Must be a valid E.164 phone number
-      .optional(),
-    govIdType: Joi.string().optional(),
-    bio: Joi.string().optional(),
-    socialLinks: Joi.array().items(Joi.string().uri()).optional(),
-  }).optional(),
+};
+
+// Freelancer-specific schema
+const freelancerSchema = Joi.object({
+  ...baseSchema,
+  firstName: Joi.string().required(),
+  lastName: Joi.string().required(),
+  dateOfBirth: Joi.string().optional(), // comes as string from FormData
+  profileTitle: Joi.string().optional(),
+  serviceOffered: Joi.string().required(), // JSON stringified array
+  niche: Joi.string().required(), // JSON stringified array
+  govId: Joi.string().required(),
+  phoneNumber: Joi.string()
+    .pattern(/^\+?[1-9]\d{1,14}$/)
+    .optional(),
+  govIdType: Joi.string().required(),
+});
+
+// Creator-specific schema
+const creatorSchema = Joi.object({
+  ...baseSchema,
+  firstName: Joi.string().required(),
+  lastName: Joi.string().required(),
+  niche: Joi.string().required(), // JSON stringified array
+  socialLinks: Joi.string().optional(), // JSON stringified array
+});
+
+// Password reset schema
+const passwordResetSchema = Joi.object({
+  email: Joi.string().email().required(),
+  otp: Joi.string().required(),
+  type: Joi.string().valid("password-reset").required(),
+  encryptedPassword: Joi.string().required(),
 });
 
 const verifyOtpAndProcess = async (req, res, next) => {
-  // Validate req.body
-  const { error } = verifyOtpSchema.validate(req.body, { abortEarly: false });
-  if (error) {
-    return next(new AppError(error.details.map((detail) => detail.message).join(", "), 400));
-  }
-
   let { email, otp, type, encryptedPassword, role } = req.body;
-  const { userData } = req.body;
-  const UserData = json.parse(userData || "{}");
+
   email = email?.trim();
   otp = otp?.trim();
-  const userName = UserData.firstName + " " + UserData.lastName;
-  const currentTimestamp = new Date().toUTCString();
 
   try {
-    // const decryptedPassword = decryptId(encryptedPassword)?.trim();
+    // Validate based on type and role
+    let validationError;
+
+    if (type === "password-reset") {
+      const { error } = passwordResetSchema.validate(req.body, { abortEarly: false });
+      validationError = error;
+    } else if (type === "email-verification") {
+      if (role === "freelancer") {
+        const { error } = freelancerSchema.validate(req.body, { abortEarly: false });
+        validationError = error;
+      } else if (role === "creator") {
+        const { error } = creatorSchema.validate(req.body, { abortEarly: false });
+        validationError = error;
+      } else {
+        return next(new AppError("Role is required for email verification", 400));
+      }
+    } else {
+      return next(new AppError("Invalid type", 400));
+    }
+
+    if (validationError) {
+      return next(new AppError(validationError.details.map((d) => d.message).join(", "), 400));
+    }
+
     const decryptedPassword = encryptedPassword;
     const currentDateTime = new Date(Date.now());
+    const currentTimestamp = new Date().toUTCString();
 
+    // Verify OTP
     const otpRes = await query(
       "SELECT * FROM otp_tokens WHERE email = $1 AND type = $2 AND expires_at > $3",
       [email, type, currentDateTime]
@@ -75,9 +109,6 @@ const verifyOtpAndProcess = async (req, res, next) => {
     if (type === "email-verification") {
       logger.info("Performing user registration");
 
-      if (!role == "freelancer" || !role == "creator") {
-        return next(new AppError("role does not exist"));
-      }
       const existingUser = await query(
         "SELECT id FROM users WHERE user_email=$1",
         [email]
@@ -89,58 +120,49 @@ const verifyOtpAndProcess = async (req, res, next) => {
       }
 
       if (role === "freelancer") {
-        logger.info(userName);
         const {
           firstName,
           lastName,
           dateOfBirth,
           profileTitle,
-          serviceOffred,
+          serviceOffered,
           niche,
           govId,
           phoneNumber,
           govIdType,
-        } = UserData;
+        } = req.body;
+
+        // Parse JSON strings from FormData
+        const parsedServiceOffered = JSON.parse(serviceOffered);
+        const parsedNiche = JSON.parse(niche);
+
+        const userName = `${firstName} ${lastName}`;
+
         if (!req.file) {
-          return next(new AppError("document is required", 400));
+          return next(new AppError("Document is required", 400));
         }
-        // const isvalidFileType = validateFile(req.file, ["image/jpeg", "image/png", "image/avif","image/webp"], 5);
 
-        //   if (!isvalidFileType.valid) {
-        //     return next(new AppError(isvalidFileType.error, 400));
-        //   }
-          const BUCKET_NAME = "meet-rub-assets";
-          const fileExt = path.extname(req.file.originalname);
-          const fileName = `${crypto.randomUUID()}${fileExt}`;
-          const folder = `freelancer/goverment-doc/${govIdType}`;
-          const objectName = `${folder}/${fileName}`;
-          const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+        const BUCKET_NAME = "meet-rub-assets";
+        const fileExt = path.extname(req.file.originalname);
+        const fileName = `${crypto.randomUUID()}${fileExt}`;
+        const folder = `freelancer/goverment-doc/${govIdType}`;
+        const objectName = `${folder}/${fileName}`;
+        const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
 
-          // Start transaction
-          const client = await pool.connect();
+        const client = await pool.connect();
 
-          try {
+        try {
           await client.query("BEGIN");
-
-
 
           const { rows: newUserResMeetRub } = await client.query(
             "INSERT INTO users (user_email, user_role, user_password, user_name, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-            [
-              email.toLowerCase(),
-              role,
-              hashedPassword,
-              userName,
-              currentTimestamp,
-            ]
+            [email.toLowerCase(), role, hashedPassword, userName, currentTimestamp]
           );
 
-          await client.query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
-            email,
-            type,
-          ]);
-
-          // Upload file to MinIO first
+          await client.query(
+            "DELETE FROM otp_tokens WHERE email = $1 AND type = $2",
+            [email, type]
+          );
 
           await minioClient.putObject(
             BUCKET_NAME,
@@ -150,25 +172,11 @@ const verifyOtpAndProcess = async (req, res, next) => {
             { "Content-Type": req.file.mimetype }
           );
 
-          // Insert freelancer record
           const { rows: freelancer } = await client.query(
             `INSERT INTO freelancer 
-            (
-              user_id,
-              profile_title,
-              gov_id_type,
-              gov_id_url,
-              first_name,
-              last_name,
-              date_of_birth,
-              phone_number,
-              created_at,
-              updated_at,
-              freelancer_full_name,
-              freelancer_email,
-              gov_id_number,
-              niche
-            )
+            (user_id, profile_title, gov_id_type, gov_id_url, first_name, last_name, 
+             date_of_birth, phone_number, created_at, updated_at, freelancer_full_name, 
+             freelancer_email, gov_id_number, niche)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING *`,
             [
@@ -178,67 +186,47 @@ const verifyOtpAndProcess = async (req, res, next) => {
               govIdUrl,
               firstName,
               lastName,
-              dateOfBirth,
-              phoneNumber,
+              dateOfBirth || null,
+              phoneNumber || null,
               currentDateTime,
               currentDateTime,
-              `${firstName} ${lastName}`,
+              userName,
               email,
               govId,
-              niche,
+              parsedNiche,
             ]
           );
 
-          // Insert all services
-          for (const service of serviceOffred) {
+          for (const service of parsedServiceOffered) {
             await client.query(
               "INSERT INTO services (freelancer_id, services_name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
-              [
-                freelancer[0].freelancer_id,
-                service,
-                currentTimestamp,
-                currentTimestamp,
-              ]
+              [freelancer[0].freelancer_id, service, currentTimestamp, currentTimestamp]
             );
           }
 
-          // Commit transaction
-
-          logger.info("User registration successful", { email });
-
-          // sendEmailNotification(
-          //   email,
-          //   userRegistrationSubject,
-          //   userRegistrationHtml,
-          //   false
-          // );
           await client.query("COMMIT");
+          logger.info("Freelancer registration successful", { email });
         } catch (error) {
-          // Rollback transaction on error
           await client.query("ROLLBACK");
-
-          // Cleanup: Delete uploaded file from MinIO if database operations failed
           try {
             await minioClient.removeObject(BUCKET_NAME, objectName);
             console.log("Rolled back MinIO upload due to database error");
           } catch (minioError) {
             console.error("Failed to cleanup MinIO object:", minioError);
           }
-
-          throw error; // Re-throw to be handled by error middleware
+          throw error;
         } finally {
           client.release();
         }
       } else if (role === "creator") {
-        const { firstName, lastName, niche, socialLinks } = UserData;
+        const { firstName, lastName, niche, socialLinks } = req.body;
 
+        // Parse JSON strings from FormData
+        const parsedNiche = JSON.parse(niche);
+        const parsedSocialLinks = socialLinks ? JSON.parse(socialLinks) : null;
 
+        const userName = `${firstName} ${lastName}`;
 
-        if (!firstName || !lastName || !niche || !Array.isArray(niche) || niche.length === 0) {
-          return next(new AppError("Missing required fields for creator", 400));
-        }
-
-        // Start transaction
         const client = await pool.connect();
 
         try {
@@ -246,79 +234,46 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
           const { rows: newUserResMeetRub } = await client.query(
             "INSERT INTO users (user_email, user_role, user_password, user_name, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-            [
-              email.toLowerCase(),
-              role,
-              hashedPassword,
-              userName,
-              currentTimestamp,
-            ]
+            [email.toLowerCase(), role, hashedPassword, userName, currentTimestamp]
           );
 
-          await client.query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
-            email,
-            type,
-          ]);
+          await client.query(
+            "DELETE FROM otp_tokens WHERE email = $1 AND type = $2",
+            [email, type]
+          );
 
-          // Insert creator record
-          const { rows: creator } = await client.query(
+          await client.query(
             `INSERT INTO creators 
-                (
-                  user_id,
-                  first_name,
-                  last_name,
-                  niche,
-                  social_links,
-                  created_at,
-                  updated_at
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING *`,
+            (user_id, first_name, last_name, niche, social_links, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *`,
             [
               newUserResMeetRub[0].id,
               firstName,
               lastName,
-              niche,  // ✅ Stringify the array
-              socialLinks ? JSON.stringify(socialLinks) : null,  // ✅ Stringify if exists
+              parsedNiche,
+              parsedSocialLinks ? JSON.stringify(parsedSocialLinks) : null,
               currentDateTime,
               currentDateTime,
             ]
           );
-          // Commit transaction
-
-          logger.info("Creator registration successful", { email });
-          // userRegistrationSubject
-
-          // sendEmailNotification(
-          //   email,
-          //   userRegistrationSubject,
-          //   userRegistrationHtml,
-          //   false
-          // );
 
           await client.query("COMMIT");
+          logger.info("Creator registration successful", { email });
         } catch (error) {
-          // Rollback transaction on error
           await client.query("ROLLBACK");
-          throw error; // Re-throw to be handled by error middleware
+          throw error;
         } finally {
           client.release();
         }
       }
-
-      await query("DELETE FROM otp_tokens WHERE email=$1 AND type=$2", [
-        email,
-        type,
-      ]);
-
-      logger.info("OTP entry deleted after success");
 
       return res.status(200).json({
         status: "success",
         message: "Signup successful",
       });
     } else if (type === "password-reset") {
-      const userRes = await query("SELECT * FROM users WHERE email = $1", [
+      const userRes = await query("SELECT * FROM users WHERE user_email = $1", [
         email,
       ]);
       if (userRes.rows.length === 0) {
@@ -336,10 +291,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
       return res.status(200).json({
         status: "success",
-        message: "Password reset succefully",
+        message: "Password reset successfully",
       });
-    } else {
-      return next(new AppError("Invalid OTP type", 400));
     }
   } catch (error) {
     logger.error("Error during Verification Code verification:", error);
