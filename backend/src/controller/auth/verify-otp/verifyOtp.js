@@ -103,11 +103,11 @@ const verifyOtpAndProcess = async (req, res, next) => {
         if (!req.file) {
           return next(new AppError("document is required", 400));
         }
-        const isvalidFileType = validateFile(req.file, ["image/jpeg", "image/png", "image/avif","image/webp"], 5);
+        // const isvalidFileType = validateFile(req.file, ["image/jpeg", "image/png", "image/avif","image/webp"], 5);
 
-          if (!isvalidFileType.valid) {
-            return next(new AppError(isvalidFileType.error, 400));
-          }
+        //   if (!isvalidFileType.valid) {
+        //     return next(new AppError(isvalidFileType.error, 400));
+        //   }
           const BUCKET_NAME = "meet-rub-assets";
           const fileExt = path.extname(req.file.originalname);
           const fileName = `${crypto.randomUUID()}${fileExt}`;
