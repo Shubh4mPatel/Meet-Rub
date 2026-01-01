@@ -9,6 +9,7 @@ const {
 const path = require("path"); // CommonJS
 const { minioClient } = require("../../../../config/minio");
 const Joi = require("joi"); // Add Joi for validation
+const crypto = require("crypto");
 
 // Define validation schema
 const verifyOtpSchema = Joi.object({
