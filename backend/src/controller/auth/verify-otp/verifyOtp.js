@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-const { query,pool } = require("../../../../config/dbConfig");
+const { query, pool } = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
 const { decryptId } = require("../../../../config/encryptDecryptId");
 const { logger } = require("../../../../utils/logger");
@@ -115,7 +115,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
         try {
           await client.query("BEGIN");
 
-          
+
 
           const { rows: newUserResMeetRub } = await client.query(
             "INSERT INTO users (user_email, user_role, user_password, user_name, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
@@ -125,7 +125,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
               hashedPassword,
               userName,
               currentTimestamp,
-            ] 
+            ]
           );
 
           await client.query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
@@ -134,7 +134,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           ]);
 
           // Upload file to MinIO first
-          
+
           await minioClient.putObject(
             BUCKET_NAME,
             objectName,
@@ -196,16 +196,16 @@ const verifyOtpAndProcess = async (req, res, next) => {
           }
 
           // Commit transaction
-          
+
           logger.info("User registration successful", { email });
-          
+
           // sendEmailNotification(
-            //   email,
-            //   userRegistrationSubject,
-            //   userRegistrationHtml,
-            //   false
-            // );
-            await client.query("COMMIT");
+          //   email,
+          //   userRegistrationSubject,
+          //   userRegistrationHtml,
+          //   false
+          // );
+          await client.query("COMMIT");
         } catch (error) {
           // Rollback transaction on error
           await client.query("ROLLBACK");
@@ -223,9 +223,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
           client.release();
         }
       } else if (role === "creator") {
-        const { firstName, lastName, niche, socialLinks  } = UserData;
+        const { firstName, lastName, niche, socialLinks } = UserData;
 
-        
+
 
         if (!firstName || !lastName || !niche || !Array.isArray(niche) || niche.length === 0) {
           return next(new AppError("Missing required fields for creator", 400));
@@ -245,7 +245,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
               hashedPassword,
               userName,
               currentTimestamp,
-            ] 
+            ]
           );
 
           await client.query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
@@ -256,41 +256,40 @@ const verifyOtpAndProcess = async (req, res, next) => {
           // Insert creator record
           const { rows: creator } = await client.query(
             `INSERT INTO creators 
-            (
-              user_id,
-              first_name,
-              last_name,
-              niche,
-              social_links,
-              created_at,
-              updated_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING *`,
+                (
+                  user_id,
+                  first_name,
+                  last_name,
+                  niche,
+                  social_links,
+                  created_at,
+                  updated_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING *`,
             [
               newUserResMeetRub[0].id,
               firstName,
               lastName,
-              niche,
-              socialLinks || null,
+              JSON.stringify(niche),  // ✅ Stringify the array
+              socialLinks ? JSON.stringify(socialLinks) : null,  // ✅ Stringify if exists
               currentDateTime,
               currentDateTime,
             ]
           );
-
           // Commit transaction
-          
+
           logger.info("Creator registration successful", { email });
           // userRegistrationSubject
-          
-          // sendEmailNotification(
-            //   email,
-            //   userRegistrationSubject,
-            //   userRegistrationHtml,
-            //   false
-            // );
 
-            await client.query("COMMIT");
+          // sendEmailNotification(
+          //   email,
+          //   userRegistrationSubject,
+          //   userRegistrationHtml,
+          //   false
+          // );
+
+          await client.query("COMMIT");
         } catch (error) {
           // Rollback transaction on error
           await client.query("ROLLBACK");
