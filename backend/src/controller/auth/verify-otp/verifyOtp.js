@@ -223,12 +223,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
           client.release();
         }
       } else if (role === "creator") {
-        const { firstName, lastName, niche, socialLinks,socialPlatformType } = UserData;
+        const { firstName, lastName, niche, socialLinks  } = UserData;
 
-        // Validate required fields for creator"
-        if(!socialPlatformType || ['youtube', 'instagram'].includes(socialPlatformType)=== false){
-          return next(new AppError("Invalid or missing social platform type", 400));
-        }
+        
 
         if (!firstName || !lastName || !niche || !Array.isArray(niche) || niche.length === 0) {
           return next(new AppError("Missing required fields for creator", 400));
@@ -264,19 +261,17 @@ const verifyOtpAndProcess = async (req, res, next) => {
               first_name,
               last_name,
               niche,
-              social_platform_type,
               social_links,
               created_at,
               updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *`,
             [
               newUserResMeetRub[0].id,
               firstName,
               lastName,
               niche,
-              socialPlatformType,
               socialLinks || null,
               currentDateTime,
               currentDateTime,
