@@ -153,3 +153,5 @@ volumes:
 networks:
   meetrub-network:
     driver: bridge
+  shared-network:
+    external: true 
