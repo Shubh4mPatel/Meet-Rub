@@ -1,4 +1,4 @@
-
+const {minioPublicClient} = require('../config/minio');
 function getObjectNameFromUrl(url, bucketName) {
   try {
     const parsedUrl = new URL(url);
@@ -55,4 +55,21 @@ function validateFile(file, allowedTypes, maxSizeMB) {
   return { valid: true };
 }
 
-module.exports = {  getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile};
+
+async function createPresignedUrl(bucketName, objectName, expirySeconds) {
+  try {
+    const presignedUrl = await new Promise((resolve, reject) => {
+      minioPublicClient.presignedGetObject(bucketName, objectName, expirySeconds, (err, url) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve(url);
+      });
+    });
+    return presignedUrl; ;
+  } catch (err) {
+    throw err;
+  }
+}
+
+module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile,createPresignedUrl };

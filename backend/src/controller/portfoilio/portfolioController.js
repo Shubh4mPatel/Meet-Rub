@@ -2,6 +2,7 @@ const { query } = require("../../../config/dbConfig");
 const AppError = require("../../../utils/appError");
 const { minioClient } = require("../../../config/minio");
 const { logger } = require("../../../utils/logger");
+const { createPresignedUrl } = require("../../../utils/helper");
 
 const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60;
@@ -30,11 +31,10 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
     const userPortFolioData = await userPortFolios.reduce(
       async (accPromise, curr) => {
         const acc = await accPromise;
-        console.log("Current portfolio item URL:", curr.portfolio_item_url);
         const objectName = curr.portfolio_item_url.split("/").slice(3).join("/");
         logger.debug("Generating presigned URL for:", objectName);
 
-        const url = await minioClient.presignedGetObject(
+        const url = await createPresignedUrl(
           BUCKET_NAME,
           objectName,
           expirySeconds
@@ -286,7 +286,7 @@ const updateFreelancerPortfolio = async (req, res, next) => {
         const acc = await accPromise;
         const objectName = curr.portfolio_item_url.split("/").slice(3).join("/");
 
-        const url = await minioClient.presignedGetObject(
+        const url = await createPresignedUrl(
           BUCKET_NAME,
           objectName,
           expirySeconds

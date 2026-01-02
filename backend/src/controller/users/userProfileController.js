@@ -4,6 +4,7 @@ const { minioClient } = require("../../../config/minio");
 const path = require("path");
 const crypto = require("crypto");
 const { logger } = require("../../../utils/logger");
+const { createPresignedUrl } = require("../../../utils/helper");
 
 const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -82,7 +83,7 @@ const getUserProfile = async (req, res, next) => {
             logger.debug(`Generating presigned URL for bucket: ${bucketName}, object: ${objectName}`);
 
             const signedUrl = await Promise.race([
-              minioClient.presignedGetObject(bucketName, objectName, expirySeconds),
+              createPresignedUrl(bucketName, objectName, expirySeconds),
               new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('MinIO presignedGetObject timeout')), 5000)
               )
@@ -118,7 +119,7 @@ const getUserProfile = async (req, res, next) => {
         const bucketName = parts[2];
         const objectName = parts.slice(3).join("/");
 
-        const signedUrl = await minioClient.presignedGetObject(
+        const signedUrl = await createPresignedUrl(
           bucketName,
           objectName,
           expirySeconds
@@ -146,7 +147,7 @@ const getUserProfile = async (req, res, next) => {
         const bucketName = parts[2];
         const objectName = parts.slice(3).join("/");
 
-        const signedUrl = await minioClient.presignedGetObject(
+        const signedUrl = await createPresignedUrl(
           bucketName,
           objectName,
           expirySeconds
@@ -422,7 +423,7 @@ const editProfile = async (req, res, next) => {
             [gov_id_type, gov_id_url, gov_id_number, user.user_id]
           );
 
-          const signedUrl = await minioClient.presignedGetObject(
+          const signedUrl = await createPresignedUrl(
             BUCKET_NAME,
             objectName,
             expirySeconds
@@ -497,7 +498,7 @@ const editProfile = async (req, res, next) => {
           );
 
           // Generate presigned URL for the uploaded image
-          const signedUrl = await minioClient.presignedGetObject(
+          const signedUrl = await createPresignedUrl(
             BUCKET_NAME,
             objectName,
             expirySeconds
@@ -609,7 +610,7 @@ const editProfile = async (req, res, next) => {
               { "Content-Type": req.file.mimetype }
             );
 
-            signedUrl = await minioClient.presignedGetObject(
+            signedUrl = await createPresignedUrl(
               BUCKET_NAME,
               objectName,
               expirySeconds
@@ -678,7 +679,7 @@ const editProfile = async (req, res, next) => {
                 { "Content-Type": req.file.mimetype }
               );
 
-              signedUrl = await minioClient.presignedGetObject(
+              signedUrl = await createPresignedUrl(
                 BUCKET_NAME,
                 objectName,
                 expirySeconds
@@ -898,7 +899,7 @@ const getAllFreelancers = async (req, res, next) => {
           const objectName = parts.slice(3).join("/");
 
           try {
-            const signedUrl = await minioClient.presignedGetObject(
+            const signedUrl = await createPresignedUrl(
               bucketName,
               objectName,
               expirySeconds
@@ -967,7 +968,7 @@ const getFreelancerById = async (req, res, next) => {
           const bucketName = parts[2];
           const objectName = parts.slice(3).join("/");
 
-          const signedUrl = await minioClient.presignedGetObject(
+          const signedUrl = await createPresignedUrl(
             bucketName,
             objectName,
             expirySeconds
@@ -993,7 +994,7 @@ const getFreelancerById = async (req, res, next) => {
         if (thumbParts.length >= 4) {
           const thumbBucketName = thumbParts[2];
           const thumbObjectName = thumbParts.slice(3).join("/");
-          const thumbSignedUrl = await minioClient.presignedGetObject(
+          const thumbSignedUrl = await createPresignedUrl(
             thumbBucketName,
             thumbObjectName,
             expirySeconds
@@ -1099,7 +1100,7 @@ ORDER BY portfolio_item_service_type`,
                 if (parts.length >= 4) {
                   const bucketName = parts[2];
                   const objectName = parts.slice(3).join("/");
-                  const signedUrl = await minioClient.presignedGetObject(
+                  const signedUrl = await createPresignedUrl(
                     bucketName,
                     objectName,
                     expirySeconds
@@ -1209,7 +1210,7 @@ ORDER BY service_type`,
                 if (beforeParts.length >= 4) {
                   const beforeBucketName = beforeParts[2];
                   const beforeObjectName = beforeParts.slice(3).join("/");
-                  beforeSignedUrl = await minioClient.presignedGetObject(
+                  beforeSignedUrl = await createPresignedUrl(
                     beforeBucketName,
                     beforeObjectName,
                     expirySeconds
@@ -1227,7 +1228,7 @@ ORDER BY service_type`,
                 if (afterParts.length >= 4) {
                   const afterBucketName = afterParts[2];
                   const afterObjectName = afterParts.slice(3).join("/");
-                  afterSignedUrl = await minioClient.presignedGetObject(
+                  afterSignedUrl = await createPresignedUrl(
                     afterBucketName,
                     afterObjectName,
                     expirySeconds

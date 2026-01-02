@@ -2,6 +2,7 @@ const { query, pool } = require("../../../config/dbConfig");
 const AppError = require("../../../utils/appError");
 const { logger } = require("../../../utils/logger");
 const { minioClient } = require("../../../config/minio");
+const { createPresignedUrl } = require("../../../utils/helper");
 
 const expirySeconds = 4 * 60 * 60; // 4 hours
 
@@ -332,7 +333,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
             const bucketName = parts[2];
             const objectName = parts.slice(3).join("/");
 
-            const signedUrl = await minioClient.presignedGetObject(
+            const signedUrl = await createPresignedUrl(
               bucketName,
               objectName,
               expirySeconds

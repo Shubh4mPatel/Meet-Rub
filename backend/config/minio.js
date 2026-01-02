@@ -12,6 +12,13 @@ const minioClient = new Client({
   secretKey: process.env.MINIO_SECRET_KEY
 });
 
+const minioPublicClient = new Client({
+  endPoint: process.env.MINIO_PUBLIC_ENDPOINT , // Public IP or domain
+  port: parseInt(process.env.MINIO_PUBLIC_PORT) || 9000,
+  useSSL: process.env.MINIO_USE_SSL === 'true',
+  accessKey: process.env.MINIO_ACCESS_KEY,
+  secretKey: process.env.MINIO_SECRET_KEY
+});
 // const BUCKET_NAME = process.env.MINIO_BUCKET_NAME || 'media-uploads';
 
 // Ensure bucket exists
@@ -32,4 +39,5 @@ const ensureBucketExists = async (bucketName) => {
 
 module.exports = {
   minioClient,
+  minioPublicClient
 };
