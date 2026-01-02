@@ -87,7 +87,7 @@ const addFreelancerPortfolio = async (req, res, next) => {
       const fileName = `${file.originalname}`;
       const folder = `freelancer/portfolio/${user.user_id}`;
       const objectName = `${folder}/${fileName}`;
-      const fileUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+      const fileUrl = `/assets/${BUCKET_NAME}/${objectName}`;
 
       await minioClient.putObject(
         BUCKET_NAME,
@@ -184,7 +184,7 @@ const updateFreelancerPortfolio = async (req, res, next) => {
     const fileName = `${req.file.originalname}`;
     const folder = `freelancer/portfolio/${user.user_id}`;
     const objectName = `${folder}/${fileName}`;
-    const fileUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+    const fileUrl = `/assets/${BUCKET_NAME}/${objectName}`;
 
     await minioClient.putObject(
       BUCKET_NAME,

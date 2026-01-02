@@ -402,7 +402,7 @@ const editProfile = async (req, res, next) => {
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = `freelancer/goverment-doc/${gov_id_type}`;
         const objectName = `${folder}/${fileName}`;
-        const gov_id_url = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+        const gov_id_url = `/assets/${BUCKET_NAME}/${objectName}`;
 
         // Start transaction
         await query("BEGIN");
@@ -478,7 +478,7 @@ const editProfile = async (req, res, next) => {
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = "freelancer/freelancer-profile-image";
         const objectName = `${folder}/${fileName}`;
-        const profile_url = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+        const profile_url = `/assets/${BUCKET_NAME}/${objectName}`;
 
         // Start transaction
         await query("BEGIN");
@@ -598,7 +598,7 @@ const editProfile = async (req, res, next) => {
             const fileName = `${crypto.randomUUID()}${fileExt}`;
             const folder = "freelancer/freelancer-profile-thumbnail";
             const objectName = `${folder}/${fileName}`;
-            newThumbnailUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+            newThumbnailUrl = `/assets/${BUCKET_NAME}/${objectName}`;
 
             // Upload to MinIO
             await minioClient.putObject(
@@ -667,7 +667,7 @@ const editProfile = async (req, res, next) => {
               const fileName = `${crypto.randomUUID()}${fileExt}`;
               const folder = "freelancer/freelancer-profile-thumbnail";
               const objectName = `${folder}/${fileName}`;
-              newThumbnailUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+              newThumbnailUrl = `/assets/${BUCKET_NAME}/${objectName}`;
 
               // Upload to MinIO
               await minioClient.putObject(

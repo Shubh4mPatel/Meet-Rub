@@ -147,7 +147,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = `freelancer/goverment-doc/${govIdType}`;
         const objectName = `${folder}/${fileName}`;
-        const govIdUrl = `${process.env.MINIO_ENDPOINT}/assets/${BUCKET_NAME}/${objectName}`;
+        const govIdUrl = `/assets/${BUCKET_NAME}/${objectName}`;
 
         const client = await pool.connect();
 
