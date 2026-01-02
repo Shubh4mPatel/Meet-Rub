@@ -15,7 +15,7 @@ const minioClient = new Client({
 const minioPublicClient = new Client({
   endPoint: process.env.MINIO_PUBLIC_ENDPOINT , // Public IP or domain
   port: parseInt(process.env.MINIO_PUBLIC_PORT) || 9000,
-  useSSL: process.env.MINIO_USE_SSL === 'true',
+  useSSL: false,
   accessKey: process.env.MINIO_ACCESS_KEY,
   secretKey: process.env.MINIO_SECRET_KEY
 });

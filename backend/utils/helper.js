@@ -59,7 +59,7 @@ function validateFile(file, allowedTypes, maxSizeMB) {
 async function createPresignedUrl(bucketName, objectName, expirySeconds) {
   try {
     const presignedUrl = await new Promise((resolve, reject) => {
-      minioClient.presignedGetObject(bucketName, objectName, expirySeconds, (err, url) => {
+      minioPublicClient.presignedGetObject(bucketName, objectName, expirySeconds, (err, url) => {
         if (err) {
           return reject(err);
         }
