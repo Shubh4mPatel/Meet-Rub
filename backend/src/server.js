@@ -17,9 +17,9 @@ const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
  
 // Load .env file only if not running in Docker (Docker Compose injects env vars directly)
-if (!process.env.DOCKER_ENV) {
+// if (!process.env.DOCKER_ENV) {
   dotenv.config();
-}
+// }
 
 // Parse allowed origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((origin) =>
