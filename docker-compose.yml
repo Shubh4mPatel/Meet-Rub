@@ -1,34 +1,29 @@
 services:
   # Backend API Server
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: meetrub-backend
-    ports:
-      - "7000:7000"
-    env_file:
-      - ./.env
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    environment:
-      - DOCKER_ENV=true
-      - PORT=7000
-    volumes:
-      - ./backend/logs:/app/logs
-    networks:
-      - meetrub-network
-      - shared-network  # ADD THIS
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:7000/api/v1/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  container_name: meetrub-backend
+  ports:
+    - "7000:7000"
+  env_file:
+    - ./.env
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+    - "minio-public:147.93.108.64"  # ADD THIS LINE
+  environment:
+    - DOCKER_ENV=true
+    - PORT=7000
+  volumes:
+    - ./backend/logs:/app/logs
+  networks:
+    - meetrub-network
+    - shared-network
+  depends_on:
+    rabbitmq:
+      condition: service_healthy
+  restart: unless-stopped
   # Notification Worker Service (Email, In-App, etc.)
   worker:
     build:
