@@ -11,6 +11,7 @@ services:
       - ./.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "147.93.108.64:172.18.0.2" 
     environment:
       - DOCKER_ENV=true
       - PORT=7000
