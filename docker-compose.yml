@@ -1,29 +1,29 @@
 services:
   # Backend API Server
   backend:
-  build:
-    context: ./backend
-    dockerfile: Dockerfile
-  container_name: meetrub-backend
-  ports:
-    - "7000:7000"
-  env_file:
-    - ./.env
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
-    - "minio-public:147.93.108.64"  # ADD THIS LINE
-  environment:
-    - DOCKER_ENV=true
-    - PORT=7000
-  volumes:
-    - ./backend/logs:/app/logs
-  networks:
-    - meetrub-network
-    - shared-network
-  depends_on:
-    rabbitmq:
-      condition: service_healthy
-  restart: unless-stopped
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: meetrub-backend
+    ports:
+      - "7000:7000"
+    env_file:
+      - ./.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "minio-public:147.93.108.64"  # ADD THIS LINE
+    environment:
+      - DOCKER_ENV=true
+      - PORT=7000
+    volumes:
+      - ./backend/logs:/app/logs
+    networks:
+      - meetrub-network
+      - shared-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
   # Notification Worker Service (Email, In-App, etc.)
   worker:
     build:
