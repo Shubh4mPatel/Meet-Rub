@@ -39,5 +39,5 @@ const ensureBucketExists = async (bucketName) => {
 
 module.exports = {
   minioClient,
-  minioPublicClient
+  // minioPublicClient
 };

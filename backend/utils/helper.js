@@ -1,4 +1,4 @@
-const {minioPublicClient,minioClient} = require('../config/minio');
+const {minioClient} = require('../config/minio');
 function getObjectNameFromUrl(url, bucketName) {
   try {
     const parsedUrl = new URL(url);
