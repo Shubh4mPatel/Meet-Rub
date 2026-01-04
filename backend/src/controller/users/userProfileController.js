@@ -778,6 +778,7 @@ const getAllFreelancers = async (req, res, next) => {
     // Sort and delivery time filters
     const sortBy = req.query.sortBy || "newest"; // toprated, newest
     const deliveryTime = req.query.deliveryTime || ""; // e.g., "2-3 days"
+    // const type = req.query.type || "all"; // e.g., "all", "featured", etc.
 
     // Build the query based on filters
     let queryText = `
@@ -786,6 +787,7 @@ const getAllFreelancers = async (req, res, next) => {
         f.freelancer_full_name,
         f.profile_title,
         f.profile_image_url,
+        f.freelancer_thumbnail_image,
         f.rating,
         s.service_name,
         s.service_price,
@@ -918,6 +920,29 @@ const getAllFreelancers = async (req, res, next) => {
             freelancer.profile_image_url = null;
           }
         }
+
+        // Generate presigned URL for thumbnail image if it exists
+        if (freelancer.freelancer_thumbnail_image) {
+          const parts = freelancer.freelancer_thumbnail_image.split("/");
+          const bucketName = parts[2];
+          const objectName = parts.slice(3).join("/");
+
+          try {
+            const signedUrl = await createPresignedUrl(
+              bucketName,
+              objectName,
+              expirySeconds
+            );
+            freelancer.freelancer_thumbnail_image = signedUrl;
+          } catch (error) {
+            logger.error(
+              `Error generating signed URL for freelancer thumbnail ${freelancer.user_id}:`,
+              error
+            );
+            freelancer.freelancer_thumbnail_image = null;
+          }
+        }
+
         return freelancer;
       })
     );
@@ -1355,6 +1380,7 @@ const getUserProfileProgress = async (req, res, next) => {
     return next(new AppError("Failed to calculate profile progress", 500));
   }
 };
+
 
 module.exports = {
   getUserProfile,
