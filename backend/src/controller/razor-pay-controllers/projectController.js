@@ -27,7 +27,7 @@ const createProject = async (req, res, next) => {
 
     // Create project
     const [result] = await db.query(
-      `INSERT INTO projects (client_id, freelancer_id, title, description, amount, status)
+      `INSERT INTO projects (creator_id, freelancer_id, title, description, amount, status)
        VALUES (?, ?, ?, ?, ?, 'CREATED')`,
       [clientId, freelancer_id, title, description, amount]
     );
