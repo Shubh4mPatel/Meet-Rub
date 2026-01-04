@@ -84,7 +84,7 @@ const getProject = async (req, res, next) => {
 const getMyProjects = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const userType = req.user.user_type;
+    const userType = req.user.role;
     const status = req.query.status;
 
     let query = `
@@ -92,17 +92,17 @@ const getMyProjects = async (req, res, next) => {
         c.full_name as client_name,
         f.full_name as freelancer_name
       FROM projects p
-      JOIN users c ON p.client_id = c.id
+      JOIN users c ON p.creator_id = c.id
       JOIN users f ON p.freelancer_id = f.id
       WHERE
     `;
 
     const params = [];
 
-    if (userType === 'CLIENT') {
-      query += 'p.client_id = ?';
+    if (userType === 'creator') {
+      query += 'p.creator_id = ?';
       params.push(userId);
-    } else if (userType === 'FREELANCER') {
+    } else if (userType === 'freelancer') {
       query += 'p.freelancer_id = ?';
       params.push(userId);
     } else {
