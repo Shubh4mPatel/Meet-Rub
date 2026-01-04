@@ -84,6 +84,7 @@ const addServicesByFreelancer = async (req, res, next) => {
     const user = req.user;
     console.log("User in addServicesByFreelancer:", user);
     const freelancer_id = user?.roleWiseId;
+    
 
     if (!service || !price || !description || !deliveryDuration) {
       logger.warn("Missing required fields");

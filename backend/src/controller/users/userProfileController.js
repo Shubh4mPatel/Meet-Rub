@@ -5,6 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { logger } = require("../../../utils/logger");
 const { createPresignedUrl } = require("../../../utils/helper");
+const Joi = require("joi");
 
 const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -194,24 +195,56 @@ const getUserProfile = async (req, res, next) => {
   }
 };
 
+// Validation Schemas
+const freelancerGovInfoSchema = Joi.object({
+  type: Joi.string().valid("govtId").required(),
+  gov_id_type: Joi.string().required(),
+  gov_id_number: Joi.string().required(),
+});
+
+const freelancerBankDetailsSchema = Joi.object({
+  type: Joi.string().valid("bankDetails").required(),
+  bank_account_no: Joi.string().required(),
+  bank_name: Joi.string().required(),
+  bank_ifsc_code: Joi.string().required(),
+  bank_branch_name: Joi.string().required(),
+});
+
+const freelancerBasicInfoSchema = Joi.object({
+  type: Joi.string().valid("basicInfo").required(),
+  freelancerFullName: Joi.string().required(),
+  dateOfBirth: Joi.string().required(),
+  phoneNumber: Joi.string()
+    .pattern(/^\+?[1-9]\d{1,14}$/)
+    .required(),
+  profileTitle: Joi.string().required(),
+  thumbnailImageUrl: Joi.string().optional().allow(""),
+});
+
+const freelancerProfileImageSchema = Joi.object({
+  type: Joi.string().valid("profileImage").required(),
+});
+
+const creatorBasicInfoSchema = Joi.object({
+  type: Joi.string().valid("basicInfo").required(),
+  first_name: Joi.string().required(),
+  last_name: Joi.string().required(),
+  full_name: Joi.string().optional(),
+  phone_number: Joi.string()
+    .pattern(/^\+?[1-9]\d{1,14}$/)
+    .required(),
+  social_platform_type: Joi.string().valid("youtube", "instagram").required(),
+  social_links: Joi.string().optional().allow(""),
+  niche: Joi.string().optional().allow(""),
+});
+
 // ✅ EDIT USER PROFILE
 const editProfile = async (req, res, next) => {
   logger.info("Updating user profile");
   try {
     const user = req.user;
     const role = user.role;
-    let { type, userData } = req.body;
-
-    // Parse userData if it's a JSON string (happens with multipart/form-data)
-    if (typeof userData === 'string') {
-      try {
-        userData = JSON.parse(userData);
-        logger.debug("userData parsed from JSON string");
-      } catch (error) {
-        logger.error("Failed to parse userData:", error);
-        return next(new AppError("Invalid userData format", 400));
-      }
-    }
+    const { type } = req.body;
 
     // Handle file from upload.any() - convert req.files array to req.file
     if (req.files && req.files.length > 0) {
@@ -221,18 +254,44 @@ const editProfile = async (req, res, next) => {
 
     logger.debug("Edit request type:", type);
     logger.debug("User role:", role);
-    logger.debug("Received Data:", userData);
+    logger.debug("Received Data:", req.body);
 
-    if (!type || !userData) {
-      logger.warn("Missing type or data for profile update");
-      return next(new AppError("type & userData required", 400));
+    if (!type) {
+      logger.warn("Missing type for profile update");
+      return next(new AppError("type is required", 400));
+    }
+
+    // Validate request based on role and type
+    let validationError;
+    if (role === "creator" && type === "basicInfo") {
+      const { error } = creatorBasicInfoSchema.validate(req.body, { abortEarly: false });
+      validationError = error;
+    } else if (role === "freelancer") {
+      if (type === "basicInfo") {
+        const { error } = freelancerBasicInfoSchema.validate(req.body, { abortEarly: false });
+        validationError = error;
+      } else if (type === "bankDetails") {
+        const { error } = freelancerBankDetailsSchema.validate(req.body, { abortEarly: false });
+        validationError = error;
+      } else if (type === "govtId") {
+        const { error } = freelancerGovInfoSchema.validate(req.body, { abortEarly: false });
+        validationError = error;
+      } else if (type === "profileImage") {
+        const { error } = freelancerProfileImageSchema.validate(req.body, { abortEarly: false });
+        validationError = error;
+      }
+    }
+
+    if (validationError) {
+      logger.warn("Validation failed:", validationError.details);
+      return next(new AppError(validationError.details.map((d) => d.message).join(", "), 400));
     }
 
     // ✅ CREATOR ROLE HANDLING
     if (role === "creator") {
       if (type === "basicInfo") {
-        logger.info("Updating Creator Basic Info");
 
+        logger.info("Updating Creator Basic Info");
         const {
           first_name,
           last_name,
@@ -241,33 +300,7 @@ const editProfile = async (req, res, next) => {
           social_platform_type,
           social_links,
           niche,
-        } = userData;
-
-        if (
-          !first_name ||
-          !last_name ||
-          !phone_number ||
-          !social_platform_type
-        ) {
-          logger.warn("Missing required creator fields");
-          return next(
-            new AppError(
-              "first_name, last_name, phone_number, and social_platform_type are required",
-              400
-            )
-          );
-        }
-
-        // Validate social_platform_type
-        if (!["youtube", "instagram"].includes(social_platform_type)) {
-          logger.warn("Invalid social platform type");
-          return next(
-            new AppError(
-              "social_platform_type must be either 'youtube' or 'instagram'",
-              400
-            )
-          );
-        }
+        } = req.body;
 
         // Start transaction
         await query("BEGIN");
@@ -281,11 +314,11 @@ const editProfile = async (req, res, next) => {
             [
               first_name,
               last_name,
-              full_name,
+              full_name || `${first_name} ${last_name}`,
               phone_number,
               social_platform_type,
-              social_links,
-              niche,
+              social_links || null,
+              niche || null,
               user.user_id,
             ]
           );
@@ -326,25 +359,14 @@ const editProfile = async (req, res, next) => {
         logger.info("Updating Freelancer Bank Details");
 
         const { bank_account_no, bank_name, bank_ifsc_code, bank_branch_name } =
-          userData;
-
-        if (
-          !bank_account_no ||
-          !bank_name ||
-          !bank_ifsc_code ||
-          !bank_branch_name
-        ) {
-          logger.warn("Missing bank details fields");
-          return next(new AppError("All bank details required", 400));
-        }
+          req.body;
 
         // Start transaction
         await query("BEGIN");
         try {
           const { rows } = await query(
-            "UPDATE freelancer SET freelancer_full_name=$1, bank_account_no=$2, bank_name=$3, bank_ifsc_code=$4, bank_branch_name=$5 WHERE user_id=$6 RETURNING *",
+            "UPDATE freelancer SET bank_account_no=$1, bank_name=$2, bank_ifsc_code=$3, bank_branch_name=$4 WHERE user_id=$5 RETURNING *",
             [
-              freelancer_fullname,
               bank_account_no,
               bank_name,
               bank_ifsc_code,
@@ -366,11 +388,10 @@ const editProfile = async (req, res, next) => {
           throw error;
         }
       }
-
       if (type === "govtId") {
         logger.info("Updating Freelancer Govt ID");
 
-        const { gov_id_type, gov_id_number } = userData;
+        const { gov_id_type, gov_id_number } = req.body;
 
         // Validate only single file upload
         if (req.files && Array.isArray(req.files) && req.files.length > 1) {
@@ -383,9 +404,9 @@ const editProfile = async (req, res, next) => {
           );
         }
 
-        if (!gov_id_type || !req.file) {
-          logger.warn("Missing fields for govt ID update");
-          return next(new AppError("gov ID and file required", 400));
+        if (!req.file) {
+          logger.warn("Missing file for govt ID update");
+          return next(new AppError("Government ID file is required", 400));
         }
 
         // Validate that the file is an image
@@ -444,7 +465,6 @@ const editProfile = async (req, res, next) => {
           throw error;
         }
       }
-
       if (type === "profileImage") {
         logger.info("Updating Freelancer Profile Image");
 
@@ -519,7 +539,6 @@ const editProfile = async (req, res, next) => {
           throw error;
         }
       }
-
       if (type === "basicInfo") {
         // ✅ FREELANCER BASIC DETAILS UPDATE
         logger.info("Updating Freelancer Basic Info");
@@ -529,16 +548,7 @@ const editProfile = async (req, res, next) => {
           phoneNumber,
           profileTitle,
           thumbnailImageUrl,
-        } = userData;
-        if (
-          !freelancerFullName ||
-          !dateOfBirth ||
-          !phoneNumber ||
-          !profileTitle
-        ) {
-          logger.warn("Missing basicInfo fields");
-          return next(new AppError("All basic info fields required", 400));
-        }
+        } = req.body;
 
         // Start transaction
         await query("BEGIN");
