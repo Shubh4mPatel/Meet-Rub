@@ -61,7 +61,7 @@ WHERE u.id = $1`,
       sameSite: isProduction ?  "lax":"None", // required for cross-site cookies
       path: "/",
     });
-
+    logger.info("New access token issued",payload);
     req.user = payload;
     next();
   } catch (error) {
@@ -83,7 +83,9 @@ const authenticateUser = async (req, res, next) => {
     token.trim() !== ""
   ) {
     try {
+      logger.info("Verifying access token...",jwt.verify(token, process.env.JWT_SECRET));
       req.user = jwt.verify(token, process.env.JWT_SECRET);
+
       return next();
     } catch (error) {
       logger.info("Access token verification failed:", error.message);

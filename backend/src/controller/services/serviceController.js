@@ -82,7 +82,7 @@ const addServicesByFreelancer = async (req, res, next) => {
   try {
     const { service, price, description, deliveryDuration } = req.body;
     const user = req.user;
-    console.log("User in addServicesByFreelancer:", user);
+    logger.info("Freelancer user info:", user);
     const freelancer_id = user?.roleWiseId;
 
 
