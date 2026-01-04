@@ -44,8 +44,10 @@ WHERE u.id = $1`,
       email: user.rows[0].user_email,
       name: user.rows[0].user_name,
       role: user.rows[0].user_role,
-      roleWiseId: user.rows[0].roleWiseId,
+      roleWiseId: user.rows[0].rolewiseid, // Database returns lowercase column names
     };
+
+    logger.info("Token refresh payload:", payload);
 
     const newAccessToken = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: "15m",
@@ -76,6 +78,8 @@ const authenticateUser = async (req, res, next) => {
   // First try to verify access token
   let token = req.cookies?.AccessToken;
 
+  logger.info(`Auth middleware called for ${req.method} ${req.path}`);
+
   if (
     token &&
     token !== "null" &&
@@ -83,12 +87,17 @@ const authenticateUser = async (req, res, next) => {
     token.trim() !== ""
   ) {
     try {
-      logger.info("Verifying access token...",jwt.verify(token, process.env.JWT_SECRET));
-      req.user = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      logger.info("Access token verified successfully:", {
+        user_id: decoded.user_id,
+        role: decoded.role,
+        roleWiseId: decoded.roleWiseId
+      });
+      req.user = decoded;
 
       return next();
     } catch (error) {
-      logger.info("Access token verification failed:", error.message);
+      logger.warn("Access token verification failed:", error.message);
       if (error.name === "TokenExpiredError") {
         logger.info("Access token expired, attempting to refresh...");
         // Access token expired, try to refresh
