@@ -49,7 +49,7 @@ const uploadBeforeAfter = async (req, res, next) => {
       const fileName = `${crypto.randomUUID()}${fileExt}`;
       const folder = `freelancer/Impact/${user.user_id}/${type}`;
       const objectName = `${folder}/${fileName}`;
-      const fileUrl = `/assets/${BUCKET_NAME}/${objectName}`;
+      const fileUrl = `${BUCKET_NAME}/${objectName}`;
 
       logger.debug(`Uploading ${type} file: ${file.originalname}`);
 

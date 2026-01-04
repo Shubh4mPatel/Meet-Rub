@@ -65,7 +65,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Freelancer Basic Info");
         const { rows } = await query(
-          "SELECT freelancer_full_name, date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email FROM freelancer WHERE user_id = $1",
+          "SELECT freelancer_full_name , date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email,created_at FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -83,12 +83,7 @@ const getUserProfile = async (req, res, next) => {
 
             logger.debug(`Generating presigned URL for bucket: ${bucketName}, object: ${objectName}`);
 
-            const signedUrl = await Promise.race([
-              createPresignedUrl(bucketName, objectName, expirySeconds),
-              new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('MinIO presignedGetObject timeout')), 5000)
-              )
-            ]);
+            const signedUrl = await createPresignedUrl(bucketName, objectName, expirySeconds);
 
             rows[0].freelancer_thumbnail_image = signedUrl;
           } catch (error) {
@@ -424,7 +419,7 @@ const editProfile = async (req, res, next) => {
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = `freelancer/goverment-doc/${gov_id_type}`;
         const objectName = `${folder}/${fileName}`;
-        const gov_id_url = `/assets/${BUCKET_NAME}/${objectName}`;
+        const gov_id_url = `${BUCKET_NAME}/${objectName}`;
 
         // Start transaction
         await query("BEGIN");
@@ -499,7 +494,7 @@ const editProfile = async (req, res, next) => {
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = "freelancer/freelancer-profile-image";
         const objectName = `${folder}/${fileName}`;
-        const profile_url = `/assets/${BUCKET_NAME}/${objectName}`;
+        const profile_url = `${BUCKET_NAME}/${objectName}`;
 
         // Start transaction
         await query("BEGIN");
@@ -609,7 +604,7 @@ const editProfile = async (req, res, next) => {
             const fileName = `${crypto.randomUUID()}${fileExt}`;
             const folder = "freelancer/freelancer-profile-thumbnail";
             const objectName = `${folder}/${fileName}`;
-            newThumbnailUrl = `/assets/${BUCKET_NAME}/${objectName}`;
+            newThumbnailUrl = `${BUCKET_NAME}/${objectName}`;
 
             // Upload to MinIO
             await minioClient.putObject(
@@ -678,7 +673,7 @@ const editProfile = async (req, res, next) => {
               const fileName = `${crypto.randomUUID()}${fileExt}`;
               const folder = "freelancer/freelancer-profile-thumbnail";
               const objectName = `${folder}/${fileName}`;
-              newThumbnailUrl = `/assets/${BUCKET_NAME}/${objectName}`;
+              newThumbnailUrl = `${BUCKET_NAME}/${objectName}`;
 
               // Upload to MinIO
               await minioClient.putObject(

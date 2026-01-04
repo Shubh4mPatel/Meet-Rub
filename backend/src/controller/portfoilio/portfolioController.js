@@ -66,7 +66,7 @@ const addFreelancerPortfolio = async (req, res, next) => {
 
   try {
     console.log("Request body:", req.body);
-    const { type, serviceType, itemDescription } = req.body;
+    const { serviceType, itemDescription } = req.body;
     const user = req.user;
     logger.debug("Request body:", req.body);
 
@@ -75,19 +75,14 @@ const addFreelancerPortfolio = async (req, res, next) => {
       return next(new AppError("No files uploaded", 400));
     }
 
-    if (!["image", "video"].includes(type)) {
-      logger.warn("Invalid file type:", type);
-      return next(new AppError("Type must be either 'image' or 'video'", 400));
-    }
 
     for (const file of req.files) {
       logger.info(`Uploading file: ${file.originalname}`);
-
       // const fileExt = path.extname(file.originalname);
       const fileName = `${file.originalname}`;
       const folder = `freelancer/portfolio/${user.user_id}`;
       const objectName = `${folder}/${fileName}`;
-      const fileUrl = `/assets/${BUCKET_NAME}/${objectName}`;
+      const fileUrl = `${BUCKET_NAME}/${objectName}`;
 
       await minioClient.putObject(
         BUCKET_NAME,
@@ -184,7 +179,7 @@ const updateFreelancerPortfolio = async (req, res, next) => {
     const fileName = `${req.file.originalname}`;
     const folder = `freelancer/portfolio/${user.user_id}`;
     const objectName = `${folder}/${fileName}`;
-    const fileUrl = `/assets/${BUCKET_NAME}/${objectName}`;
+    const fileUrl = `${BUCKET_NAME}/${objectName}`;
 
     await minioClient.putObject(
       BUCKET_NAME,
