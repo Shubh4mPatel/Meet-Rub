@@ -6,6 +6,7 @@ const  { requireRole } =  require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
 const { getUserProfileProgress } = require('../controller/users/userProfileController');
+const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/portfolioController");
 
 /**
  * @swagger
@@ -754,7 +755,7 @@ router.get('/freelancers/:id/impact', getFreelancerImpact);
  *       500:
  *         description: Internal server error
  */
-router.get('/payouts', getMyPayouts);
+router.get('/payouts',requireRole(['freelancer']), getMyPayouts);
 
 /**
  * @swagger
@@ -822,9 +823,11 @@ router.get('/payouts', getMyPayouts);
  *       500:
  *         description: Internal server error
  */
-router.get('/earnings', getEarningsSummary);
+router.get('/earnings',requireRole(['freelancer']), getEarningsSummary);
 
 
 router.get('/profile-progress', requireRole(['freelancer']), getUserProfileProgress);
 
-module.exports = router 
+router.delete("/portfolio/item/:itemId",requireRole(['freelancer']), deleteFreelancerProtfolioItem);
+
+module.exports = router

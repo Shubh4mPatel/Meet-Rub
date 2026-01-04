@@ -332,14 +332,41 @@ const updateFreelancerPortfolio = async (req, res, next) => {
 const deleteFreelancerPortfolio = async (req, res, next) => {
   logger.info("Deleting freelancer portfolio");
   try {
-    const { urls } = req.body;
+    const { portfolio_item_service_type } = req.body;
+    const user = req.user;
+    const FreelancerId = user.roleWiseId;
+    logger.debug(`Freelancer ID: ${FreelancerId}, Service Type: ${portfolio_item_service_type}`);
 
-    if (!urls?.length) {
-      logger.warn("No URLs provided for deletion");
-      return next(new AppError("Please provide portfolio URLs to delete", 400));
+    const { rows: portfolioItems } = await query(
+      `SELECT portfolio_item_url FROM portfolio WHERE freelancer_id = $1 AND portfolio_item_service_type = $2`,
+      [FreelancerId, portfolio_item_service_type]
+    );
+
+    if (portfolioItems.length === 0) {
+      logger.warn("No portfolio items found to delete");
+      return res.status(201).json({ status: "fail", message: "No portfolio items found to delete" });
     }
 
-    logger.debug(`Deleting ${urls.length} portfolio items...`);
+    const urls = portfolioItems.map(item => item.portfolio_item_url);
+    const objectNames = urls.map(url => url.split("/").slice(3).join("/"));
+
+    logger.debug(`Deleting ${objectNames.length} portfolio items from MinIO...`);
+
+    for (const objectName of objectNames) {
+      try {
+        await minioClient.removeObject(BUCKET_NAME, objectName);
+        logger.info(`Deleted object from MinIO: ${objectName}`);
+      } catch (minioError) {
+        logger.warn(`Failed to delete object from MinIO: ${objectName}`, minioError);
+      }
+    }
+
+    await query(
+      `DELETE FROM portfolio WHERE freelancer_id = $1 AND portfolio_item_service_type = $2`,
+      [FreelancerId, portfolio_item_service_type]
+    );
+
+    logger.info("Portfolio items deleted from database");
 
     return res.status(200).json({
       status: "success",
@@ -351,9 +378,75 @@ const deleteFreelancerPortfolio = async (req, res, next) => {
   }
 };
 
+const deleteFreelancerProtfolioItem = async (req, res, next) => {
+  logger.info("Deleting a freelancer portfolio item");
+  let client = null;
+
+  try {
+    const { itemId } = req.params;
+    const user = req.user;
+    logger.debug(`Deleting portfolio item ID: ${itemId} for user ID: ${user.roleWiseId}`);
+
+    // Start database transaction
+    client = await query("BEGIN");
+    logger.info("Transaction started");
+
+    // Fetch the portfolio item to get the URL
+    const { rows } = await query(
+      `SELECT portfolio_item_url FROM portfolio WHERE portfolio_item_id = $1 AND freelancer_id = $2`,
+      [itemId, user.roleWiseId]
+    );
+
+    if (rows.length === 0) {
+      await query("ROLLBACK");
+      logger.warn("Portfolio item not found");
+      return next(new AppError("Portfolio item not found", 404));
+    }
+
+    const objectName = rows[0].portfolio_item_url.split("/").slice(3).join("/");
+    logger.debug(`Object to delete from MinIO: ${objectName}`);
+
+    // Delete the object from MinIO
+    try {
+      await minioClient.removeObject(BUCKET_NAME, objectName);
+      logger.info(`Deleted object from MinIO: ${objectName}`);
+    } catch (minioError) {
+      await query("ROLLBACK");
+      logger.error(`Failed to delete object from MinIO: ${objectName}`, minioError);
+      return next(new AppError("Failed to delete portfolio item from storage", 500));
+    }
+
+    // Delete the portfolio item from the database
+    await query(
+      `DELETE FROM portfolio WHERE portfolio_item_id = $1 AND freelancer_id = $2`,
+      [itemId, user.roleWiseId]
+    );
+    logger.info("Portfolio item deleted from database");
+
+    // Commit transaction
+    await query("COMMIT");
+    logger.info("Transaction committed");
+
+    return res.status(200).json({
+      status: "success",
+      message: "Portfolio item deleted successfully",
+    });
+  } catch (error) {
+    // Rollback transaction on any error
+    if (client) {
+      await query("ROLLBACK");
+      logger.info("Transaction rolled back");
+    }
+
+    logger.error("Error deleting portfolio item:", error);
+    return next(new AppError("Failed to delete portfolio item", 500));
+  }
+};
+
 module.exports = {
   getPortfolioByFreelancerId,
   addFreelancerPortfolio,
   updateFreelancerPortfolio,
   deleteFreelancerPortfolio,
+  deleteFreelancerProtfolioItem,
 };
