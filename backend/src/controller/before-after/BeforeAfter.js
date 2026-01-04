@@ -1,7 +1,6 @@
 const { query, pool } = require("../../../config/dbConfig");
 const { minioClient } = require("../../../config/minio");
 const AppError = require("../../../utils/appError");
-const { decodedToken } = require("../../../utils/helper");
 const {logger} = require("../../../utils/logger");
 const path = require("path");
 const crypto = require("crypto");
@@ -16,15 +15,15 @@ const uploadBeforeAfter = async (req, res, next) => {
   const uploadedFiles = [];
 
   try {
-    const { matric, serviceType } = req.body;
+    const { serviceType } = req.body;
     const user = req.user
     const freelancerId = user?.roleWiseId;
     client = await pool.connect();
 
     logger.debug("Request payload", req.body);
 
-    if (!serviceType || !matric) {
-      logger.warn("Missing required fields serviceType or matric");
+    if (!serviceType ) {
+      logger.warn("Missing required fields serviceType ");
       return next(new AppError("Service and details are required", 400));
     }
 
@@ -63,15 +62,14 @@ const uploadBeforeAfter = async (req, res, next) => {
     const { rows } = await client.query(
       `INSERT INTO impact 
         (freelancer_id, service_type, before_service_url, after_service_url,
-         impact_matric, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
       [
         freelancerId,
         serviceType,
         uploadedFiles.find(f => f.type === "before").fileUrl,
         uploadedFiles.find(f => f.type === "after").fileUrl,
-        matric,
         new Date(),
         new Date(),
       ]
