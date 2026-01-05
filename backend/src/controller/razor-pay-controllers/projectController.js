@@ -1,11 +1,11 @@
-const {pool:db} = require('../../../config/dbConfig');
+const { query } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 
 // Create a new project
 const createProject = async (req, res, next) => {
   try {
     const clientId = req.user.id;
-    const { freelancer_id, service_id , number_of_units , amount , project_end_date } = req.body;
+    const { freelancer_id, service_id, number_of_units, amount, project_end_date } = req.body;
 
     if (!freelancer_id || !amount || !service_id || !number_of_units || !project_end_date) {
       return next(new AppError('Freelancer ID, title, and amount are required', 400));
@@ -16,9 +16,9 @@ const createProject = async (req, res, next) => {
     }
 
     // Verify freelancer exists
-    const [freelancers] = await db.query(
-      'SELECT id FROM users WHERE id = ? AND user_type = "freelancer" AND status = "ACTIVE"',
-      [freelancer_id]
+    const { rows: freelancers } = await query(
+      'SELECT id FROM users WHERE id = $1 AND user_type = $2 AND status = $3',
+      [freelancer_id, 'freelancer', 'ACTIVE']
     );
 
     if (freelancers.length === 0) {
@@ -26,15 +26,16 @@ const createProject = async (req, res, next) => {
     }
 
     // Create project
-    const [result] = await db.query(
+    const { rows: result } = await query(
       `INSERT INTO projects (creator_id, freelancer_id, service_id, number_of_units, amount, end_date, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'CREATED')`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'CREATED')
+       RETURNING id`,
       [clientId, freelancer_id, service_id, number_of_units, amount, project_end_date]
     );
 
     res.status(201).json({
       message: 'Project created successfully',
-      project_id: result.insertId,
+      project_id: result[0].id,
       amount
     });
 
@@ -50,14 +51,14 @@ const getProject = async (req, res, next) => {
     const projectId = req.params.id;
     const userId = req.user.id;
 
-    const [projects] = await db.query(
+    const { rows: projects } = await query(
       `SELECT p.*,
         c.full_name as creator_name, c.email as creator_email,
         f.full_name as freelancer_name, f.email as freelancer_email
        FROM projects p
        JOIN creators c ON p.creator_id = c.creator_id
        JOIN freelancer f ON p.freelancer_id = f.freelancer_id
-       WHERE p.id = ?`,
+       WHERE p.id = $1`,
       [projectId]
     );
 
@@ -88,36 +89,40 @@ const getMyProjects = async (req, res, next) => {
     const userType = req.user.role;
     const status = req.query.status;
 
-    let query = `
+    let queryText = `
       SELECT p.*,
         c.full_name as client_name,
-        f.full_name as freelancer_name
+        f.freelancer_full_name as freelancer_name
       FROM projects p
       JOIN creators c ON p.creator_id = c.creator_id
-      JOIN freelancer f ON p.freelancer_id = f.id
-      WHERE
+      JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+      WHERE 1=1
     `;
 
     const params = [];
+    let paramCount = 1;
 
     if (userType === 'creator') {
-      query += 'p.creator_id = ?';
+      queryText += ` AND p.creator_id = $${paramCount}`;
       params.push(userId);
+      paramCount++;
     } else if (userType === 'freelancer') {
-      query += 'p.freelancer_id = ?';
+      queryText += ` AND p.freelancer_id = $${paramCount}`;
       params.push(userId);
+      paramCount++;
     } else {
       return next(new AppError('Invalid user type', 400));
     }
 
     if (status) {
-      query += ' AND p.status = ?';
+      queryText += ` AND p.status = $${paramCount}`;
       params.push(status);
+      paramCount++;
     }
 
-    query += ' ORDER BY p.created_at DESC';
+    queryText += ' ORDER BY p.created_at DESC';
 
-    const [projects] = await db.query(query, params);
+    const { rows: projects } = await query(queryText, params);
 
     res.json({
       count: projects.length,
@@ -146,8 +151,8 @@ const updateProjectStatus = async (req, res, next) => {
     }
 
     // Get project
-    const [projects] = await db.query(
-      'SELECT * FROM projects WHERE id = ?',
+    const { rows: projects } = await query(
+      'SELECT * FROM projects WHERE id = $1',
       [projectId]
     );
 
@@ -168,14 +173,11 @@ const updateProjectStatus = async (req, res, next) => {
     }
 
     // Update status
-    const updateData = { status };
-    if (status === 'COMPLETED') {
-      updateData.completed_at = new Date();
-    }
+    const completedAt = status === 'COMPLETED' ? new Date() : null;
 
-    await db.query(
-      'UPDATE projects SET status = ?, completed_at = ?, updated_at = NOW() WHERE id = ?',
-      [status, updateData.completed_at || null, projectId]
+    await query(
+      'UPDATE projects SET status = $1, completed_at = $2, updated_at = NOW() WHERE id = $3',
+      [status, completedAt, projectId]
     );
 
     res.json({
@@ -196,8 +198,8 @@ const deleteProject = async (req, res, next) => {
     const userId = req.user.id;
 
     // Get project
-    const [projects] = await db.query(
-      'SELECT * FROM projects WHERE id = ?',
+    const { rows: projects } = await query(
+      'SELECT * FROM projects WHERE id = $1',
       [projectId]
     );
 
@@ -213,8 +215,8 @@ const deleteProject = async (req, res, next) => {
     }
 
     // Check if payment has been made
-    const [transactions] = await db.query(
-      'SELECT id FROM transactions WHERE project_id = ?',
+    const { rows: transactions } = await query(
+      'SELECT id FROM transactions WHERE project_id = $1',
       [projectId]
     );
 
@@ -223,7 +225,7 @@ const deleteProject = async (req, res, next) => {
     }
 
     // Delete project
-    await db.query('DELETE FROM projects WHERE id = ?', [projectId]);
+    await query('DELETE FROM projects WHERE id = $1', [projectId]);
 
     res.json({
       message: 'Project deleted successfully',
