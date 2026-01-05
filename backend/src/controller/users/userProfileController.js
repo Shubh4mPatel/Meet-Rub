@@ -100,7 +100,7 @@ const getUserProfile = async (req, res, next) => {
       }
 
       if (type === "profileImage") {
-        logger.info("Fetching: Freelancer Profile Image");
+        logger.info("Fetching: Freelancer Profile Image",user);
         const { rows } = await query(
           "SELECT profile_image_url FROM freelancer WHERE user_id = $1",
           [user.user_id]
