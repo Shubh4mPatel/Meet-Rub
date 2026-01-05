@@ -244,11 +244,12 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
           await client.query(
             `INSERT INTO creators 
-            (user_id, first_name, last_name, niche, social_links, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (user_id,full_name , first_name, last_name, niche, social_links, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7,$8)
             RETURNING *`,
             [
               newUserResMeetRub[0].id,
+              firstName + " " + lastName,
               firstName,
               lastName,
               parsedNiche,

@@ -30,7 +30,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Creator Basic Info");
         const { rows } = await query(
-          "SELECT first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche FROM creators WHERE user_id = $1",
+          "SELECT full_name, first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche FROM creators WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -44,14 +44,42 @@ const getUserProfile = async (req, res, next) => {
           data: { userBasicInfo: rows[0] },
         });
       }
+      if (type === "profileImage") {
+        logger.info("Fetching: creator Profile Image", user);
+        const { rows } = await query(
+          "SELECT profile_image_url FROM creators WHERE user_id = $1",
+          [user.user_id]
+        );
+
+        logger.debug("Profile Image Query Result:", rows[0]);
+        if (!rows[0]?.profile_image_url) {
+          logger.warn("Profile image not uploaded");
+          return next(new AppError("No profile image found", 404));
+        }
+
+        logger.info(
+          "Generating presigned URL for profile image",
+          rows[0].profile_image_url
+        );
+        const parts = rows[0].profile_image_url.split("/");
+        const bucketName = parts[0];
+        const objectName = parts.slice(1).join("/");
+
+        const signedUrl = await createPresignedUrl(
+          bucketName,
+          objectName,
+          expirySeconds
+        );
+
+        return res.status(200).json({
+          status: "success",
+          data: { userProfileImage: signedUrl },
+        });
+      }
 
       // Creators don't have profile images, govt ID, or bank details in the creators table
       // Return appropriate error messages for unsupported types
-      if (
-        type === "profileImage" ||
-        type === "govtId" ||
-        type === "bankDetails"
-      ) {
+      if (type === "govtId" || type === "bankDetails") {
         logger.warn(`Type ${type} not supported for creator role`);
         return next(new AppError(`${type} is not available for creators`, 400));
       }
@@ -77,18 +105,29 @@ const getUserProfile = async (req, res, next) => {
         // Generate presigned URL for thumbnail image if it exists
         if (rows[0].freelancer_thumbnail_image) {
           try {
-            logger.info("Generating presigned URL for thumbnail image",rows[0].freelancer_thumbnail_image);
+            logger.info(
+              "Generating presigned URL for thumbnail image",
+              rows[0].freelancer_thumbnail_image
+            );
             const parts = rows[0].freelancer_thumbnail_image.split("/");
             const bucketName = parts[0];
             const objectName = parts.slice(1).join("/");
 
-            logger.debug(`Generating presigned URL for bucket: ${bucketName}, object: ${objectName}`);
+            logger.debug(
+              `Generating presigned URL for bucket: ${bucketName}, object: ${objectName}`
+            );
 
-            const signedUrl = await createPresignedUrl(bucketName, objectName, expirySeconds);
+            const signedUrl = await createPresignedUrl(
+              bucketName,
+              objectName,
+              expirySeconds
+            );
 
             rows[0].freelancer_thumbnail_image = signedUrl;
           } catch (error) {
-            logger.error(`Failed to generate presigned URL for thumbnail: ${error.message}`);
+            logger.error(
+              `Failed to generate presigned URL for thumbnail: ${error.message}`
+            );
             // Keep the original URL or set to null
             rows[0].freelancer_thumbnail_image = null;
           }
@@ -101,7 +140,7 @@ const getUserProfile = async (req, res, next) => {
       }
 
       if (type === "profileImage") {
-        logger.info("Fetching: Freelancer Profile Image",user);
+        logger.info("Fetching: Freelancer Profile Image", user);
         const { rows } = await query(
           "SELECT profile_image_url FROM freelancer WHERE user_id = $1",
           [user.user_id]
@@ -112,7 +151,10 @@ const getUserProfile = async (req, res, next) => {
           return next(new AppError("No profile image found", 404));
         }
 
-        logger.info("Generating presigned URL for profile image", rows[0].profile_image_url);
+        logger.info(
+          "Generating presigned URL for profile image",
+          rows[0].profile_image_url
+        );
         const parts = rows[0].profile_image_url.split("/");
         const bucketName = parts[0];
         const objectName = parts.slice(1).join("/");
@@ -219,7 +261,7 @@ const freelancerBasicInfoSchema = Joi.object({
   thumbnailImageUrl: Joi.string().optional().allow(""),
 });
 
-const freelancerProfileImageSchema = Joi.object({
+const ProfileImageSchema = Joi.object({
   type: Joi.string().valid("profileImage").required(),
 });
 
@@ -261,34 +303,56 @@ const editProfile = async (req, res, next) => {
 
     // Validate request based on role and type
     let validationError;
-    if (role === "creator" && type === "basicInfo") {
-      const { error } = creatorBasicInfoSchema.validate(req.body, { abortEarly: false });
-      validationError = error;
+    if (role === "creator") {
+      if (type === "basicInfo") {
+        const { error } = creatorBasicInfoSchema.validate(req.body, {
+          abortEarly: false,
+        });
+        validationError = error;
+      }
+      if(type==="profileImage"){
+        const { error } = ProfileImageSchema.validate(req.body, {
+          abortEarly: false,
+        });
+        validationError = error;
+      }
     } else if (role === "freelancer") {
       if (type === "basicInfo") {
-        const { error } = freelancerBasicInfoSchema.validate(req.body, { abortEarly: false });
+        const { error } = freelancerBasicInfoSchema.validate(req.body, {
+          abortEarly: false,
+        });
         validationError = error;
       } else if (type === "bankDetails") {
-        const { error } = freelancerBankDetailsSchema.validate(req.body, { abortEarly: false });
+        const { error } = freelancerBankDetailsSchema.validate(req.body, {
+          abortEarly: false,
+        });
         validationError = error;
       } else if (type === "govtId") {
-        const { error } = freelancerGovInfoSchema.validate(req.body, { abortEarly: false });
+        const { error } = freelancerGovInfoSchema.validate(req.body, {
+          abortEarly: false,
+        });
         validationError = error;
       } else if (type === "profileImage") {
-        const { error } = freelancerProfileImageSchema.validate(req.body, { abortEarly: false });
+        const { error } = ProfileImageSchema.validate(req.body, {
+          abortEarly: false,
+        });
         validationError = error;
       }
     }
 
     if (validationError) {
       logger.warn("Validation failed:", validationError.details);
-      return next(new AppError(validationError.details.map((d) => d.message).join(", "), 400));
+      return next(
+        new AppError(
+          validationError.details.map((d) => d.message).join(", "),
+          400
+        )
+      );
     }
 
     // ✅ CREATOR ROLE HANDLING
     if (role === "creator") {
       if (type === "basicInfo") {
-
         logger.info("Updating Creator Basic Info");
         const {
           first_name,
@@ -340,7 +404,83 @@ const editProfile = async (req, res, next) => {
           throw error;
         }
       }
+      if( type==="profileImage"){
+        logger.info("Updating Freelancer Profile Image");
 
+        // Validate only single file upload
+        if (req.files && Array.isArray(req.files) && req.files.length > 1) {
+          logger.warn("Multiple files uploaded, only single file allowed");
+          return next(
+            new AppError(
+              "Only one profile image can be uploaded at a time",
+              400
+            )
+          );
+        }
+
+        if (!req.file) {
+          logger.warn("Profile image missing");
+          return next(new AppError("Profile image required", 400));
+        }
+
+        // Validate that the file is an image
+        if (!req.file.mimetype.startsWith("image/")) {
+          logger.warn(
+            "Invalid file type for profile image:",
+            req.file.mimetype
+          );
+          return next(
+            new AppError(
+              "Profile image must be an image file (JPEG, PNG, GIF, etc.)",
+              400
+            )
+          );
+        }
+
+        const fileExt = path.extname(req.file.originalname);
+        const fileName = `${crypto.randomUUID()}${fileExt}`;
+        const folder = "freelancer/freelancer-profile-image";
+        const objectName = `${folder}/${fileName}`;
+        const profile_url = `${BUCKET_NAME}/${objectName}`;
+
+        // Start transaction
+        await query("BEGIN");
+        try {
+          await minioClient.putObject(
+            BUCKET_NAME,
+            objectName,
+            req.file.buffer,
+            req.file.size,
+            { "Content-Type": req.file.mimetype }
+          );
+
+          await query(
+            "UPDATE freelancer SET profile_image_url=$1 WHERE user_id=$2",
+            [profile_url, user.user_id]
+          );
+
+          // Generate presigned URL for the uploaded image
+          const signedUrl = await createPresignedUrl(
+            BUCKET_NAME,
+            objectName,
+            expirySeconds
+          );
+
+          // Commit transaction
+          await query("COMMIT");
+          logger.info("Profile image updated successfully");
+          return res.status(200).json({
+            status: "success",
+            message: "Profile image updated successfully",
+            data: {
+              profile_image_url: signedUrl,
+            },
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
+        }
+      }
       // Creators don't support other types
       logger.warn(`Type ${type} not supported for creator role`);
       return next(
@@ -356,8 +496,13 @@ const editProfile = async (req, res, next) => {
       if (type === "bankDetails") {
         logger.info("Updating Freelancer Bank Details");
 
-        const { bank_account_no, bank_name, bank_ifsc_code, bank_branch_name,bank_account_holder_name } =
-          req.body;
+        const {
+          bank_account_no,
+          bank_name,
+          bank_ifsc_code,
+          bank_branch_name,
+          bank_account_holder_name,
+        } = req.body;
 
         // Start transaction
         await query("BEGIN");
@@ -485,7 +630,10 @@ const editProfile = async (req, res, next) => {
 
         // Validate that the file is an image
         if (!req.file.mimetype.startsWith("image/")) {
-          logger.warn("Invalid file type for profile image:", req.file.mimetype);
+          logger.warn(
+            "Invalid file type for profile image:",
+            req.file.mimetype
+          );
           return next(
             new AppError(
               "Profile image must be an image file (JPEG, PNG, GIF, etc.)",
@@ -593,7 +741,10 @@ const editProfile = async (req, res, next) => {
             // Validate that the file is an image
             if (!req.file.mimetype.startsWith("image/")) {
               await query("ROLLBACK");
-              logger.warn("Invalid file type for thumbnail:", req.file.mimetype);
+              logger.warn(
+                "Invalid file type for thumbnail:",
+                req.file.mimetype
+              );
               return next(
                 new AppError(
                   "Thumbnail must be an image file (JPEG, PNG, GIF, etc.)",
@@ -602,7 +753,9 @@ const editProfile = async (req, res, next) => {
               );
             }
 
-            logger.info("No thumbnail URL provided, uploading new file to MinIO");
+            logger.info(
+              "No thumbnail URL provided, uploading new file to MinIO"
+            );
 
             const fileExt = path.extname(req.file.originalname);
             const fileName = `${crypto.randomUUID()}${fileExt}`;
@@ -645,7 +798,10 @@ const editProfile = async (req, res, next) => {
               // Validate that the file is an image
               if (!req.file.mimetype.startsWith("image/")) {
                 await query("ROLLBACK");
-                logger.warn("Invalid file type for thumbnail:", req.file.mimetype);
+                logger.warn(
+                  "Invalid file type for thumbnail:",
+                  req.file.mimetype
+                );
                 return next(
                   new AppError(
                     "Thumbnail must be an image file (JPEG, PNG, GIF, etc.)",
@@ -654,7 +810,9 @@ const editProfile = async (req, res, next) => {
                 );
               }
 
-              logger.info("Thumbnail URL changed, replacing old file with new one");
+              logger.info(
+                "Thumbnail URL changed, replacing old file with new one"
+              );
 
               // Delete old thumbnail from MinIO if it exists
               if (currentThumbnailUrl) {
@@ -663,7 +821,10 @@ const editProfile = async (req, res, next) => {
                   if (parts.length >= 4) {
                     const oldBucketName = parts[2];
                     const oldObjectName = parts.slice(3).join("/");
-                    await minioClient.removeObject(oldBucketName, oldObjectName);
+                    await minioClient.removeObject(
+                      oldBucketName,
+                      oldObjectName
+                    );
                     logger.info("Old thumbnail deleted from MinIO");
                   }
                 } catch (deleteError) {
@@ -734,10 +895,10 @@ const editProfile = async (req, res, next) => {
             message: "Profile updated successfully",
             data: rows[0].freelancer_thumbnail_image
               ? {
-                  ...rows[0],
-                  freelancer_thumbnail_image:
-                    signedUrl || rows[0].freelancer_thumbnail_image,
-                }
+                ...rows[0],
+                freelancer_thumbnail_image:
+                  signedUrl || rows[0].freelancer_thumbnail_image,
+              }
               : rows[0],
           });
         } catch (error) {
@@ -823,9 +984,8 @@ const getAllFreelancers = async (req, res, next) => {
     }
 
     // Add price range filter
-    queryText += ` AND (s.service_price >= $${paramCount} AND s.service_price <= $${
-      paramCount + 1
-    })`;
+    queryText += ` AND (s.service_price >= $${paramCount} AND s.service_price <= $${paramCount + 1
+      })`;
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
@@ -881,9 +1041,8 @@ const getAllFreelancers = async (req, res, next) => {
       countParamIndex += serviceTypes.length;
     }
 
-    countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${
-      countParamIndex + 1
-    })`;
+    countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${countParamIndex + 1
+      })`;
     countParams.push(minPrice, maxPrice);
     countParamIndex += 2;
 
@@ -1384,7 +1543,6 @@ const getUserProfileProgress = async (req, res, next) => {
     return next(new AppError("Failed to calculate profile progress", 500));
   }
 };
-
 
 module.exports = {
   getUserProfile,
