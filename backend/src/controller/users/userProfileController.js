@@ -77,6 +77,7 @@ const getUserProfile = async (req, res, next) => {
         // Generate presigned URL for thumbnail image if it exists
         if (rows[0].freelancer_thumbnail_image) {
           try {
+            logger.info("Generating presigned URL for thumbnail image",rows[0].freelancer_thumbnail_image);
             const parts = rows[0].freelancer_thumbnail_image.split("/");
             const bucketName = parts[2];
             const objectName = parts.slice(3).join("/");
@@ -111,6 +112,7 @@ const getUserProfile = async (req, res, next) => {
           return next(new AppError("No profile image found", 404));
         }
 
+        logger.info("Generating presigned URL for profile image", rows[0].profile_image_url);
         const parts = rows[0].profile_image_url.split("/");
         const bucketName = parts[2];
         const objectName = parts.slice(3).join("/");
