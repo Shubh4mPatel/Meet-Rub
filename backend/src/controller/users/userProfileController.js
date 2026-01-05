@@ -310,7 +310,7 @@ const editProfile = async (req, res, next) => {
         });
         validationError = error;
       }
-      if(type==="profileImage"){
+      if (type === "profileImage") {
         const { error } = ProfileImageSchema.validate(req.body, {
           abortEarly: false,
         });
@@ -404,7 +404,7 @@ const editProfile = async (req, res, next) => {
           throw error;
         }
       }
-      if( type==="profileImage"){
+      if (type === "profileImage") {
         logger.info("Updating Freelancer Profile Image");
 
         // Validate only single file upload
