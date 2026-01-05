@@ -954,10 +954,8 @@ const getAllFreelancers = async (req, res, next) => {
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
-        s.service_name,
-        s.service_price,
-        s.delivery_time,
-        s.created_at
+        ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
+        MIN(s.service_price) as lowest_price
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1
@@ -996,28 +994,30 @@ const getAllFreelancers = async (req, res, next) => {
       paramCount++;
     }
 
+    // Add GROUP BY clause
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating`;
+
     // Add sorting based on sortBy parameter
     let orderByClause = "";
     switch (sortBy) {
       case "toprated":
         orderByClause =
-          "ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name";
+          " ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name";
         break;
       case "newest":
       default:
         orderByClause =
-          "ORDER BY s.created_at DESC NULLS LAST, f.freelancer_full_name";
+          " ORDER BY MAX(s.created_at) DESC NULLS LAST, f.freelancer_full_name";
         break;
     }
 
     // Add pagination
-    queryText += ` ${orderByClause}
-                  LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    queryText += `${orderByClause} LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
     queryParams.push(limit, offset);
 
-    // Get total count for pagination
+    // Get total count for pagination (count distinct freelancers)
     let countQuery = `
-      SELECT COUNT(DISTINCT f.freelancer_id)
+      SELECT COUNT(DISTINCT f.freelancer_id) as count
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1
@@ -1065,8 +1065,8 @@ const getAllFreelancers = async (req, res, next) => {
       results.rows.map(async (freelancer) => {
         if (freelancer.profile_image_url) {
           const parts = freelancer.profile_image_url.split("/");
-          const bucketName = parts[2];
-          const objectName = parts.slice(3).join("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
 
           try {
             const signedUrl = await createPresignedUrl(
@@ -1077,7 +1077,7 @@ const getAllFreelancers = async (req, res, next) => {
             freelancer.profile_image_url = signedUrl;
           } catch (error) {
             logger.error(
-              `Error generating signed URL for freelancer ${freelancer.user_id}:`,
+              `Error generating signed URL for freelancer ${freelancer.freelancer_id}:`,
               error
             );
             freelancer.profile_image_url = null;
@@ -1087,8 +1087,8 @@ const getAllFreelancers = async (req, res, next) => {
         // Generate presigned URL for thumbnail image if it exists
         if (freelancer.freelancer_thumbnail_image) {
           const parts = freelancer.freelancer_thumbnail_image.split("/");
-          const bucketName = parts[2];
-          const objectName = parts.slice(3).join("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
 
           try {
             const signedUrl = await createPresignedUrl(
@@ -1099,7 +1099,7 @@ const getAllFreelancers = async (req, res, next) => {
             freelancer.freelancer_thumbnail_image = signedUrl;
           } catch (error) {
             logger.error(
-              `Error generating signed URL for freelancer thumbnail ${freelancer.user_id}:`,
+              `Error generating signed URL for freelancer thumbnail ${freelancer.freelancer_id}:`,
               error
             );
             freelancer.freelancer_thumbnail_image = null;
