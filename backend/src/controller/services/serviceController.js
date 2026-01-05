@@ -170,7 +170,8 @@ const updateServiceByFreelancer = async (req, res, next) => {
 
 // ✅ Freelancer Delete their service
 const deleteServiceByFreelancer = async (req, res, next) => {
-  logger.info("Freelancer deleting service");
+  logger.info('request info', req.headers['content-type']);
+  logger.info("Freelancer deleting service",red.body);
   try {
     const { id } = req.body;
     const user = req.user;
