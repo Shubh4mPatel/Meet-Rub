@@ -93,8 +93,8 @@ const getMyProjects = async (req, res, next) => {
         c.full_name as client_name,
         f.full_name as freelancer_name
       FROM projects p
-      JOIN users c ON p.creator_id = c.id
-      JOIN users f ON p.freelancer_id = f.id
+      JOIN creators c ON p.creator_id = c.creator_id
+      JOIN freelancer f ON p.freelancer_id = f.id
       WHERE
     `;
 
