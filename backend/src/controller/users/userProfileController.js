@@ -79,8 +79,8 @@ const getUserProfile = async (req, res, next) => {
           try {
             logger.info("Generating presigned URL for thumbnail image",rows[0].freelancer_thumbnail_image);
             const parts = rows[0].freelancer_thumbnail_image.split("/");
-            const bucketName = parts[2];
-            const objectName = parts.slice(3).join("/");
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join("/");
 
             logger.debug(`Generating presigned URL for bucket: ${bucketName}, object: ${objectName}`);
 
@@ -114,8 +114,8 @@ const getUserProfile = async (req, res, next) => {
 
         logger.info("Generating presigned URL for profile image", rows[0].profile_image_url);
         const parts = rows[0].profile_image_url.split("/");
-        const bucketName = parts[2];
-        const objectName = parts.slice(3).join("/");
+        const bucketName = parts[0];
+        const objectName = parts.slice(1).join("/");
 
         const signedUrl = await createPresignedUrl(
           bucketName,
