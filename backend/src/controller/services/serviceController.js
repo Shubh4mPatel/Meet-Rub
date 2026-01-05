@@ -172,7 +172,7 @@ const updateServiceByFreelancer = async (req, res, next) => {
 const deleteServiceByFreelancer = async (req, res, next) => {
 
   try {
-    const  id  = req.params?.id;
+    const  id  = req.query?.serviceId;
     const user = req.user;
     const freelancer_id = user?.roleWiseId;
 
