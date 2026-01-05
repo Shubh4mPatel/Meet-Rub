@@ -164,7 +164,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "bankDetails") {
         logger.info("Fetching: Freelancer Bank Details");
         const { rows } = await query(
-          "SELECT bank_account_no, bank_name, bank_ifsc_code, bank_branch_name FROM freelancer WHERE user_id=$1",
+          "SELECT bank_account_no,bank_account_holder_name, bank_name, bank_ifsc_code, bank_branch_name FROM freelancer WHERE user_id=$1",
           [user.user_id]
         );
 
@@ -205,6 +205,7 @@ const freelancerBankDetailsSchema = Joi.object({
   bank_name: Joi.string().required(),
   bank_ifsc_code: Joi.string().required(),
   bank_branch_name: Joi.string().required(),
+  bank_account_holder_name: Joi.string().required(),
 });
 
 const freelancerBasicInfoSchema = Joi.object({
@@ -355,19 +356,20 @@ const editProfile = async (req, res, next) => {
       if (type === "bankDetails") {
         logger.info("Updating Freelancer Bank Details");
 
-        const { bank_account_no, bank_name, bank_ifsc_code, bank_branch_name } =
+        const { bank_account_no, bank_name, bank_ifsc_code, bank_branch_name,bank_account_holder_name } =
           req.body;
 
         // Start transaction
         await query("BEGIN");
         try {
           const { rows } = await query(
-            "UPDATE freelancer SET bank_account_no=$1, bank_name=$2, bank_ifsc_code=$3, bank_branch_name=$4 WHERE user_id=$5 RETURNING *",
+            "UPDATE freelancer SET bank_account_no=$1, bank_name=$2, bank_ifsc_code=$3, bank_branch_name=$4, bank_account_holder_name = $5 WHERE user_id=$6 RETURNING *",
             [
               bank_account_no,
               bank_name,
               bank_ifsc_code,
               bank_branch_name,
+              bank_account_holder_name,
               user.user_id,
             ]
           );
