@@ -5,9 +5,9 @@ const AppError = require("../../../utils/appError");
 const createProject = async (req, res, next) => {
   try {
     const clientId = req.user.id;
-    const { freelancer_id, title, description, amount } = req.body;
+    const { freelancer_id, service_id , number_of_units , amount , project_end_date } = req.body;
 
-    if (!freelancer_id || !title || !amount) {
+    if (!freelancer_id || !amount || !service_id || !number_of_units || !project_end_date) {
       return next(new AppError('Freelancer ID, title, and amount are required', 400));
     }
 
@@ -17,7 +17,7 @@ const createProject = async (req, res, next) => {
 
     // Verify freelancer exists
     const [freelancers] = await db.query(
-      'SELECT id FROM users WHERE id = ? AND user_type = "FREELANCER" AND status = "ACTIVE"',
+      'SELECT id FROM users WHERE id = ? AND user_type = "freelancer" AND status = "ACTIVE"',
       [freelancer_id]
     );
 
@@ -27,9 +27,9 @@ const createProject = async (req, res, next) => {
 
     // Create project
     const [result] = await db.query(
-      `INSERT INTO projects (creator_id, freelancer_id, title, description, amount, status)
-       VALUES (?, ?, ?, ?, ?, 'CREATED')`,
-      [clientId, freelancer_id, title, description, amount]
+      `INSERT INTO projects (creator_id, freelancer_id, service_id, number_of_units, amount, end_date, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'CREATED')`,
+      [clientId, freelancer_id, service_id, number_of_units, amount, project_end_date]
     );
 
     res.status(201).json({
@@ -37,6 +37,7 @@ const createProject = async (req, res, next) => {
       project_id: result.insertId,
       amount
     });
+
   } catch (error) {
     console.error('Create project error:', error);
     return next(new AppError('Failed to create project', 500));
@@ -51,11 +52,11 @@ const getProject = async (req, res, next) => {
 
     const [projects] = await db.query(
       `SELECT p.*,
-        c.full_name as client_name, c.email as client_email,
+        c.full_name as creator_name, c.email as creator_email,
         f.full_name as freelancer_name, f.email as freelancer_email
        FROM projects p
-       JOIN users c ON p.client_id = c.id
-       JOIN users f ON p.freelancer_id = f.id
+       JOIN creators c ON p.creator_id = c.creator_id
+       JOIN freelancer f ON p.freelancer_id = f.freelancer_id
        WHERE p.id = ?`,
       [projectId]
     );
@@ -67,7 +68,7 @@ const getProject = async (req, res, next) => {
     const project = projects[0];
 
     // Check access
-    if (project.client_id !== userId &&
+    if (project.creator_id !== userId &&
         project.freelancer_id !== userId &&
         req.user.user_type !== 'ADMIN') {
       return next(new AppError('Access denied', 403));
