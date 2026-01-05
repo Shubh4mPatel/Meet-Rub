@@ -105,7 +105,7 @@ const getUserProfile = async (req, res, next) => {
           "SELECT profile_image_url FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
-
+        logger.debug("Profile Image Query Result:", rows[0]);
         if (!rows[0]?.profile_image_url) {
           logger.warn("Profile image not uploaded");
           return next(new AppError("No profile image found", 404));
