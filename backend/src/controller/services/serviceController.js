@@ -173,6 +173,7 @@ const deleteServiceByFreelancer = async (req, res, next) => {
 
   try {
     const  id  = req.query?.serviceId;
+    logger.info("Service ID to delete:", id);
     const user = req.user;
     const freelancer_id = user?.roleWiseId;
 
