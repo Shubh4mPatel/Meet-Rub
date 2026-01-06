@@ -239,18 +239,18 @@ const updateFreelancerPortfolio = async (req, res, next) => {
     if (shouldUpdateImage) {
       await query(
         `UPDATE portfolio
-         SET portfolio_item_url = $1, portfolio_item_description = $2, portfolio_item_updated_at = $3
-         WHERE portfolio_item_id = $4`,
-        [fileUrl, itemDescription, new Date(), itemId]
+         SET portfolio_item_url = $1, portfolio_item_description = $2,portfolio_item_service_type = $3 , portfolio_item_updated_at = $4
+         WHERE portfolio_item_id = $5`,
+        [fileUrl, itemDescription, serviceType, new Date(), itemId]
       );
       logger.info("Portfolio item URL and description updated in database");
     } else {
       // Only update description and timestamp if no new image
       await query(
         `UPDATE portfolio
-         SET portfolio_item_description = $1, portfolio_item_updated_at = $2
-         WHERE portfolio_item_id = $3`,
-        [itemDescription, new Date(), itemId]
+         SET portfolio_item_description = $1, portfolio_item_service_type = $2,portfolio_item_updated_at = $3
+         WHERE portfolio_item_id = $4`,
+        [itemDescription, serviceType , new Date(), itemId]
       );
       logger.info("Portfolio item description updated in database (image unchanged)");
     }
