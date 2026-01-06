@@ -139,16 +139,17 @@ RETURNING *`,
 
 const updateFreelancerPortfolio = async (req, res, next) => {
   logger.info("Updating freelancer portfolio");
-  const uploadedObjectName = null;
+  let uploadedObjectName = null;
   let client = null;
 
   try {
-    const { itemId, type, serviceType, itemDescription } = req.body;
+    const { itemId, type, serviceType, itemDescription, url } = req.body;
     const user = req.user;
 
-    if (!req.file) {
-      logger.warn("Missing file");
-      return next(new AppError("Please provide a file to upload", 400));
+    // Validate that itemId is provided
+    if (!itemId) {
+      logger.warn("Missing itemId");
+      return next(new AppError("itemId is required for updating portfolio", 400));
     }
 
     // Start database transaction
@@ -156,113 +157,90 @@ const updateFreelancerPortfolio = async (req, res, next) => {
     logger.info("Transaction started");
 
     let oldObjectName = null;
+    let existingUrl = null;
+    let shouldUpdateImage = !url; // Update image only if URL is not provided
 
-    // If itemId exists, fetch the old URL for deletion
-    if (itemId) {
-      logger.info(`Fetching existing portfolio item: ${itemId}`);
-      const { rows } = await query(
-        `SELECT portfolio_item_url FROM portfolio WHERE portfolio_item_id = $1`,
-        [itemId]
-      );
-
-      if (rows.length === 0) {
-        await query("ROLLBACK");
-        logger.warn("Portfolio item not found");
-        return next(new AppError("Portfolio item not found", 404));
-      }
-
-      oldObjectName = rows[0].portfolio_item_url.split("/").slice(3).join("/");
-      logger.debug(`Old object to delete: ${oldObjectName}`);
-    }
-
-    // Upload new file to MinIO
-    const fileName = `${req.file.originalname}`;
-    const folder = `freelancer/portfolio/${user.user_id}`;
-    const objectName = `${folder}/${fileName}`;
-    const fileUrl = `${BUCKET_NAME}/${objectName}`;
-
-    await minioClient.putObject(
-      BUCKET_NAME,
-      objectName,
-      req.file.buffer,
-      req.file.size,
-      { "Content-Type": req.file.mimetype }
+    // Fetch the existing data
+    logger.info(`Fetching existing portfolio item: ${itemId}`);
+    const { rows } = await query(
+      `SELECT portfolio_item_url, portfolio_item_description FROM portfolio WHERE portfolio_item_id = $1`,
+      [itemId]
     );
 
-    logger.info(`File uploaded successfully: ${fileName}`);
+    if (rows.length === 0) {
+      await query("ROLLBACK");
+      logger.warn("Portfolio item not found");
+      return next(new AppError("Portfolio item not found", 404));
+    }
 
-    // If no itemId provided, insert new record
-    if (!itemId) {
-      logger.info("No itemId provided, adding new portfolio item");
+    existingUrl = rows[0].portfolio_item_url;
+    oldObjectName = existingUrl.split("/").slice(3).join("/");
 
-      if (!["image", "video"].includes(type)) {
-        await query("ROLLBACK");
-        // Delete uploaded file on validation failure
-        await minioClient.removeObject(BUCKET_NAME, objectName);
-        logger.warn("Invalid file type:", type);
-        return next(new AppError("Type must be either 'image' or 'video'", 400));
-      }
-
-      // Check if user has existing portfolio items
-      const { rows: existingItems } = await query(
-        `SELECT DISTINCT portfolio_item_service_type FROM portfolio WHERE freelancer_id = $1`,
-        [user.roleWiseId]
-      );
-
-      // If user has existing items, validate serviceType matches
-      if (existingItems.length > 0) {
-        const existingServiceType = existingItems[0].portfolio_item_service_type;
-
-        if (serviceType !== existingServiceType) {
-          await query("ROLLBACK");
-          // Delete uploaded file on validation failure
-          await minioClient.removeObject(BUCKET_NAME, objectName);
-          logger.warn(`ServiceType mismatch. Expected: ${existingServiceType}, Got: ${serviceType}`);
-          return next(
-            new AppError(
-              `Service type must be '${existingServiceType}' to match your existing portfolio items`,
-              400
-            )
-          );
-        }
-      }
-
-      await query(
-        `INSERT INTO portfolio
-        (freelancer_id, portfolio_item_service_type, portfolio_item_url, portfolio_item_description, portfolio_item_created_at, portfolio_item_updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          user.roleWiseId,
-          serviceType,
-          fileUrl,
-          itemDescription,
-          new Date(),
-          new Date(),
-        ]
-      );
-      logger.info("New portfolio item added");
+    if (shouldUpdateImage) {
+      logger.info("URL not provided, will update image");
     } else {
-      // If itemId exists, update existing record
-      logger.info(`Updating existing portfolio item: ${itemId}`);
+      logger.info("URL provided, skipping image update");
+    }
 
+    let fileUrl = existingUrl; // Default to existing URL
+
+    // Only process file upload if image should be updated
+    if (shouldUpdateImage) {
+      if (!req.file) {
+        await query("ROLLBACK");
+        logger.warn("Missing file");
+        return next(new AppError("Please provide a file to upload", 400));
+      }
+
+      // Upload new file to MinIO
+      const fileName = `${req.file.originalname}`;
+      const folder = `freelancer/portfolio/${user.user_id}`;
+      const objectName = `${folder}/${fileName}`;
+      fileUrl = `${BUCKET_NAME}/${objectName}`;
+      uploadedObjectName = objectName;
+
+      await minioClient.putObject(
+        BUCKET_NAME,
+        objectName,
+        req.file.buffer,
+        req.file.size,
+        { "Content-Type": req.file.mimetype }
+      );
+
+      logger.info(`File uploaded successfully: ${fileName}`);
+    }
+
+    // Update existing record
+    logger.info(`Updating existing portfolio item: ${itemId}`);
+
+    // Build update query based on what needs to be updated
+    if (shouldUpdateImage) {
       await query(
         `UPDATE portfolio
-         SET portfolio_item_url = $1, portfolio_item_updated_at = $2
-         WHERE portfolio_item_id = $3`,
-        [fileUrl, new Date(), itemId]
+         SET portfolio_item_url = $1, portfolio_item_description = $2, portfolio_item_updated_at = $3
+         WHERE portfolio_item_id = $4`,
+        [fileUrl, itemDescription, new Date(), itemId]
       );
+      logger.info("Portfolio item URL and description updated in database");
+    } else {
+      // Only update description and timestamp if URL is the same
+      await query(
+        `UPDATE portfolio
+         SET portfolio_item_description = $1, portfolio_item_updated_at = $2
+         WHERE portfolio_item_id = $3`,
+        [itemDescription, new Date(), itemId]
+      );
+      logger.info("Portfolio item description updated in database (image unchanged)");
+    }
 
-      logger.info("Portfolio item updated in database");
-
-      // Delete old file from MinIO
-      if (oldObjectName) {
-        try {
-          await minioClient.removeObject(BUCKET_NAME, oldObjectName);
-          logger.info(`Old file deleted from MinIO: ${oldObjectName}`);
-        } catch (minioError) {
-          logger.warn(`Failed to delete old file: ${oldObjectName}`, minioError);
-          // Continue - we don't want to fail the transaction if old file deletion fails
-        }
+    // Delete old file from MinIO only if we uploaded a new one
+    if (shouldUpdateImage && oldObjectName) {
+      try {
+        await minioClient.removeObject(BUCKET_NAME, oldObjectName);
+        logger.info(`Old file deleted from MinIO: ${oldObjectName}`);
+      } catch (minioError) {
+        logger.warn(`Failed to delete old file: ${oldObjectName}`, minioError);
+        // Continue - we don't want to fail the transaction if old file deletion fails
       }
     }
 
@@ -327,7 +305,11 @@ const updateFreelancerPortfolio = async (req, res, next) => {
 const deleteFreelancerPortfolio = async (req, res, next) => {
   logger.info("Deleting freelancer portfolio");
   try {
-    const { portfolio_item_service_type } = req.body;
+    const portfolio_item_service_type = req.query?.serviceType;
+    if (!portfolio_item_service_type) {
+      logger.warn("Missing portfolio_item_service_type in query parameters");
+      return next(new AppError("portfolio_item_service_type is required in query parameters", 400));
+    }
     const user = req.user;
     const FreelancerId = user.roleWiseId;
     logger.debug(`Freelancer ID: ${FreelancerId}, Service Type: ${portfolio_item_service_type}`);
@@ -378,8 +360,15 @@ const deleteFreelancerProtfolioItem = async (req, res, next) => {
   let client = null;
 
   try {
-    const { itemId } = req.params;
+    const { itemId } = req.query;
     const user = req.user;
+
+    // Validate that itemId is provided
+    if (!itemId) {
+      logger.warn("Missing itemId in query parameters");
+      return next(new AppError("itemId is required in query parameters", 400));
+    }
+
     logger.debug(`Deleting portfolio item ID: ${itemId} for user ID: ${user.roleWiseId}`);
 
     // Start database transaction

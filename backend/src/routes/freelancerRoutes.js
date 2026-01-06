@@ -415,7 +415,7 @@ router.put('/portfolio/update-protfolio', requireRole(['freelancer']), updateFre
  *       404:
  *         description: Portfolio item not found
  */
-router.delete('/portfolio/delete-protfolios', requireRole(['freelancer']), deleteFreelancerPortfolio)
+router.delete('/portfolio/delete-portfolio', requireRole(['freelancer']), deleteFreelancerPortfolio)
 
 /**
  * @swagger
@@ -828,6 +828,6 @@ router.get('/earnings',requireRole(['freelancer']), getEarningsSummary);
 
 router.get('/profile-progress', requireRole(['freelancer']), getUserProfileProgress);
 
-router.delete("/portfolio/item/:itemId",requireRole(['freelancer']), deleteFreelancerProtfolioItem);
+router.delete("/portfolio/delete-portfolio-item",requireRole(['freelancer']), deleteFreelancerProtfolioItem);
 
 module.exports = router
