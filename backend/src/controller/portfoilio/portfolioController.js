@@ -156,6 +156,12 @@ const updateFreelancerPortfolio = async (req, res, next) => {
   let client = null;
 
   try {
+    // Ensure req.body exists (can be undefined with multipart/form-data if multer isn't configured correctly)
+    if (!req.body) {
+      logger.warn("Request body is undefined - check multer middleware configuration");
+      return next(new AppError("Request body is missing. Ensure the form data is sent correctly.", 400));
+    }
+
     const { itemId, serviceType, itemDescription, url } = req.body;
     const user = req.user;
 
@@ -165,13 +171,20 @@ const updateFreelancerPortfolio = async (req, res, next) => {
       return next(new AppError("itemId is required for updating portfolio", 400));
     }
 
+    // If URL is not provided, a file must be provided to update the image
+    if (!url && !req.file) {
+      logger.warn("Neither URL nor file provided");
+      return next(new AppError("Provide image to update the image", 400));
+    }
+
     // Start database transaction
     client = await query("BEGIN");
     logger.info("Transaction started");
 
     let oldObjectName = null;
     let existingUrl = null;
-    let shouldUpdateImage = !url; // Update image only if URL is not provided
+    // Update image only if URL is not provided AND a file is uploaded
+    const shouldUpdateImage = !url && !!req.file;
 
     // Fetch the existing data
     logger.info(`Fetching existing portfolio item: ${itemId}`);
@@ -190,21 +203,17 @@ const updateFreelancerPortfolio = async (req, res, next) => {
     oldObjectName = existingUrl.split("/").slice(3).join("/");
 
     if (shouldUpdateImage) {
-      logger.info("URL not provided, will update image");
-    } else {
+      logger.info("File provided and no URL, will update image");
+    } else if (url) {
       logger.info("URL provided, skipping image update");
+    } else {
+      logger.info("No file provided, only updating description");
     }
 
     let fileUrl = existingUrl; // Default to existing URL
 
     // Only process file upload if image should be updated
     if (shouldUpdateImage) {
-      if (!req.file) {
-        await query("ROLLBACK");
-        logger.warn("Missing file");
-        return next(new AppError("Please provide a file to upload", 400));
-      }
-
       // Upload new file to MinIO
       const fileName = `${req.file.originalname}`;
       const folder = `freelancer/portfolio/${user.user_id}`;
@@ -236,7 +245,7 @@ const updateFreelancerPortfolio = async (req, res, next) => {
       );
       logger.info("Portfolio item URL and description updated in database");
     } else {
-      // Only update description and timestamp if URL is the same
+      // Only update description and timestamp if no new image
       await query(
         `UPDATE portfolio
          SET portfolio_item_description = $1, portfolio_item_updated_at = $2

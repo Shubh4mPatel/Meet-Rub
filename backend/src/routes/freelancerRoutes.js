@@ -385,7 +385,7 @@ router.post('/portfolio/add-protfolio', requireRole(['freelancer']), upload.arra
  *       404:
  *         description: Portfolio item not found
  */
-router.put('/portfolio/update-protfolio', requireRole(['freelancer']), updateFreelancerPortfolio)
+router.put('/portfolio/update-protfolio', requireRole(['freelancer']),upload.single('file'), updateFreelancerPortfolio)
 
 /**
  * @swagger
