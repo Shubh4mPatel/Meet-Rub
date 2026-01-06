@@ -75,10 +75,8 @@ const addFreelancerPortfolio = async (req, res, next) => {
       return next(new AppError("No files uploaded", 400));
     }
 
-
     for (const file of req.files) {
       logger.info(`Uploading file: ${file.originalname}`);
-      // const fileExt = path.extname(file.originalname);
       const fileName = `${file.originalname}`;
       const folder = `freelancer/portfolio/${user.user_id}`;
       const objectName = `${folder}/${fileName}`;
@@ -121,14 +119,29 @@ RETURNING *`,
       portfolioRecords.push(rows[0]);
     }
 
+    // Generate presigned URLs for the response
+    const portfoliosWithPresignedUrls = await Promise.all(
+      portfolioRecords.map(async (record) => {
+        const objectName = record.portfolio_item_url.split("/").slice(1).join("/");
+        const presignedUrl = await createPresignedUrl(
+          BUCKET_NAME,
+          objectName,
+          expirySeconds
+        );
+        // Return record with presigned URL, excluding the db URL
+        const { portfolio_item_url, ...rest } = record;
+        return { ...rest, portfolio_item_url: presignedUrl };
+      })
+    );
+
     logger.info("Portfolio saved successfully");
 
     res.status(201).json({
       status: "success",
-      message: `Portfolio  uploaded successfully`,
+      message: `Portfolio uploaded successfully`,
       data: {
-        uploadedCount: portfolioRecords.length,
-        portfolios: portfolioRecords,
+        uploadedCount: portfoliosWithPresignedUrls.length,
+        portfolios: portfoliosWithPresignedUrls,
       },
     });
   } catch (error) {
