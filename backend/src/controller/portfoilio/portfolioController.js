@@ -125,7 +125,7 @@ RETURNING *`,
 
     res.status(201).json({
       status: "success",
-      message: `Portfolio ${type}s uploaded successfully`,
+      message: `Portfolio  uploaded successfully`,
       data: {
         uploadedCount: portfolioRecords.length,
         portfolios: portfolioRecords,
@@ -143,7 +143,7 @@ const updateFreelancerPortfolio = async (req, res, next) => {
   let client = null;
 
   try {
-    const { itemId, type, serviceType, itemDescription, url } = req.body;
+    const { itemId, serviceType, itemDescription, url } = req.body;
     const user = req.user;
 
     // Validate that itemId is provided
