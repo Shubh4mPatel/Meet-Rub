@@ -31,7 +31,8 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
     const userPortFolioData = await userPortFolios.reduce(
       async (accPromise, curr) => {
         const acc = await accPromise;
-        const objectName = curr.portfolio_item_url.split("/").slice(3).join("/");
+        console.log("Current portfolio item URL:", curr.portfolio_item_url);
+        const objectName = curr.portfolio_item_url.split("/").slice(1).join("/");
         logger.debug("Generating presigned URL for:", objectName);
 
         const url = await createPresignedUrl(
@@ -60,7 +61,7 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
   }
 };
 
-const addFreelancerPortfolio = async (req, res, next) => {
+const addFreelancerPortfolio = async (req, res, next) => { 
   logger.info("Adding freelancer portfolio");
   const uploadedFiles = [];
 
@@ -200,7 +201,7 @@ const updateFreelancerPortfolio = async (req, res, next) => {
     }
 
     existingUrl = rows[0].portfolio_item_url;
-    oldObjectName = existingUrl.split("/").slice(3).join("/");
+    oldObjectName = existingUrl.split("/").slice(1).join("/");
 
     if (shouldUpdateImage) {
       logger.info("File provided and no URL, will update image");
@@ -279,7 +280,7 @@ const updateFreelancerPortfolio = async (req, res, next) => {
     const portfolioData = await allPortfolios.reduce(
       async (accPromise, curr) => {
         const acc = await accPromise;
-        const objectName = curr.portfolio_item_url.split("/").slice(3).join("/");
+        const objectName = curr.portfolio_item_url.split("/").slice(1).join("/");
 
         const url = await createPresignedUrl(
           BUCKET_NAME,
@@ -347,7 +348,7 @@ const deleteFreelancerPortfolio = async (req, res, next) => {
     }
 
     const urls = portfolioItems.map(item => item.portfolio_item_url);
-    const objectNames = urls.map(url => url.split("/").slice(3).join("/"));
+    const objectNames = urls.map(url => url.split("/").slice(1).join("/"));
 
     logger.debug(`Deleting ${objectNames.length} portfolio items from MinIO...`);
 
@@ -409,7 +410,7 @@ const deleteFreelancerProtfolioItem = async (req, res, next) => {
       return next(new AppError("Portfolio item not found", 404));
     }
 
-    const objectName = rows[0].portfolio_item_url.split("/").slice(3).join("/");
+    const objectName = rows[0].portfolio_item_url.split("/").slice(1).join("/");
     logger.debug(`Object to delete from MinIO: ${objectName}`);
 
     // Delete the object from MinIO
