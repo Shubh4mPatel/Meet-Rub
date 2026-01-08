@@ -58,8 +58,8 @@ const uploadBeforeAfter = async (req, res, next) => {
       });
       const publicUrl = await createPresignedUrl(
         BUCKET_NAME,
-        expirySeconds,
-        objectName
+        objectName,
+        expirySeconds
       );
       logger.info(`${type} file uploaded to MinIO: ${objectName}`);
 
