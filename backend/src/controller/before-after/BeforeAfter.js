@@ -141,7 +141,7 @@ const getBeforeAfter = async (req, res, next) => {
     const totalPages = Math.ceil(totalRecords / limit);
 
     const { rows: records } = await query(
-      `SELECT * FROM impact WHERE freelancer_id=$1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3`,
+      `SELECT * FROM impact WHERE freelancer_id=$1 ORDER BY service_type, updated_at DESC LIMIT $2 OFFSET $3`,
       [freelancerId, limit, offset]
     );
 
@@ -181,11 +181,20 @@ const getBeforeAfter = async (req, res, next) => {
       })
     );
 
+    // Group by service_type
+    const groupedByServiceType = enrichedRecords.reduce((acc, record) => {
+      const serviceType = record.service_type;
+      if (!acc[serviceType]) {
+        acc[serviceType] = [];
+      }
+      acc[serviceType].push(record);
+      return acc;
+    }, {});
 
     return res.status(200).json({
       status: "success",
       message: records.length ? "Impact data fetched" : "No before/after data",
-      data: enrichedRecords,
+      data: groupedByServiceType,
       pagination: {
         total: totalRecords,
         totalPages,
