@@ -125,6 +125,7 @@ const uploadBeforeAfter = async (req, res, next) => {
 const getBeforeAfter = async (req, res, next) => {
   logger.info("Get before/after started");
   try {
+    const serviceType = req.query.serviceType;
     const user = req.user
     const freelancerId = user?.roleWiseId;
 
@@ -132,79 +133,132 @@ const getBeforeAfter = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const offset = (page - 1) * limit;
 
-    const { rows: countResult } = await query(
-      `SELECT COUNT(*) AS total FROM impact WHERE freelancer_id=$1`,
-      [freelancerId]
-    );
+    let records, totalRecords, totalPages, enrichedRecords, groupedByServiceType;
 
-    const totalRecords = Number(countResult[0].total);
-    const totalPages = Math.ceil(totalRecords / limit);
+    if (!serviceType) {
+      // Case 1: No serviceType provided - Show 5 most recent per service type
+      const { rows: allRecords } = await query(
+        `SELECT * FROM (
+          SELECT *, 
+                 ROW_NUMBER() OVER (PARTITION BY service_type ORDER BY updated_at DESC) as rn
+          FROM impact 
+          WHERE freelancer_id=$1
+        ) ranked
+        WHERE rn <= 5
+        ORDER BY service_type, updated_at DESC`,
+        [freelancerId]
+      );
 
-    const { rows: records } = await query(
-      `SELECT * FROM impact WHERE freelancer_id=$1 ORDER BY service_type, updated_at DESC LIMIT $2 OFFSET $3`,
-      [freelancerId, limit, offset]
-    );
+      enrichedRecords = await Promise.all(
+        allRecords.map(async (record) => {
+          const [beforeUrl, afterUrl] = await Promise.allSettled([
+            createPresignedUrl(
+              BUCKET_NAME,
+              record.before_service_url.split("/").slice(1).join("/"),
+              expirySeconds
+            ),
+            createPresignedUrl(
+              BUCKET_NAME,
+              record.after_service_url.split("/").slice(1).join("/"),
+              expirySeconds
+            )
+          ]);
 
-    logger.debug(`Total impact found: ${totalRecords}`);
+          return {
+            impact_id: record.id,
+            freelancer_id: record.freelancer_id,
+            service_type: record.service_type,
+            before_service_public_url:
+              beforeUrl.status === "fulfilled" ? beforeUrl.value : null,
+            after_service_public_url:
+              afterUrl.status === "fulfilled" ? afterUrl.value : null,
+            impact_metric: record.impact_metric,
+            created_at: record.created_at,
+            updated_at: record.updated_at,
+          };
+        })
+      );
 
-    const enrichedRecords = await Promise.all(
-      records.map(async (record) => {
+      // Re-group enriched records
+      groupedByServiceType = enrichedRecords.reduce((acc, record) => {
+        if (!acc[record.service_type]) {
+          acc[record.service_type] = [];
+        }
+        acc[record.service_type].push(record);
+        return acc;
+      }, {});
 
-        const [beforeUrl, afterUrl] = await Promise.allSettled([
-          createPresignedUrl(
-            BUCKET_NAME,
-            record.before_service_url.split("/").slice(1).join("/"),
-            expirySeconds
-          ),
-          createPresignedUrl(
-            BUCKET_NAME,
-            record.after_service_url.split("/").slice(1).join("/"),
-            expirySeconds
-          )
-        ]);
+      logger.debug(`Impact found for multiple service types`);
 
-        return {
-          impact_id: record.id,
-          freelancer_id: record.freelancer_id,
-          service_type: record.service_type,
+      return res.status(200).json({
+        status: "success",
+        message: enrichedRecords.length ? "Impact data fetched" : "No before/after data",
+        data: groupedByServiceType,
+      });
 
-          before_service_public_url:
-            beforeUrl.status === "fulfilled" ? beforeUrl.value : null,
+    } else {
+      // Case 2: serviceType provided - Use pagination for specific service type
+      const { rows: countResult } = await query(
+        `SELECT COUNT(*) AS total FROM impact WHERE freelancer_id=$1 AND service_type=$2`,
+        [freelancerId, serviceType]
+      );
 
-          after_service_public_url:
-            afterUrl.status === "fulfilled" ? afterUrl.value : null,
+      totalRecords = Number(countResult[0].total);
+      totalPages = Math.ceil(totalRecords / limit);
 
-          impact_metric: record.impact_metric,
-          created_at: record.created_at,
-          updated_at: record.updated_at,
-        };
-      })
-    );
+      const { rows: records } = await query(
+        `SELECT * FROM impact WHERE freelancer_id=$1 AND service_type=$2 
+         ORDER BY updated_at DESC LIMIT $3 OFFSET $4`,
+        [freelancerId, serviceType, limit, offset]
+      );
 
-    // Group by service_type
-    const groupedByServiceType = enrichedRecords.reduce((acc, record) => {
-      const serviceType = record.service_type;
-      if (!acc[serviceType]) {
-        acc[serviceType] = [];
-      }
-      acc[serviceType].push(record);
-      return acc;
-    }, {});
+      logger.debug(`Total impact found for ${serviceType}: ${totalRecords}`);
 
-    return res.status(200).json({
-      status: "success",
-      message: records.length ? "Impact data fetched" : "No before/after data",
-      data: groupedByServiceType,
-      pagination: {
-        total: totalRecords,
-        totalPages,
-        currentPage: page,
-        limit,
-        offset,
-        hasNext: page < totalPages,
-        hasPrevious: page > 1,
-      },
-    });
+      enrichedRecords = await Promise.all(
+        records.map(async (record) => {
+          const [beforeUrl, afterUrl] = await Promise.allSettled([
+            createPresignedUrl(
+              BUCKET_NAME,
+              record.before_service_url.split("/").slice(1).join("/"),
+              expirySeconds
+            ),
+            createPresignedUrl(
+              BUCKET_NAME,
+              record.after_service_url.split("/").slice(1).join("/"),
+              expirySeconds
+            )
+          ]);
+
+          return {
+            impact_id: record.id,
+            freelancer_id: record.freelancer_id,
+            service_type: record.service_type,
+            before_service_public_url:
+              beforeUrl.status === "fulfilled" ? beforeUrl.value : null,
+            after_service_public_url:
+              afterUrl.status === "fulfilled" ? afterUrl.value : null,
+            impact_metric: record.impact_metric,
+            created_at: record.created_at,
+            updated_at: record.updated_at,
+          };
+        })
+      );
+
+      return res.status(200).json({
+        status: "success",
+        message: enrichedRecords.length ? "Impact data fetched" : "No before/after data",
+        data: enrichedRecords,
+        pagination: {
+          total: totalRecords,
+          totalPages,
+          currentPage: page,
+          limit,
+          offset,
+          hasNext: page < totalPages,
+          hasPrevious: page > 1,
+        },
+      });
+    }
 
   } catch (error) {
     logger.error("Error fetching before/after:", error);
@@ -217,7 +271,7 @@ const deleteBeforeAfter = async (req, res, next) => {
   logger.info("Deleting before/after item");
   let client;
   try {
-    const { id } = req.body;
+    const { id } = req.query;
     const user = req.user
 
     if (!id) {
