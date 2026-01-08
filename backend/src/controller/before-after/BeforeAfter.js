@@ -284,7 +284,7 @@ const deleteBeforeAfter = async (req, res, next) => {
 
     const { rows } = await client.query(
       `SELECT before_service_url, after_service_url FROM impact 
-       WHERE id=$1 AND freelancer_id=$2`,
+       WHERE impact_id=$1 AND freelancer_id=$2`,
       [id, user.roleWiseId]
     );
 
