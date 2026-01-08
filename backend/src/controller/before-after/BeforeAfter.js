@@ -1,9 +1,10 @@
 const { query, pool } = require("../../../config/dbConfig");
 const { minioClient } = require("../../../config/minio");
 const AppError = require("../../../utils/appError");
-const {logger} = require("../../../utils/logger");
+const { logger } = require("../../../utils/logger");
 const path = require("path");
 const crypto = require("crypto");
+const { createPresignedUrl } = require("../../../utils/helper");
 
 const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60;
@@ -22,7 +23,7 @@ const uploadBeforeAfter = async (req, res, next) => {
 
     logger.debug("Request payload", req.body);
 
-    if (!serviceType ) {
+    if (!serviceType) {
       logger.warn("Missing required fields serviceType ");
       return next(new AppError("Service and details are required", 400));
     }
@@ -55,8 +56,14 @@ const uploadBeforeAfter = async (req, res, next) => {
       await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, {
         "Content-Type": file.mimetype,
       });
+      const publicUrl = createPresignedUrl(
+        BUCKET_NAME,
+        expirySeconds,
+        objectName
+      );
+      logger.info(`${type} file uploaded to MinIO: ${objectName}`);
 
-      uploadedFiles.push({ type, objectName, fileUrl });
+      uploadedFiles.push({ type, objectName, fileUrl, publicUrl });
     }
 
     const { rows } = await client.query(
@@ -78,11 +85,21 @@ const uploadBeforeAfter = async (req, res, next) => {
     await client.query("COMMIT");
     logger.info("Impact saved — DB Transaction committed ✅");
 
+    const impactData = {
+      impact_id: rows[0].id,
+      freelancer_id: rows[0].freelancer_id,
+      service_type: rows[0].service_type,
+      before_service_public_url: uploadedFiles.find(f => f.type === "before").publicUrl,
+      after_service_public_url: uploadedFiles.find(f => f.type === "after").publicUrl,
+      impact_metric: rows[0].impact_metric,
+      created_at: rows[0].created_at,
+      updated_at: rows[0].updated_at,
+    };
+
     return res.status(201).json({
       status: "success",
       message: "Before/After uploaded successfully",
-      data: rows[0],
-      files: uploadedFiles,
+      data: impactData,
     });
 
   } catch (error) {
