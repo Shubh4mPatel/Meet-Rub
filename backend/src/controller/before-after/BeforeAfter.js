@@ -86,7 +86,7 @@ const uploadBeforeAfter = async (req, res, next) => {
     logger.info("Impact saved — DB Transaction committed ✅");
 
     const impactData = {
-      impact_id: rows[0].id,
+      impact_id: rows[0].impact_id,
       freelancer_id: rows[0].freelancer_id,
       service_type: rows[0].service_type,
       before_service_public_url: uploadedFiles.find(f => f.type === "before").publicUrl,
@@ -165,7 +165,7 @@ const getBeforeAfter = async (req, res, next) => {
           ]);
 
           return {
-            impact_id: record.id,
+            impact_id: record.impact_id,
             freelancer_id: record.freelancer_id,
             service_type: record.service_type,
             before_service_public_url:
@@ -230,7 +230,7 @@ const getBeforeAfter = async (req, res, next) => {
           ]);
 
           return {
-            impact_id: record.id,
+            impact_id: record.impact_id,
             freelancer_id: record.freelancer_id,
             service_type: record.service_type,
             before_service_public_url:
@@ -300,7 +300,7 @@ const deleteBeforeAfter = async (req, res, next) => {
       logger.debug(`Deleted file from MinIO: ${objName}`);
     }
 
-    await client.query(`DELETE FROM impact WHERE id=$1`, [id]);
+    await client.query(`DELETE FROM impact WHERE impact_id=$1`, [id]);
     await client.query("COMMIT");
 
     logger.info("Impact deleted successfully ✅");
