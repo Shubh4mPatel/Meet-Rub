@@ -147,10 +147,45 @@ const getBeforeAfter = async (req, res, next) => {
 
     logger.debug(`Total impact found: ${totalRecords}`);
 
+    const enrichedRecords = await Promise.all(
+      records.map(async (record) => {
+
+        const [beforeUrl, afterUrl] = await Promise.allSettled([
+          createPresignedUrl(
+            BUCKET_NAME,
+            record.before_service_url.split("/").slice(1).join("/"),
+            expirySeconds
+          ),
+          createPresignedUrl(
+            BUCKET_NAME,
+            record.after_service_url.split("/").slice(1).join("/"),
+            expirySeconds
+          )
+        ]);
+
+        return {
+          impact_id: record.id,
+          freelancer_id: record.freelancer_id,
+          service_type: record.service_type,
+
+          before_service_public_url:
+            beforeUrl.status === "fulfilled" ? beforeUrl.value : null,
+
+          after_service_public_url:
+            afterUrl.status === "fulfilled" ? afterUrl.value : null,
+
+          impact_metric: record.impact_metric,
+          created_at: record.created_at,
+          updated_at: record.updated_at,
+        };
+      })
+    );
+
+
     return res.status(200).json({
       status: "success",
       message: records.length ? "Impact data fetched" : "No before/after data",
-      data: records,
+      data: enrichedRecords,
       pagination: {
         total: totalRecords,
         totalPages,
