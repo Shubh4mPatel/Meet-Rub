@@ -56,7 +56,7 @@ const uploadBeforeAfter = async (req, res, next) => {
       await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, {
         "Content-Type": file.mimetype,
       });
-      const publicUrl = createPresignedUrl(
+      const publicUrl = await createPresignedUrl(
         BUCKET_NAME,
         expirySeconds,
         objectName
