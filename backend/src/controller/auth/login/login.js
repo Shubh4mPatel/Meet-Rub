@@ -56,6 +56,13 @@ const loginUser = async (req, res, next) => {
                 [user.id]
             );
             roleWiseId = result.rows[0]?.freelancer_id || null;
+        } 
+        if (user.user_role === 'creator') {
+            const result = await query(
+                "SELECT creator_id FROM creators WHERE user_id = $1",
+                [user.id]
+            );
+            roleWiseId = result.rows[0]?.creator_id || null;
         }
 
         logger.info(`User authenticated successfully: user_id=${user.id}`);
@@ -71,7 +78,6 @@ const loginUser = async (req, res, next) => {
             role: user.user_role,
             roleWiseId
         };
-
         return next();
 
     } catch (error) {

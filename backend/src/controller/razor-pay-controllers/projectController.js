@@ -1,5 +1,6 @@
 const {pool:db} = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
+const {logger} = require('../../../utils/logger');
 
 // Create a new project
 const createProject = async (req, res, next) => {
@@ -84,40 +85,42 @@ const getProject = async (req, res, next) => {
 // Get user's projects
 const getMyProjects = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.roleWiseId;
     const userType = req.user.role;
     const status = req.query.status;
-
+    logger.info('Get my projects called by user %s of type %s with status %s', userId, userType, status);
+    
     let query = `
       SELECT p.*,
         c.full_name as client_name,
         f.full_name as freelancer_name
       FROM projects p
       JOIN creators c ON p.creator_id = c.creator_id
-      JOIN freelancer f ON p.freelancer_id = f.id
+      JOIN freelancer f ON p.freelancer_id = f.freelancer_id
       WHERE
     `;
 
     const params = [];
+    let paramIndex = 1;
 
     if (userType === 'creator') {
-      query += 'p.creator_id = ?';
+      query += `p.creator_id = $${paramIndex++}`;
       params.push(userId);
     } else if (userType === 'freelancer') {
-      query += 'p.freelancer_id = ?';
+      query += `p.freelancer_id = $${paramIndex++}`;
       params.push(userId);
     } else {
       return next(new AppError('Invalid user type', 400));
     }
 
     if (status) {
-      query += ' AND p.status = ?';
+      query += ` AND p.status = $${paramIndex++}`;
       params.push(status);
     }
 
     query += ' ORDER BY p.created_at DESC';
-
-    const [projects] = await db.query(query, params);
+    logger.info('Executing query: %s with params: %o', query, params);
+    const { rows: projects } = await db.query(query, params);
 
     res.json({
       count: projects.length,
