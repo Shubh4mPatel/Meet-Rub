@@ -6,36 +6,38 @@ const {logger} = require('../../../utils/logger');
 const createProject = async (req, res, next) => {
   try {
     const clientId = req.user.id;
-    const { freelancer_id, service_id , number_of_units , amount , project_end_date } = req.body;
+    const { freelancer_id, service_id, number_of_units, amount, project_end_date } = req.body;
 
     if (!freelancer_id || !amount || !service_id || !number_of_units || !project_end_date) {
-      return next(new AppError('Freelancer ID, title, and amount are required', 400));
+      return next(new AppError('Freelancer ID, service ID, number of units, amount, and project end date are required', 400));
     }
 
     if (amount <= 0) {
       return next(new AppError('Invalid amount', 400));
     }
 
-    // Verify freelancer exists
-    const [freelancers] = await db.query(
-      'SELECT id FROM users WHERE id = ? AND user_role = "freelancer" AND approval_status = "approved"',
+    // Verify freelancer exists (PostgreSQL syntax)
+    const freelancerResult = await db.query(
+      `SELECT id FROM users 
+       WHERE id = $1 AND user_role = 'freelancer' AND approval_status = 'approved'`,
       [freelancer_id]
     );
 
-    if (freelancers.length === 0) {
+    if (freelancerResult.rows.length === 0) {
       return next(new AppError('Freelancer not found or inactive', 404));
     }
 
-    // Create project
-    const [result] = await db.query(
+    // Create project (PostgreSQL syntax with RETURNING)
+    const result = await db.query(
       `INSERT INTO projects (creator_id, freelancer_id, service_id, number_of_units, amount, end_date, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'CREATED')`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'CREATED')
+       RETURNING id`,
       [clientId, freelancer_id, service_id, number_of_units, amount, project_end_date]
     );
 
     res.status(201).json({
       message: 'Project created successfully',
-      project_id: result.insertId,
+      project_id: result.rows[0].id,
       amount
     });
 
@@ -43,7 +45,7 @@ const createProject = async (req, res, next) => {
     console.error('Create project error:', error);
     return next(new AppError('Failed to create project', 500));
   }
-}
+};
 
 // Get project details
 const getProject = async (req, res, next) => {
