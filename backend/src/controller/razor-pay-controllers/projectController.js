@@ -5,7 +5,7 @@ const {logger} = require('../../../utils/logger');
 // Create a new project
 const createProject = async (req, res, next) => {
   try {
-    const clientId = req.user.id;
+    const clientId = req.user.roleWiseId;
     const { freelancer_id, service_id, number_of_units, amount, project_end_date } = req.body;
 
     if (!freelancer_id || !amount || !service_id || !number_of_units || !project_end_date) {
