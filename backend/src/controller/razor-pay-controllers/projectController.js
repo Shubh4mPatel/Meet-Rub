@@ -21,7 +21,7 @@ const createProject = async (req, res, next) => {
       `SELECT f.freelancer_id 
       FROM freelancer f
       INNER JOIN users u ON f.user_id = u.id
-      WHERE f.user_id = $1 
+      WHERE f.freelancer_id = $1 
         AND u.user_role = 'freelancer' 
         AND u.approval_status = 'approved'`,
       [freelancer_id]
