@@ -18,7 +18,7 @@ const createProject = async (req, res, next) => {
 
     // Verify freelancer exists
     const [freelancers] = await db.query(
-      'SELECT id FROM users WHERE id = ? AND user_type = "freelancer" AND status = "ACTIVE"',
+      'SELECT id FROM users WHERE id = ? AND user_role = "freelancer" AND approval_status = "approved"',
       [freelancer_id]
     );
 
