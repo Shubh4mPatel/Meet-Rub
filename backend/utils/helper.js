@@ -66,6 +66,7 @@ async function createPresignedUrl(bucketName, objectName, expirySeconds) {
         resolve(url);
       });
     });
+    console.log("Presigned URL generated from fun:", presignedUrl);
     return presignedUrl; ;
   } catch (err) {
     throw err;

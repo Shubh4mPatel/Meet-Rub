@@ -70,7 +70,7 @@ const getUserProfile = async (req, res, next) => {
           objectName,
           expirySeconds
         );
-
+        logger.info("Presigned URL generated successfully", signedUrl);
         return res.status(200).json({
           status: "success",
           data: { userProfileImage: signedUrl },
