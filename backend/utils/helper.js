@@ -67,7 +67,13 @@ async function createPresignedUrl(bucketName, objectName, expirySeconds) {
       });
     });
     console.log("Presigned URL generated from fun:", presignedUrl);
-    return presignedUrl; ;
+    
+    // Replace MinIO server URL with staging domain
+    const parsedUrl = new URL(presignedUrl);
+    const pathAndQuery = parsedUrl.pathname + parsedUrl.search;
+    const modifiedUrl = `https://staging.meetrub.com${pathAndQuery}`;
+    
+    return modifiedUrl;
   } catch (err) {
     throw err;
   }
