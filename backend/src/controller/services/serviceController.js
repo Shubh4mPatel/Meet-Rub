@@ -250,7 +250,7 @@ const createSreviceRequest = async (req, res, next) => {
     }
 
     const { rows } = await query(
-      `INSERT INTO service_requests (creator_id, service, details, budget, created_at, updated_at, status)
+      `INSERT INTO service_requests (creator_id, desired_service, details, budget, created_at, updated_at, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [creator_id, service, details, budget, new Date(), new Date(), "active"]
@@ -377,10 +377,40 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
 const getUserServiceRequestsToAdmin = async (req, res, next) => {
   logger.info("Admin fetching all user service requests");
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const searchTerm = req.query.search?.trim() || '';
+    const sortBy = req.query.sortBy || 'created_at';
+    const sortOrder = req.query.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    const allowedSortFields = ['created_at', 'creator_name'];
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
+    const orderByClause = sortField === 'creator_name' ? `c.full_name ${sortOrder}` : `sr.${sortField} ${sortOrder}`;
+
+    const searchCondition = searchTerm ? `AND c.full_name ILIKE $3` : '';
+    const countParams = searchTerm ? [`%${searchTerm}%`] : [];
+
+    const countResult = await query(
+      `SELECT COUNT(*) FROM service_requests sr
+       LEFT JOIN creators c ON sr.creator_id = c.id
+       WHERE sr.status NOT IN ('assigned','completed') ${searchCondition}`,
+      countParams
+    );
+    const totalCount = parseInt(countResult.rows[0].count);
+
+    const queryParams = searchTerm ? [limit, offset, `%${searchTerm}%`] : [limit, offset];
+
     const { rows: serviceRequests } = await query(
-      `SELECT * FROM service_requests
-       WHERE status NOT IN ('assigned','completed')
-       ORDER BY created_at DESC`
+      `SELECT
+         sr.*,
+         c.full_name AS creator_name
+       FROM service_requests sr
+       LEFT JOIN creators c ON sr.creator_id = c.id
+       WHERE sr.status NOT IN ('assigned','completed') ${searchCondition}
+       ORDER BY ${orderByClause}
+       LIMIT $1 OFFSET $2`,
+      queryParams
     );
 
     logger.debug(`Total service requests found: ${serviceRequests.length}`);
@@ -391,29 +421,26 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
         status: "success",
         message: "No service requests found",
         data: [],
+        pagination: {
+          currentPage: page,
+          totalPages: 0,
+          totalCount: 0,
+          limit
+        }
       });
     }
 
-    const { rows: creators } = await query(
-      `SELECT id, full_name FROM creators
-       WHERE id = ANY($1::int[])`,
-      [serviceRequests.map((sr) => sr.creator_id)]
-    );
-
-    // Create a Map for O(1) lookup - O(m) time complexity
-    const creatorMap = new Map(creators.map(c => [c.id, c.full_name]));
-
-    // Enrich service requests with creator names - O(n) time complexity
-    const enrichedRequests = serviceRequests.map((req) => ({
-      ...req,
-      creator_name: creatorMap.get(req.creator_id) || 'Unknown'
-    }));
-
-    logger.info("Service requests fetched and enriched successfully");
+    logger.info("Service requests fetched successfully");
     return res.status(200).json({
       status: "success",
       message: "Service requests fetched successfully",
-      data: enrichedRequests,
+      data: serviceRequests,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        limit
+      }
     });
   } catch (error) {
     logger.error("Failed to fetch all service requests:", error);

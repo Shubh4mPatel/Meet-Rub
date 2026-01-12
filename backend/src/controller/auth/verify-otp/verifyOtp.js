@@ -65,24 +65,37 @@ const verifyOtpAndProcess = async (req, res, next) => {
     let validationError;
 
     if (type === "password-reset") {
-      const { error } = passwordResetSchema.validate(req.body, { abortEarly: false });
+      const { error } = passwordResetSchema.validate(req.body, {
+        abortEarly: false,
+      });
       validationError = error;
     } else if (type === "email-verification") {
       if (role === "freelancer") {
-        const { error } = freelancerSchema.validate(req.body, { abortEarly: false });
+        const { error } = freelancerSchema.validate(req.body, {
+          abortEarly: false,
+        });
         validationError = error;
       } else if (role === "creator") {
-        const { error } = creatorSchema.validate(req.body, { abortEarly: false });
+        const { error } = creatorSchema.validate(req.body, {
+          abortEarly: false,
+        });
         validationError = error;
       } else {
-        return next(new AppError("Role is required for email verification", 400));
+        return next(
+          new AppError("Role is required for email verification", 400)
+        );
       }
     } else {
       return next(new AppError("Invalid type", 400));
     }
 
     if (validationError) {
-      return next(new AppError(validationError.details.map((d) => d.message).join(", "), 400));
+      return next(
+        new AppError(
+          validationError.details.map((d) => d.message).join(", "),
+          400
+        )
+      );
     }
 
     const decryptedPassword = encryptedPassword;
@@ -156,7 +169,13 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
           const { rows: newUserResMeetRub } = await client.query(
             "INSERT INTO users (user_email, user_role, user_password, user_name, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-            [email.toLowerCase(), role, hashedPassword, userName, currentTimestamp]
+            [
+              email.toLowerCase(),
+              role,
+              hashedPassword,
+              userName,
+              currentTimestamp,
+            ]
           );
 
           await client.query(
@@ -200,7 +219,12 @@ const verifyOtpAndProcess = async (req, res, next) => {
           for (const service of parsedServiceOffered) {
             await client.query(
               "INSERT INTO services (freelancer_id, service_name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
-              [freelancer[0].freelancer_id, service, currentTimestamp, currentTimestamp]
+              [
+                freelancer[0].freelancer_id,
+                service,
+                currentTimestamp,
+                currentTimestamp,
+              ]
             );
           }
 
@@ -234,7 +258,13 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
           const { rows: newUserResMeetRub } = await client.query(
             "INSERT INTO users (user_email, user_role, user_password, user_name, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-            [email.toLowerCase(), role, hashedPassword, userName, currentTimestamp]
+            [
+              email.toLowerCase(),
+              role,
+              hashedPassword,
+              userName,
+              currentTimestamp,
+            ]
           );
 
           await client.query(
