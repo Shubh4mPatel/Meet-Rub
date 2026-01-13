@@ -1532,7 +1532,7 @@ const getUserProfileProgress = async (req, res, next) => {
       freelancerProgressWeights.Services = 20;
     }
     const { rows: freelancerPortfolio } = await query(
-      "SELECT portfolio_id FROM portfolio WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1)",
+      "SELECT portfolio_item_id FROM portfolio WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1)",
       [user.user_id]
     );
     if (freelancerPortfolio.length > 0) {
