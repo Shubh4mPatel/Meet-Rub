@@ -1538,6 +1538,20 @@ const getUserProfileProgress = async (req, res, next) => {
     if (freelancerPortfolio.length > 0) {
       freelancerProgressWeights.Portfolio = 20;
     }
+    const totalProgress = Object.values(freelancerProgressWeights).reduce(
+      (acc, curr) => acc + curr,
+      0
+    );
+    logger.info(
+      `User profile completion progress calculated: ${totalProgress}%`
+    );
+    return res.status(200).json({
+      status: "success",
+      data: {
+        profileCompletionPercentage: totalProgress,
+        freelancerProgressWeights : freelancerProgressWeights,
+      },
+    });
   } catch (error) {
     logger.error("Error calculating profile progress:", error);
     return next(new AppError("Failed to calculate profile progress", 500));
