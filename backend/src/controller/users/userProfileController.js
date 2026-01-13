@@ -1510,7 +1510,7 @@ const getUserProfileProgress = async (req, res, next) => {
         freelancer.profile_image_url &&
         freelancer.freelancer_thumbnail_image
       ) {
-        freelancerProgressWeights.ProfileInfo += 40;
+        freelancerProgressWeights.ProfileInfo += 20;
       }
       if (freelancer.gov_id_url) {
         freelancerProgressWeights.GovtID += 20;
