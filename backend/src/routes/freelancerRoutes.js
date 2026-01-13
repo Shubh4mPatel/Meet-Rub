@@ -2,7 +2,7 @@ const express = require('express');
 const upload = require('../../config/multer');
 const {getMyPayouts,getEarningsSummary } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
-const  { requireRole } =  require('../middleware/authMiddleware');
+const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
 const { getUserProfileProgress } = require('../controller/users/userProfileController');
@@ -45,7 +45,7 @@ const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/port
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.post('/portfolio/upload-after-before',requireRole(['freelancer']), upload.fields([
+router.post('/portfolio/upload-after-before',authenticateUser, requireRole(['freelancer']), upload.fields([
     {
         name: 'before',
         maxCount: 1
@@ -86,7 +86,7 @@ router.post('/portfolio/upload-after-before',requireRole(['freelancer']), upload
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.get('/portfolio/get-after-before',  getBeforeAfter)
+router.get('/portfolio/get-after-before',authenticateUser,  getBeforeAfter)
 
 /**
  * @swagger
@@ -116,7 +116,7 @@ router.get('/portfolio/get-after-before',  getBeforeAfter)
  *       404:
  *         description: Images not found
  */
-router.delete('/portfolio/delete-after-before',requireRole(['freelancer']), deleteBeforeAfter)
+router.delete('/portfolio/delete-after-before',authenticateUser, requireRole(['freelancer']), deleteBeforeAfter)
 
 /**
  * @swagger
@@ -155,7 +155,7 @@ router.delete('/portfolio/delete-after-before',requireRole(['freelancer']), dele
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.post('/add-service', requireRole(['freelancer']), addServicesByFreelancer)
+router.post('/add-service',authenticateUser, requireRole(['freelancer']), addServicesByFreelancer)
 
 /**
  * @swagger
@@ -189,7 +189,7 @@ router.post('/add-service', requireRole(['freelancer']), addServicesByFreelancer
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.get('/get-services', requireRole(['freelancer']), getServicesByFreelaner)
+router.get('/get-services',authenticateUser, requireRole(['freelancer']), getServicesByFreelaner)
 
 /**
  * @swagger
@@ -219,7 +219,7 @@ router.get('/get-services', requireRole(['freelancer']), getServicesByFreelaner)
  *       404:
  *         description: Service not found
  */
-router.delete('/delete-services', requireRole(['freelancer']), deleteServiceByFreelancer)
+router.delete('/delete-services',authenticateUser, requireRole(['freelancer']), deleteServiceByFreelancer)
 
 /**
  * @swagger
@@ -260,7 +260,7 @@ router.delete('/delete-services', requireRole(['freelancer']), deleteServiceByFr
  *       404:
  *         description: Service not found
  */
-router.put('/update-service', requireRole(['freelancer']), updateServiceByFreelancer)
+router.put('/update-service',authenticateUser, requireRole(['freelancer']), updateServiceByFreelancer)
 
 /**
  * @swagger
@@ -296,7 +296,7 @@ router.put('/update-service', requireRole(['freelancer']), updateServiceByFreela
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.get('/portfolio/get-protfolio', requireRole(['freelancer']), getPortfolioByFreelancerId)
+router.get('/portfolio/get-protfolio',authenticateUser, requireRole(['freelancer']), getPortfolioByFreelancerId)
 
 /**
  * @swagger
@@ -343,7 +343,7 @@ router.get('/portfolio/get-protfolio', requireRole(['freelancer']), getPortfolio
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.post('/portfolio/add-protfolio', requireRole(['freelancer']), upload.array('files'), addFreelancerPortfolio)
+router.post('/portfolio/add-protfolio',authenticateUser, requireRole(['freelancer']), upload.array('files'), addFreelancerPortfolio)
 
 /**
  * @swagger
@@ -385,7 +385,7 @@ router.post('/portfolio/add-protfolio', requireRole(['freelancer']), upload.arra
  *       404:
  *         description: Portfolio item not found
  */
-router.put('/portfolio/update-protfolio', requireRole(['freelancer']),upload.single('file'), updateFreelancerPortfolio)
+router.put('/portfolio/update-protfolio', authenticateUser, requireRole(['freelancer']),upload.single('file'), updateFreelancerPortfolio)
 
 /**
  * @swagger
@@ -415,7 +415,7 @@ router.put('/portfolio/update-protfolio', requireRole(['freelancer']),upload.sin
  *       404:
  *         description: Portfolio item not found
  */
-router.delete('/portfolio/delete-portfolio', requireRole(['freelancer']), deleteFreelancerPortfolio)
+router.delete('/portfolio/delete-portfolio', authenticateUser, requireRole(['freelancer']), deleteFreelancerPortfolio)
 
 /**
  * @swagger
@@ -755,7 +755,7 @@ router.get('/freelancers/:id/impact', getFreelancerImpact);
  *       500:
  *         description: Internal server error
  */
-router.get('/payouts',requireRole(['freelancer']), getMyPayouts);
+router.get('/payouts',authenticateUser,requireRole(['freelancer']), getMyPayouts);
 
 /**
  * @swagger
@@ -823,11 +823,11 @@ router.get('/payouts',requireRole(['freelancer']), getMyPayouts);
  *       500:
  *         description: Internal server error
  */
-router.get('/earnings',requireRole(['freelancer']), getEarningsSummary);
+router.get('/earnings',authenticateUser,requireRole(['freelancer']), getEarningsSummary);
 
 
-router.get('/profile-progress', requireRole(['freelancer']), getUserProfileProgress);
+router.get('/profile-progress', authenticateUser, requireRole(['freelancer']), getUserProfileProgress);
 
-router.delete("/portfolio/delete-portfolio-item",requireRole(['freelancer']), deleteFreelancerProtfolioItem);
+router.delete("/portfolio/delete-portfolio-item",authenticateUser, requireRole(['freelancer']), deleteFreelancerProtfolioItem);
 
 module.exports = router
