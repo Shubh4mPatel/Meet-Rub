@@ -958,7 +958,7 @@ const getAllFreelancers = async (req, res, next) => {
         MIN(s.service_price) as lowest_price
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
-      WHERE 1=1
+      WHERE 1=1 and f.verified_status = 'VERIFIED' and is_active = true
     `;
 
     const queryParams = [];
