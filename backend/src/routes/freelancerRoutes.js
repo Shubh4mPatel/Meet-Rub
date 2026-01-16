@@ -3,7 +3,7 @@ const upload = require('../../config/multer');
 const {getMyPayouts,getEarningsSummary } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
-const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist } = require('../controller');
+const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWhitelist, getServices } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
 const { getUserProfileProgress } = require('../controller/users/userProfileController');
 const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/portfolioController");
@@ -190,6 +190,8 @@ router.post('/add-service',authenticateUser, requireRole(['freelancer']), addSer
  *         description: Forbidden - Freelancer role required
  */
 router.get('/get-services',authenticateUser, requireRole(['freelancer']), getServicesByFreelaner)
+
+router.get('/get-available-services', authenticateUser, requireRole(['freelancer']), getServices);
 
 /**
  * @swagger

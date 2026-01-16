@@ -82,7 +82,6 @@ const addServicesByFreelancer = async (req, res, next) => {
   try {
     const { service, price, description, deliveryDuration } = req.body;
     const user = req.user;
-    console.log("User in addServicesByFreelancer:", user);
     logger.info("Freelancer user info:", user);
     const freelancer_id = user?.roleWiseId;
 
@@ -98,6 +97,16 @@ const addServicesByFreelancer = async (req, res, next) => {
       return next(new AppError("Service, price, description, and delivery duration are required", 400));
     }
 
+    const {rows : existingService} = await query(
+      `SELECT * FROM services WHERE freelancer_id=$1 AND service_name=$2`,
+      [freelancer_id, service]
+    );
+
+    if (existingService.length > 0) {
+      logger.warn("Service already exists for this freelancer");
+      return next(new AppError("You have already added this service", 400));
+    }
+    
     const { rows } = await query(
       `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at,delivery_time)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
