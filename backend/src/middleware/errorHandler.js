@@ -1,5 +1,5 @@
 
-const { logger } = require('../utils/logger');
+const { logger } = require("../../utils/logger");
 
 const globalErrorHandler = (err, req, res, next) => {
   // Set default values
