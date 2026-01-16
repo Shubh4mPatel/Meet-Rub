@@ -15,6 +15,7 @@ const { logger } = require("../utils/logger");
 const { manageLogFiles } = require("../cron/logmanager");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
+const globalErrorHandler = require("./middleware/errorHandler");
  
 // Load .env file only if not running in Docker (Docker Compose injects env vars directly)
 // if (!process.env.DOCKER_ENV) {
@@ -124,28 +125,7 @@ app.use((req, res, next) => {
 });
 
 // Global error handler
-app.use((err, req, res, next) => {
-  const { statusCode = 500, message = "Something went wrong!" } = err;
-
-  // Log error in production
-  if (process.env.NODE_ENV === "production") {
-    logger.error("Error:", {
-      message: err.message,
-      stack: err.stack,
-      url: req.originalUrl,
-      method: req.method,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  res.status(statusCode).json({
-    status: "error",
-    message:
-      process.env.NODE_ENV === "production" && statusCode === 500
-        ? "Internal server error"
-        : message,
-  });
-});
+app.use(globalErrorHandler)
 
 // Start server
 const PORT = process.env.PORT;
