@@ -1310,10 +1310,12 @@ ORDER BY portfolio_item_service_type`,
           portfolio.portfolio_items.map(async (item) => {
             try {
               if (item.portfolio_item_url) {
-                const parts = item.portfolio_item_url.split("/");
-                if (parts.length >= 4) {
-                  const bucketName = parts[2];
-                  const objectName = parts.slice(3).join("/");
+                const portfolioItemPath = item.portfolio_item_url;
+                const firstSlashIndex = portfolioItemPath.indexOf("/");
+                
+                if (firstSlashIndex !== -1) {
+                  const bucketName = portfolioItemPath.substring(0, firstSlashIndex);
+                  const objectName = portfolioItemPath.substring(firstSlashIndex + 1);
                   const signedUrl = await createPresignedUrl(
                     bucketName,
                     objectName,
@@ -1420,10 +1422,12 @@ ORDER BY service_type`,
 
               // Process before_service_url
               if (item.before_service_url) {
-                const beforeParts = item.before_service_url.split("/");
-                if (beforeParts.length >= 4) {
-                  const beforeBucketName = beforeParts[2];
-                  const beforeObjectName = beforeParts.slice(3).join("/");
+                const beforePath = item.before_service_url;
+                const beforeSlashIndex = beforePath.indexOf("/");
+                
+                if (beforeSlashIndex !== -1) {
+                  const beforeBucketName = beforePath.substring(0, beforeSlashIndex);
+                  const beforeObjectName = beforePath.substring(beforeSlashIndex + 1);
                   beforeSignedUrl = await createPresignedUrl(
                     beforeBucketName,
                     beforeObjectName,
@@ -1438,10 +1442,12 @@ ORDER BY service_type`,
 
               // Process after_service_url
               if (item.after_service_url) {
-                const afterParts = item.after_service_url.split("/");
-                if (afterParts.length >= 4) {
-                  const afterBucketName = afterParts[2];
-                  const afterObjectName = afterParts.slice(3).join("/");
+                const afterPath = item.after_service_url;
+                const afterSlashIndex = afterPath.indexOf("/");
+                
+                if (afterSlashIndex !== -1) {
+                  const afterBucketName = afterPath.substring(0, afterSlashIndex);
+                  const afterObjectName = afterPath.substring(afterSlashIndex + 1);
                   afterSignedUrl = await createPresignedUrl(
                     afterBucketName,
                     afterObjectName,
