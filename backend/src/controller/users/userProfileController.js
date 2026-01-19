@@ -1163,7 +1163,7 @@ const getFreelancerById = async (req, res, next) => {
       logger.warn(`Freelancer not found with ID: ${freelancerId}`);
       return next(new AppError("Freelancer not found", 404));
     }
-
+    logger.debug("Freelancer data fetched:", freelancerData[0]);
     // Generate presigned URL for profile image if it exists
     if (freelancerData[0].profile_image_url) {
       try {
@@ -1219,7 +1219,7 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerServices } = await query(
-      `SELECT id, services_name, service_description, service_price, delivery_time
+      `SELECT id, service_name, service_description, service_price, delivery_time
        FROM services WHERE freelancer_id = $1`,
       [freelancerId]
     );
