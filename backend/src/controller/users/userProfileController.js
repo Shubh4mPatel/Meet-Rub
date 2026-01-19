@@ -397,7 +397,7 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Creator profile updated successfully",
-            data: rows[0],
+            data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche },
           });
         } catch (error) {
           await query("ROLLBACK");
@@ -864,7 +864,7 @@ const editProfile = async (req, res, next) => {
           let updateQuery, updateParams;
           if (newThumbnailUrl) {
             updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, freelancer_thumbnail_image=$5 WHERE user_id=$6
-             RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
+             RETURNING freelancer_full_name,first_name,last_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
             updateParams = [
               freelancerFullName,
               dateOfBirth,
@@ -875,7 +875,7 @@ const editProfile = async (req, res, next) => {
             ];
           } else {
             updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4 WHERE user_id=$5
-             RETURNING freelancer_full_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
+             RETURNING freelancer_full_name, first_name, last_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image`;
             updateParams = [
               freelancerFullName,
               dateOfBirth,
@@ -893,13 +893,7 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Profile updated successfully",
-            data: rows[0].freelancer_thumbnail_image
-              ? {
-                ...rows[0],
-                freelancer_thumbnail_image:
-                  signedUrl || rows[0].freelancer_thumbnail_image,
-              }
-              : rows[0],
+            data: {first_name: rows[0].freelancer_full_name,last_name:rows[0].freelancer_last_name, email: rows[0].freelancer_email, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, freelancer_thumbnail_image: signedUrl || rows[0].freelancer_thumbnail_image }
           });
         } catch (error) {
           await query("ROLLBACK");
