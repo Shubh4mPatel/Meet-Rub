@@ -41,6 +41,7 @@ const getUserProfile = async (req, res, next) => {
 
         return res.status(200).json({
           status: "success",
+          message: "Creator basic info fetched successfully",
           data: {first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche, joined_at: rows[0].created_at },
         });
       }
@@ -73,6 +74,7 @@ const getUserProfile = async (req, res, next) => {
         logger.info("Presigned URL generated successfully", signedUrl);
         return res.status(200).json({
           status: "success",
+          message: "Profile image fetched successfully",
           data: { userProfileImage: signedUrl },
         });
       }
@@ -135,6 +137,7 @@ const getUserProfile = async (req, res, next) => {
 
         return res.status(200).json({
           status: "success",
+          message: "Freelancer basic info fetched successfully",
           data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, freelancer_thumbnail_image: rows[0].freelancer_thumbnail_image, email: rows[0].freelancer_email, joined_at: rows[0].created_at },
         });
       }
@@ -167,6 +170,7 @@ const getUserProfile = async (req, res, next) => {
 
         return res.status(200).json({
           status: "success",
+          message: "Profile image fetched successfully",
           data: { userProfileImage: signedUrl },
         });
       }
@@ -195,6 +199,7 @@ const getUserProfile = async (req, res, next) => {
 
         return res.status(200).json({
           status: "success",
+          message: "Govt ID fetched successfully",
           data: {
             userGovtIdUrl: signedUrl,
             userGovtIdType: rows[0]?.gov_id_type,
@@ -217,6 +222,7 @@ const getUserProfile = async (req, res, next) => {
 
         return res.status(200).json({
           status: "success",
+          message: "Bank details fetched successfully",
           data: { userBankDetails: rows[0] },
         });
       }
