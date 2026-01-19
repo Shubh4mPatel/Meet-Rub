@@ -60,7 +60,7 @@ const getProject = async (req, res, next) => {
     const [projects] = await db.query(
       `SELECT p.*,
         c.full_name as creator_name, c.email as creator_email,
-        f.full_name as freelancer_name, f.email as freelancer_email
+        f.freelancer_full_name as freelancer_name, f.email as freelancer_email
        FROM projects p
        JOIN creators c ON p.creator_id = c.creator_id
        JOIN freelancer f ON p.freelancer_id = f.freelancer_id
@@ -99,7 +99,7 @@ const getMyProjects = async (req, res, next) => {
     let query = `
       SELECT p.*,
         c.full_name as client_name,
-        f.full_name as freelancer_name
+        f.freelancer_full_name as freelancer_name
       FROM projects p
       JOIN creators c ON p.creator_id = c.creator_id
       JOIN freelancer f ON p.freelancer_id = f.freelancer_id
