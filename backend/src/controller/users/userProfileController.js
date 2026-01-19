@@ -282,7 +282,7 @@ const creatorBasicInfoSchema = Joi.object({
   phone_number: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .required(),
-  social_links: Joi.string().optional().allow(""),
+  social_links: Joi.object().optional().allow(null, ""),
   niche: Joi.array().items(Joi.string()).optional()
 });
 
