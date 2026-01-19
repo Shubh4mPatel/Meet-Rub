@@ -1,7 +1,7 @@
 const express = require('express');
 const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion, addFreelancerToWhitelist } = require('../controller');
 const router = express.Router();
-
+const  { requireRole } =  require('../middleware/authMiddleware');
 /**
  * @swagger
  * /creator/service-request:
