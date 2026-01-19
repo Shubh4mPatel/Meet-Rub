@@ -283,7 +283,7 @@ const creatorBasicInfoSchema = Joi.object({
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .required(),
   social_links: Joi.string().optional().allow(""),
-  niche: Joi.string().optional().allow(""),
+  niche: Joi.array().items(Joi.string()).optional()
 });
 
 // ✅ EDIT USER PROFILE
@@ -371,14 +371,14 @@ const editProfile = async (req, res, next) => {
           niche,
           email,
         } = req.body;
-
+        const nicheArray = Array.isArray(niche) ? niche : null;
         // Start transaction
         await query("BEGIN");
         try {
           const { rows } = await query(
             `UPDATE creators
              SET first_name=$1, last_name=$2, full_name=$3, phone_number=$4,
-             social_links=$5, niche=$6, email=$7, updated_at=CURRENT_TIMESTAMP
+             social_links=$5, niche=$6::text[] , email=$7, updated_at=CURRENT_TIMESTAMP
              WHERE user_id=$8
              RETURNING first_name,email, last_name, full_name, phone_number, social_links, niche, created_at`,
             [
@@ -387,7 +387,7 @@ const editProfile = async (req, res, next) => {
               full_name || `${first_name} ${last_name}`,
               phone_number,
               social_links || null,
-              niche || null,
+              nicheArray ,
               email,
               user.user_id,
             ]
