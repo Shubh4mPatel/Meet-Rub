@@ -13,8 +13,8 @@ const getServices = async (req, res, next) => {
     const service = req.query.service;
     const searchTerm = service ? service.trim() : '';
     const sql = searchTerm
-      ? 'SELECT service_type FROM available_services WHERE service_type ILIKE $1 ORDER BY service_type ASC Limit 10'
-      : 'SELECT service_type FROM available_services ORDER BY service_type ASC ';
+      ? 'SELECT service_name FROM service_options WHERE service_name ILIKE $1 ORDER BY service_name ASC Limit 10'
+      : 'SELECT service_name FROM service_options ORDER BY service_name ASC ';
     const params = searchTerm ? [`%${searchTerm}%`] : [];
 
     const { rows: services } = await query(
@@ -57,7 +57,7 @@ const addServices = async (req, res, next) => {
     const results = await Promise.all(
       serviceType.map((service) =>
         query(
-          `INSERT INTO available_services(service_type, created_by, created_at)
+          `INSERT INTO service_options(service_name, created_by, created_at)
            VALUES ($1,$2,$3) RETURNING *`,
           [service, admin, new Date()]
         )
