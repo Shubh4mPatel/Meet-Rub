@@ -30,7 +30,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Creator Basic Info");
         const { rows } = await query(
-          "SELECT full_name, first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche FROM creators WHERE user_id = $1",
+          "SELECT full_name, first_name, last_name, phone_number, email, social_platform_type, social_links, niche FROM creators WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -41,7 +41,7 @@ const getUserProfile = async (req, res, next) => {
 
         return res.status(200).json({
           status: "success",
-          data: { userBasicInfo: rows[0] },
+          data: {first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche },
         });
       }
       if (type === "profileImage") {
@@ -362,6 +362,7 @@ const editProfile = async (req, res, next) => {
           social_platform_type,
           social_links,
           niche,
+          email,
         } = req.body;
 
         // Start transaction
@@ -370,9 +371,9 @@ const editProfile = async (req, res, next) => {
           const { rows } = await query(
             `UPDATE creators
              SET first_name=$1, last_name=$2, full_name=$3, phone_number=$4,
-                 social_platform_type=$5, social_links=$6, niche=$7, updated_at=CURRENT_TIMESTAMP
-             WHERE user_id=$8
-             RETURNING first_name, last_name, full_name, phone_number, social_platform_type, social_links, niche`,
+                 social_platform_type=$5, social_links=$6, niche=$7, email=$8, updated_at=CURRENT_TIMESTAMP
+             WHERE user_id=$9
+             RETURNING first_name,email, last_name, full_name, phone_number, social_platform_type, social_links, niche`,
             [
               first_name,
               last_name,
@@ -381,6 +382,7 @@ const editProfile = async (req, res, next) => {
               social_platform_type,
               social_links || null,
               niche || null,
+              email,
               user.user_id,
             ]
           );
@@ -397,7 +399,7 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Creator profile updated successfully",
-            data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche },
+            data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche, email: rows[0].email },
           });
         } catch (error) {
           await query("ROLLBACK");
