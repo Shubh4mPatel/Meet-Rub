@@ -41,7 +41,7 @@ const router = express.Router();
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.post('/service-request', createSreviceRequest);
+router.post('/service-request', requireRole(['creator']), createSreviceRequest);
 
 /**
  * @swagger
@@ -91,7 +91,7 @@ router.post('/service-request', createSreviceRequest);
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.get('/service-requests', getUserServiceRequests);
+router.get('/service-requests',requireRole(['creator']), getUserServiceRequests);
 
 /**
  * @swagger
@@ -141,7 +141,7 @@ router.get('/service-requests', getUserServiceRequests);
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.get('/service-requests/:requestId/suggestions', getUserServiceRequestsSuggestion);
+router.get('/service-requests/:requestId/suggestions', requireRole(['creator']),getUserServiceRequestsSuggestion);
 
 /**
  * @swagger
@@ -178,7 +178,7 @@ router.get('/service-requests/:requestId/suggestions', getUserServiceRequestsSug
  *       500:
  *         description: Server error
  */
-router.post('/whitelist', addFreelancerToWhitelist);
+router.post('/whitelist',requireRole(['creator']), addFreelancerToWhitelist);
 
 
 module.exports = router;
