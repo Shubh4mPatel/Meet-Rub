@@ -93,7 +93,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Freelancer Basic Info");
         const { rows } = await query(
-          "SELECT freelancer_full_name , date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email,created_at FROM freelancer WHERE user_id = $1",
+          "SELECT freelancer_full_name, first_name, last_name, date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email,created_at FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -135,7 +135,7 @@ const getUserProfile = async (req, res, next) => {
 
         return res.status(200).json({
           status: "success",
-          data: { userBasicInfo: rows[0] },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, freelancer_thumbnail_image: rows[0].freelancer_thumbnail_image, email: rows[0].freelancer_email, created_at: rows[0].created_at },
         });
       }
 
