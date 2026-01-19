@@ -42,7 +42,7 @@ const getUserProfile = async (req, res, next) => {
         return res.status(200).json({
           status: "success",
           message: "Creator basic info fetched successfully",
-          data: {first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_links: rows[0].social_links, niche: rows[0].niche, joined_at: rows[0].created_at },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_links: rows[0].social_links, niche: rows[0].niche, joined_at: rows[0].created_at },
         });
       }
       if (type === "profileImage") {
@@ -258,8 +258,8 @@ const freelancerBankDetailsSchema = Joi.object({
 
 const freelancerBasicInfoSchema = Joi.object({
   type: Joi.string().valid("basicInfo").required(),
-  first_name : Joi.string().required(),
-  last_name : Joi.string().required(),
+  first_name: Joi.string().required(),
+  last_name: Joi.string().required(),
   email: Joi.string().email().required(),
   freelancerFullName: Joi.string().required(),
   dateOfBirth: Joi.string().required(),
@@ -282,7 +282,6 @@ const creatorBasicInfoSchema = Joi.object({
   phone_number: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .required(),
-  social_platform_type: Joi.string().valid("youtube", "instagram").required(),
   social_links: Joi.string().optional().allow(""),
   niche: Joi.string().optional().allow(""),
 });
@@ -368,7 +367,6 @@ const editProfile = async (req, res, next) => {
           last_name,
           full_name,
           phone_number,
-          social_platform_type,
           social_links,
           niche,
           email,
@@ -380,15 +378,14 @@ const editProfile = async (req, res, next) => {
           const { rows } = await query(
             `UPDATE creators
              SET first_name=$1, last_name=$2, full_name=$3, phone_number=$4,
-                 social_platform_type=$5, social_links=$6, niche=$7, email=$8, updated_at=CURRENT_TIMESTAMP
-             WHERE user_id=$9
-             RETURNING first_name,email, last_name, full_name, phone_number, social_platform_type, social_links, niche,created_at`,
+             social_links=$5, niche=$6, email=$7, updated_at=CURRENT_TIMESTAMP
+             WHERE user_id=$8
+             RETURNING first_name,email, last_name, full_name, phone_number, social_links, niche, created_at`,
             [
               first_name,
               last_name,
               full_name || `${first_name} ${last_name}`,
               phone_number,
-              social_platform_type,
               social_links || null,
               niche || null,
               email,
@@ -913,7 +910,7 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Profile updated successfully",
-            data: {full_name: rows[0].freelancer_full_name,first_name:rows[0].first_name,last_name:rows[0].last_name, email: rows[0].freelancer_email, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, freelancer_thumbnail_image: signedUrl || rows[0].freelancer_thumbnail_image, joined_at: rows[0].created_at}
+            data: { full_name: rows[0].freelancer_full_name, first_name: rows[0].first_name, last_name: rows[0].last_name, email: rows[0].freelancer_email, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, freelancer_thumbnail_image: signedUrl || rows[0].freelancer_thumbnail_image, joined_at: rows[0].created_at }
           });
         } catch (error) {
           await query("ROLLBACK");
@@ -1563,7 +1560,7 @@ const getUserProfileProgress = async (req, res, next) => {
       status: "success",
       data: {
         profileCompletionPercentage: totalProgress,
-        freelancerProgressWeights : freelancerProgressWeights,
+        freelancerProgressWeights: freelancerProgressWeights,
       },
     });
   } catch (error) {
