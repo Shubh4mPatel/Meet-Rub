@@ -42,7 +42,7 @@ const getUserProfile = async (req, res, next) => {
         return res.status(200).json({
           status: "success",
           message: "Creator basic info fetched successfully",
-          data: {first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche, joined_at: rows[0].created_at },
+          data: {first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_links: rows[0].social_links, niche: rows[0].niche, joined_at: rows[0].created_at },
         });
       }
       if (type === "profileImage") {
