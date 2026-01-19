@@ -1196,8 +1196,8 @@ const getFreelancerById = async (req, res, next) => {
         const thumbParts =
           freelancerData[0].freelancer_thumbnail_image.split("/");
         if (thumbParts.length >= 4) {
-          const thumbBucketName = thumbParts[2];
-          const thumbObjectName = thumbParts.slice(3).join("/");
+          const thumbBucketName = thumbParts[0];
+          const thumbObjectName = thumbParts.slice(1).join("/");
           const thumbSignedUrl = await createPresignedUrl(
             thumbBucketName,
             thumbObjectName,
