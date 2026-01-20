@@ -24,10 +24,11 @@ const refreshAccessToken = async (req, res, next) => {
     const user = await query(
       `SELECT 
   u.*,
-  COALESCE(f.freelancer_id, c.creator_id) AS roleWiseId
+  COALESCE(f.freelancer_id, c.creator_id, a.id) AS roleWiseId
 FROM users u
 LEFT JOIN freelancer f ON u.id = f.user_id AND u.user_role = 'freelancer'
 LEFT JOIN creators c ON u.id = c.user_id AND u.user_role = 'creator'
+LEFT JOIN admin a ON u.id = a.user_id AND u.user_role = 'admin'
 WHERE u.id = $1`,
       [decoded.user_id]
     );
