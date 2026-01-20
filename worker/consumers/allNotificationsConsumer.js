@@ -1,5 +1,7 @@
 // consumers/allNotificationsConsumer.js
-const { getChannel, QUEUES } = require('../config/rabbitmq');
+const { getChannel, QUEUES, onReconnect } = require('../config/rabbitmq');
+
+let consumerTag = null;
 
 /**
  * Analytics Message Handler
@@ -56,7 +58,7 @@ async function startAllNotificationsConsumer() {
     console.log(`📊 [ANALYTICS CONSUMER] Started and waiting for messages...`);
     console.log(`📊 [ANALYTICS CONSUMER] Consuming from queue: ${QUEUES.ALL_NOTIFICATIONS}\n`);
 
-    await channel.consume(
+    const { consumerTag: tag } = await channel.consume(
       QUEUES.ALL_NOTIFICATIONS,
       async (message) => {
         if (message !== null) {
@@ -66,6 +68,7 @@ async function startAllNotificationsConsumer() {
             
           } catch (error) {
             console.error(`❌ [ANALYTICS CONSUMER] Error processing message:`, error.message);
+            console.error('Stack:', error.stack);
             
             // For analytics, we don't requeue on failure
             // Just log the error and move on
@@ -77,13 +80,28 @@ async function startAllNotificationsConsumer() {
       { noAck: false }
     );
 
-    return { consumer: 'analytics', status: 'running' };
+    consumerTag = tag;
+    console.log(`📊 [ANALYTICS CONSUMER] Consumer tag: ${consumerTag}`);
+
+    return { consumer: 'analytics', status: 'running', consumerTag };
     
   } catch (error) {
-    console.error('❌ [ANALYTICS CONSUMER] Failed to start:', error);
-    throw error;
+    console.error('❌ [ANALYTICS CONSUMER] Failed to start:', error.message);
+    console.error('Stack:', error.stack);
+    
+    // Retry starting consumer after delay
+    console.log('🔄 [ANALYTICS CONSUMER] Retrying in 5 seconds...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    return startAllNotificationsConsumer();
   }
 }
+
+// Register reconnection handler
+onReconnect(async () => {
+  console.log('🔄 [ANALYTICS CONSUMER] Restarting consumer after reconnection...');
+  consumerTag = null;
+  await startAllNotificationsConsumer();
+});
 
 /**
  * Get consumer stats

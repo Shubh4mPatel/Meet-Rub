@@ -1,7 +1,9 @@
 // consumers/emailConsumer.js
-const { getChannel, QUEUES } = require('../config/rabbitmq');
+const { getChannel, QUEUES, onReconnect } = require('../config/rabbitmq');
 // const notificationService = require('../services/notificationService');
 const { sendMail } = require('../config/email');
+
+let consumerTag = null;
 
 /**
  * Email Message Handler
@@ -40,7 +42,7 @@ async function startEmailConsumer() {
     console.log(`📧 [EMAIL CONSUMER] Consuming from queue: ${QUEUES.EMAIL}\n`);
 
     // Start consuming messages
-    await channel.consume(
+    const { consumerTag: tag } = await channel.consume(
       QUEUES.EMAIL,
       async (message) => {
         if (message !== null) {
@@ -53,6 +55,7 @@ async function startEmailConsumer() {
             
           } catch (error) {
             console.error(`❌ [EMAIL CONSUMER] Error processing message:`, error.message);
+            console.error('Stack:', error.stack);
             
             // Check if message has been redelivered before
             if (message.fields.redelivered) {
@@ -72,13 +75,28 @@ async function startEmailConsumer() {
       }
     );
 
-    return { consumer: 'email', status: 'running' };
+    consumerTag = tag;
+    console.log(`📧 [EMAIL CONSUMER] Consumer tag: ${consumerTag}`);
+
+    return { consumer: 'email', status: 'running', consumerTag };
     
   } catch (error) {
-    console.error('❌ [EMAIL CONSUMER] Failed to start:', error);
-    throw error;
+    console.error('❌ [EMAIL CONSUMER] Failed to start:', error.message);
+    console.error('Stack:', error.stack);
+    
+    // Retry starting consumer after delay
+    console.log('🔄 [EMAIL CONSUMER] Retrying in 5 seconds...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    return startEmailConsumer();
   }
 }
+
+// Register reconnection handler
+onReconnect(async () => {
+  console.log('🔄 [EMAIL CONSUMER] Restarting consumer after reconnection...');
+  consumerTag = null;
+  await startEmailConsumer();
+});
 
 /**
  * Get consumer stats

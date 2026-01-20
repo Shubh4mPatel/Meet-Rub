@@ -3,6 +3,8 @@ const amqp = require('amqplib');
 
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://localhost';
+const RECONNECT_DELAY = 5000; // 5 seconds
+const MAX_RECONNECT_ATTEMPTS = 10;
 
 // Exchange configuration
 const EXCHANGES = {
@@ -30,6 +32,73 @@ const ROUTING_KEYS = {
 
 let connection = null;
 let channel = null;
+let reconnectAttempts = 0;
+let isReconnecting = false;
+let reconnectCallbacks = [];
+
+/**
+ * Reconnect to RabbitMQ with exponential backoff
+ */
+async function reconnect() {
+  if (isReconnecting) {
+    console.log('⏳ Reconnection already in progress...');
+    return;
+  }
+
+  isReconnecting = true;
+  
+  while (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+    try {
+      reconnectAttempts++;
+      console.log(`🔄 Reconnection attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}...`);
+      
+      // Reset connection and channel
+      connection = null;
+      channel = null;
+      
+      // Try to reconnect
+      await connect();
+      await getChannel();
+      
+      console.log('✅ Successfully reconnected to RabbitMQ');
+      reconnectAttempts = 0;
+      isReconnecting = false;
+      
+      // Notify all registered callbacks to restart consumers
+      for (const callback of reconnectCallbacks) {
+        try {
+          await callback();
+        } catch (error) {
+          console.error('Error in reconnect callback:', error);
+        }
+      }
+      
+      return;
+    } catch (error) {
+      console.error(`❌ Reconnection attempt ${reconnectAttempts} failed:`, error.message);
+      
+      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        console.error('❌ Max reconnection attempts reached. Exiting...');
+        isReconnecting = false;
+        process.exit(1);
+      }
+      
+      // Wait before next attempt with exponential backoff
+      const delay = Math.min(RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), 60000);
+      console.log(`⏳ Waiting ${delay/1000}s before next attempt...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  isReconnecting = false;
+}
+
+/**
+ * Register callback to be called on reconnection
+ */
+function onReconnect(callback) {
+  reconnectCallbacks.push(callback);
+}
 
 /**
  * Connect to RabbitMQ
@@ -41,18 +110,22 @@ async function connect() {
       console.log('✅ Connected to RabbitMQ');
 
       connection.on('error', (err) => {
-        console.error('RabbitMQ connection error:', err);
+        console.error('❌ RabbitMQ connection error:', err.message);
         connection = null;
+        channel = null;
       });
 
       connection.on('close', () => {
-        console.log('RabbitMQ connection closed');
+        console.log('⚠️  RabbitMQ connection closed, attempting to reconnect...');
         connection = null;
+        channel = null;
+        // Attempt to reconnect
+        setTimeout(() => reconnect(), 1000);
       });
     }
     return connection;
   } catch (error) {
-    console.error('Failed to connect to RabbitMQ:', error);
+    console.error('❌ Failed to connect to RabbitMQ:', error.message);
     throw error;
   }
 }
@@ -66,6 +139,17 @@ async function getChannel() {
       const conn = await connect();
       channel = await conn.createChannel();
       
+      // Handle channel errors
+      channel.on('error', (err) => {
+        console.error('❌ RabbitMQ channel error:', err.message);
+        channel = null;
+      });
+
+      channel.on('close', () => {
+        console.log('⚠️  RabbitMQ channel closed');
+        channel = null;
+      });
+      
       // Setup exchanges and queues
       await setupExchangesAndQueues(channel);
       
@@ -73,7 +157,7 @@ async function getChannel() {
     }
     return channel;
   } catch (error) {
-    console.error('Failed to create channel:', error);
+    console.error('❌ Failed to create channel:', error.message);
     throw error;
   }
 }
@@ -174,10 +258,33 @@ async function closeConnection() {
   }
 }
 
+/**
+ * Check if connection is healthy
+ */
+function isHealthy() {
+  return connection !== null && channel !== null && !isReconnecting;
+}
+
+/**
+ * Get connection status
+ */
+function getStatus() {
+  return {
+    connected: connection !== null,
+    channelReady: channel !== null,
+    reconnecting: isReconnecting,
+    reconnectAttempts: reconnectAttempts
+  };
+}
+
 module.exports = {
   connect,
   getChannel,
   closeConnection,
+  reconnect,
+  onReconnect,
+  isHealthy,
+  getStatus,
   EXCHANGES,
   QUEUES,
   ROUTING_KEYS

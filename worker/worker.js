@@ -3,7 +3,7 @@ require('dotenv').config();
 const { connect, closeConnection } = require('./config/rabbitmq');
 const { startEmailConsumer } = require('./consumers/emailConsumer');
 // const { startInAppConsumer } = require('./consumers/inAppConsumer');
-const { startAllNotificationsConsumer } = require('./consumers/allNotificationsConsumer');
+// const { startAllNotificationsConsumer } = require('./consumers/allNotificationsConsumer');
 
 /**
  * Start all consumers in a single process
@@ -15,18 +15,38 @@ async function startMasterWorker() {
     
     // Connect to RabbitMQ
     await connect();
-    // Start all consumers
-    await Promise.all([
+    
+    // Start all consumers with error handling
+    const results = await Promise.allSettled([
       startEmailConsumer(),
       // startInAppConsumer(),
-      startAllNotificationsConsumer()
+      // startAllNotificationsConsumer()
     ]);
     
-    console.log('\n✅ All consumers started successfully!');
-    console.log('📊 Master Worker is now processing all notification types\n');
+    // Check if any consumer failed to start
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.error('\n❌ Some consumers failed to start:');
+      failures.forEach((f, i) => {
+        console.error(`  ${i + 1}. ${f.reason}`);
+      });
+    }
+    
+    const successes = results.filter(r => r.status === 'fulfilled');
+    if (successes.length > 0) {
+      console.log('\n✅ Successfully started consumers:', successes.length);
+      console.log('📊 Master Worker is now processing notification types\n');
+    } else {
+      throw new Error('All consumers failed to start');
+    }
   } catch (error) {
-    console.error('❌ Failed to start master worker:', error);
-    process.exit(1);
+    console.error('❌ Failed to start master worker:', error.message);
+    console.error('Stack:', error.stack);
+    
+    // Retry after delay instead of exiting
+    console.log('🔄 Retrying in 10 seconds...');
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    return startMasterWorker();
   }
 }
 
@@ -38,16 +58,16 @@ process.on('SIGINT', async () => {
 });
 
 // Error handling
-process.on('uncaughtException', async (error) => {
-  console.error('Uncaught Exception:', error);
-  await closeConnection();
-  process.exit(1);
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error.message);
+  console.error('Stack:', error.stack);
+  // Don't exit immediately, let reconnection logic handle it
 });
 
-process.on('unhandledRejection', async (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  await closeConnection();
-  process.exit(1);
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise);
+  console.error('Reason:', reason);
+  // Don't exit immediately, let reconnection logic handle it
 });
 
 startMasterWorker();
