@@ -64,6 +64,13 @@ const loginUser = async (req, res, next) => {
             );
             roleWiseId = result.rows[0]?.creator_id || null;
         }
+        if (user.user_role === 'admin') {
+            const result = await query(
+                "SELECT id FROM admin WHERE user_id = $1",
+                [user.id]
+            );
+            roleWiseId = result.rows[0]?.admin_id || null;
+        }
 
         logger.info(`User authenticated successfully: user_id=${user.id}`);
 
