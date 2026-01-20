@@ -41,6 +41,41 @@ const getServices = async (req, res, next) => {
   }
 };
 
+const getNiches = async (req, res, next) => {
+  logger.info("Fetching available niches");
+
+  try {
+    const niche = req.query.niche;
+    const nicheTerm = niche ? niche.trim() : '';
+    const sql = nicheTerm
+      ? 'SELECT service_name FROM service_options WHERE service_name ILIKE $1 ORDER BY service_name ASC Limit 10'
+      : 'SELECT service_name FROM service_options ORDER BY service_name ASC ';
+    const params = searchTerm ? [`%${searchTerm}%`] : [];
+
+    const { rows: services } = await query(
+      sql,
+      params
+    );
+    logger.debug(`Total available services found: ${services.length}`);
+
+    if (services.length < 1) {
+      logger.warn("No available services found");
+      return next(
+        new AppError("Services are not available at this moment", 404)
+      );
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Services fetched successfully",
+      data: services,
+    });
+  } catch (error) {
+    logger.error("Failed to fetch niches:", error);
+    return next(new AppError("Failed to fetch niches", 500));
+  }
+};
+
 // ✅ Add available services by Admin
 const addServices = async (req, res, next) => {
   logger.info("Adding services by admin");
@@ -97,7 +132,7 @@ const addServicesByFreelancer = async (req, res, next) => {
       return next(new AppError("Service, price, description, and delivery duration are required", 400));
     }
 
-    const {rows : existingService} = await query(
+    const { rows: existingService } = await query(
       `SELECT * FROM services WHERE freelancer_id=$1 AND service_name=$2`,
       [freelancer_id, service]
     );
@@ -106,7 +141,7 @@ const addServicesByFreelancer = async (req, res, next) => {
       logger.warn("Service already exists for this freelancer");
       return next(new AppError("You have already added this service", 400));
     }
-    
+
     const { rows } = await query(
       `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at,delivery_time)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -182,7 +217,7 @@ const deleteServiceByFreelancer = async (req, res, next) => {
 
   try {
     logger.info("Request query parameters:", req.query);
-    const  id  = req.query?.serviceId;
+    const id = req.query?.serviceId;
     logger.info("Service ID to delete:", id);
     const user = req.user;
     const freelancer_id = user?.roleWiseId;

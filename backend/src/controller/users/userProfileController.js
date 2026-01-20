@@ -447,7 +447,7 @@ const editProfile = async (req, res, next) => {
 
         const fileExt = path.extname(req.file.originalname);
         const fileName = `${crypto.randomUUID()}${fileExt}`;
-        const folder = "freelancer/freelancer-profile-image";
+        const folder = "creator/creator-profile-image";
         const objectName = `${folder}/${fileName}`;
         const profile_url = `${BUCKET_NAME}/${objectName}`;
 
@@ -463,8 +463,8 @@ const editProfile = async (req, res, next) => {
           );
 
           await query(
-            "UPDATE freelancer SET profile_image_url=$1 WHERE user_id=$2",
-            [profile_url, user.user_id]
+            "UPDATE creators SET profile_image_url=$1 WHERE creator_id=$2",
+            [profile_url, user.roleWiseId]
           );
 
           // Generate presigned URL for the uploaded image
