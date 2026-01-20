@@ -352,7 +352,7 @@ class PaymentService {
     const [transactions] = await db.query(
       `SELECT t.*, 
         c.full_name as client_name,
-        f.full_name as freelancer_name,
+        f.freelancer_full_name as freelancer_name,
         p.title as project_title,
         p.status as project_status
       FROM transactions t

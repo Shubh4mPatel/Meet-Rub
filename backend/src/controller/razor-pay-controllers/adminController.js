@@ -72,7 +72,7 @@ const AppError = require("../../../utils/appError");
       let query = `
         SELECT p.*,
           t.project_id, t.total_amount, t.platform_commission,
-          f.full_name as freelancer_name, f.email as freelancer_email
+          f.freelancer_full_name as freelancer_name, f.email as freelancer_email
         FROM payouts p
         JOIN transactions t ON p.transaction_id = t.id
         JOIN users f ON p.freelancer_id = f.id

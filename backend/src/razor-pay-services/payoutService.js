@@ -228,7 +228,7 @@ class PayoutService {
     const [payouts] = await db.query(
       `SELECT p.*, 
         t.project_id,
-        f.full_name as freelancer_name,
+        f.freelancer_full_name as freelancer_name,
         fa.bank_account_number, fa.bank_ifsc_code
       FROM payouts p
       JOIN transactions t ON p.transaction_id = t.id
