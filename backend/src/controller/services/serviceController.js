@@ -437,7 +437,7 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
 
     const countResult = await query(
       `SELECT COUNT(*) FROM service_requests sr
-       LEFT JOIN creators c ON sr.creator_id = c.id
+       LEFT JOIN creators c ON sr.creator_id = c.creator_id
        WHERE sr.status NOT IN ('assigned','completed') ${searchCondition}`,
       countParams
     );
@@ -450,7 +450,7 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
          sr.*,
          c.full_name AS creator_name
        FROM service_requests sr
-       LEFT JOIN creators c ON sr.creator_id = c.id
+       LEFT JOIN creators c ON sr.creator_id = c.creator_id
        WHERE sr.status NOT IN ('assigned','completed') ${searchCondition}
        ORDER BY ${orderByClause}
        LIMIT $1 OFFSET $2`,
