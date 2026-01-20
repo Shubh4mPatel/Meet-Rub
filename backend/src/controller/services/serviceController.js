@@ -82,7 +82,7 @@ const addServices = async (req, res, next) => {
   try {
     const { serviceType } = req.body;
     const user = req.user;
-    const admin = user?.id;
+    const admin = user?.roleWiseId;
 
     if (!Array.isArray(serviceType) || serviceType.length === 0) {
       logger.warn("Invalid service list received", serviceType);
