@@ -81,7 +81,10 @@ const getProject = async (req, res, next) => {
       return next(new AppError('Access denied', 403));
     }
 
-    res.json(project);
+    res.status(201).json({
+      status: 'success',
+      message: 'Project fetched successfully',
+      project});
   } catch (error) {
     console.error('Get project error:', error);
     return next(new AppError('Failed to get project', 500));
@@ -97,13 +100,19 @@ const getMyProjects = async (req, res, next) => {
     logger.info('Get my projects called by user %s of type %s with status %s', userId, userType, status);
     
     let query = `
-      SELECT p.*,
-        c.full_name as client_name,
-        f.freelancer_full_name as freelancer_name
-      FROM projects p
-      JOIN creators c ON p.creator_id = c.creator_id
-      JOIN freelancer f ON p.freelancer_id = f.freelancer_id
-      WHERE
+     SELECT 
+    p.*,
+    c.full_name AS client_name,
+    f.freelancer_full_name AS freelancer_name,
+    s.service_name
+FROM projects p
+JOIN creators c 
+    ON p.creator_id = c.creator_id
+JOIN freelancer f 
+    ON p.freelancer_id = f.freelancer_id
+JOIN services s 
+    ON p.service_id = s.id
+WHERE
     `;
 
     const params = [];
@@ -128,7 +137,9 @@ const getMyProjects = async (req, res, next) => {
     logger.info('Executing query: %s with params: %o', query, params);
     const { rows: projects } = await db.query(query, params);
 
-    res.json({
+    res.status(201).json({
+      status: 'success',
+      message: 'Projects fetched successfully',
       count: projects.length,
       projects
     });
