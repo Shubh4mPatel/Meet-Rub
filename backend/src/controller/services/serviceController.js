@@ -83,6 +83,8 @@ const addServices = async (req, res, next) => {
     const { serviceType } = req.body;
     const user = req.user;
     const admin = user?.roleWiseId;
+    logger.info("Admin user info:", user);
+    logger.info("Extracted admin ID:", admin);
 
     if (!Array.isArray(serviceType) || serviceType.length === 0) {
       logger.warn("Invalid service list received", serviceType);
