@@ -15,7 +15,7 @@ router.use('/auth', authroutes);
 router.use('/user-profile', authenticateUser, userProfileRoutes);
 router.use('/admin', authenticateUser, requireRole(['admin']), adminRoutes)
 router.use('/freelancer',  freelancerRoutes)
-router.use('/creator', authenticateUser, requireRole(['creator']), creatorRoutes)
+router.use('/creator',  creatorRoutes)
 router.use('/payments',authenticateUser, paymentRoutes);
 router.use('/wallet', authenticateUser, walletRoutes);
 router.use('/projects', authenticateUser, projectRoutes);

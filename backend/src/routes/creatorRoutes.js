@@ -1,7 +1,8 @@
 const express = require('express');
 const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion, addFreelancerToWhitelist } = require('../controller');
 const router = express.Router();
-const  { requireRole } =  require('../middleware/authMiddleware');
+const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
+const { getNiches } = require('../controller/services/serviceController');
 /**
  * @swagger
  * /creator/service-request:
@@ -41,7 +42,7 @@ const  { requireRole } =  require('../middleware/authMiddleware');
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.post('/service-request', requireRole(['creator']), createSreviceRequest);
+router.post('/service-request',authenticateUser, requireRole(['creator']), createSreviceRequest);
 
 /**
  * @swagger
@@ -91,7 +92,7 @@ router.post('/service-request', requireRole(['creator']), createSreviceRequest);
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.get('/service-requests',requireRole(['creator']), getUserServiceRequests);
+router.get('/service-requests',authenticateUser, requireRole(['creator']), getUserServiceRequests);
 
 /**
  * @swagger
@@ -141,7 +142,7 @@ router.get('/service-requests',requireRole(['creator']), getUserServiceRequests)
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.get('/service-requests/:requestId/suggestions', requireRole(['creator']),getUserServiceRequestsSuggestion);
+router.get('/service-requests/:requestId/suggestions',authenticateUser, requireRole(['creator']),getUserServiceRequestsSuggestion);
 
 /**
  * @swagger
@@ -178,7 +179,8 @@ router.get('/service-requests/:requestId/suggestions', requireRole(['creator']),
  *       500:
  *         description: Server error
  */
-router.post('/whitelist',requireRole(['creator']), addFreelancerToWhitelist);
+router.post('/whitelist', authenticateUser, requireRole(['creator']), addFreelancerToWhitelist);
 
+router.get('/niches', getNiches);
 
 module.exports = router;
