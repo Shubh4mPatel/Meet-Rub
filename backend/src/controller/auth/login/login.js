@@ -50,6 +50,7 @@ const loginUser = async (req, res, next) => {
         }
 
         let roleWiseId = null;
+        logger.info(`Fetching role-wise ID for user role: ${user.user_role}`);
         if (user.user_role === 'freelancer') {
             const result = await query(
                 "SELECT freelancer_id FROM freelancer WHERE user_id = $1",
