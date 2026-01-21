@@ -21,6 +21,7 @@ const getServices = async (req, res, next) => {
       sql,
       params
     );
+    const availableServices = services.map(service => service.service_name);
     logger.debug(`Total available services found: ${services.length}`);
 
     if (services.length < 1) {
@@ -33,7 +34,7 @@ const getServices = async (req, res, next) => {
     return res.status(200).json({
       status: "success",
       message: "Services fetched successfully",
-      data: services,
+      data: availableServices,
     });
   } catch (error) {
     logger.error("Failed to fetch services:", error);
@@ -56,6 +57,7 @@ const getNiches = async (req, res, next) => {
       sql,
       params
     );
+    const availableNiches = services.map(niche => niche.niche_name);
     logger.debug(`Total available niches found: ${services.length}`);
 
     if (services.length < 1) {
@@ -68,7 +70,7 @@ const getNiches = async (req, res, next) => {
     return res.status(200).json({
       status: "success",
       message: "Services fetched successfully",
-      data: services,
+      data: availableNiches,
     });
   } catch (error) {
     logger.error("Failed to fetch niches:", error);
