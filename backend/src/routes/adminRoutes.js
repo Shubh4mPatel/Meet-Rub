@@ -2,6 +2,7 @@ const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
 const adminController = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches } = require('../controller/services/serviceController')
+const { requireRole } = require('../middleware/authMiddleware')
 const router = expess.Router()
 
 /**
