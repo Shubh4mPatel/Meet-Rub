@@ -833,6 +833,6 @@ router.get('/profile-progress', authenticateUser, requireRole(['freelancer']), g
 
 router.delete("/portfolio/delete-portfolio-item",authenticateUser, requireRole(['freelancer']), deleteFreelancerProtfolioItem);
 
-router.get('/niches', requireRole(['freelancer']), getNiches);
+router.get('/niches',authenticateUser, requireRole(['freelancer']), getNiches);
 
 module.exports = router

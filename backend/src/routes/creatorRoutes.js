@@ -42,7 +42,7 @@ const { getNiches } = require('../controller/services/serviceController');
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.post('/service-request', requireRole(['creator']), createSreviceRequest);
+router.post('/service-request', createSreviceRequest);
 
 /**
  * @swagger
@@ -92,7 +92,7 @@ router.post('/service-request', requireRole(['creator']), createSreviceRequest);
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.get('/service-requests',requireRole(['creator']), getUserServiceRequests);
+router.get('/service-requests', getUserServiceRequests);
 
 /**
  * @swagger
@@ -142,7 +142,7 @@ router.get('/service-requests',requireRole(['creator']), getUserServiceRequests)
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.get('/service-requests/:requestId/suggestions', requireRole(['creator']),getUserServiceRequestsSuggestion);
+router.get('/service-requests/:requestId/suggestions',getUserServiceRequestsSuggestion);
 
 /**
  * @swagger
@@ -179,8 +179,8 @@ router.get('/service-requests/:requestId/suggestions', requireRole(['creator']),
  *       500:
  *         description: Server error
  */
-router.post('/whitelist',requireRole(['creator']), addFreelancerToWhitelist);
+router.post('/whitelist', addFreelancerToWhitelist);
 
-router.get('/niches', requireRole(['creator']), getNiches);
+router.get('/niches', getNiches);
 
 module.exports = router;
