@@ -1,7 +1,7 @@
 const express = require('express');
 const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion, addFreelancerToWhitelist } = require('../controller');
 const router = express.Router();
-const  { requireRole } =  require('../middleware/authMiddleware');
+const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { getNiches } = require('../controller/services/serviceController');
 /**
  * @swagger
@@ -42,7 +42,7 @@ const { getNiches } = require('../controller/services/serviceController');
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.post('/service-request', createSreviceRequest);
+router.post('/service-request',authenticateUser, requireRole(['creator']), createSreviceRequest);
 
 /**
  * @swagger
@@ -92,7 +92,7 @@ router.post('/service-request', createSreviceRequest);
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.get('/service-requests', getUserServiceRequests);
+router.get('/service-requests',authenticateUser, requireRole(['creator']), getUserServiceRequests);
 
 /**
  * @swagger
@@ -142,7 +142,7 @@ router.get('/service-requests', getUserServiceRequests);
  *       403:
  *         description: Forbidden - Creator role required
  */
-router.get('/service-requests/:requestId/suggestions',getUserServiceRequestsSuggestion);
+router.get('/service-requests/:requestId/suggestions',authenticateUser, requireRole(['creator']),getUserServiceRequestsSuggestion);
 
 /**
  * @swagger
@@ -179,7 +179,7 @@ router.get('/service-requests/:requestId/suggestions',getUserServiceRequestsSugg
  *       500:
  *         description: Server error
  */
-router.post('/whitelist', addFreelancerToWhitelist);
+router.post('/whitelist', authenticateUser, requireRole(['creator']), addFreelancerToWhitelist);
 
 router.get('/niches', getNiches);
 
