@@ -70,7 +70,7 @@ const loginUser = async (req, res, next) => {
                 "SELECT id FROM admin WHERE user_id = $1",
                 [user.id]
             );
-            roleWiseId = result.rows[0]?.admin_id || null;
+            roleWiseId = result.rows[0]?.id || null;
         }
 
         logger.info(`User authenticated successfully: user_id=${user.id}`);
