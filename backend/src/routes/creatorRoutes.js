@@ -2,6 +2,7 @@ const express = require('express');
 const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion, addFreelancerToWhitelist } = require('../controller');
 const router = express.Router();
 const  { requireRole } =  require('../middleware/authMiddleware');
+const { getNiches } = require('../controller/services/serviceController');
 /**
  * @swagger
  * /creator/service-request:
@@ -180,5 +181,6 @@ router.get('/service-requests/:requestId/suggestions', requireRole(['creator']),
  */
 router.post('/whitelist',requireRole(['creator']), addFreelancerToWhitelist);
 
+router.get('/niches', requireRole(['creator']), getNiches);
 
 module.exports = router;

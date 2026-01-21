@@ -7,6 +7,7 @@ const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFree
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
 const { getUserProfileProgress } = require('../controller/users/userProfileController');
 const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/portfolioController");
+const { getNiches } = require('../controller/services/serviceController');
 
 /**
  * @swagger
@@ -831,5 +832,7 @@ router.get('/earnings',authenticateUser,requireRole(['freelancer']), getEarnings
 router.get('/profile-progress', authenticateUser, requireRole(['freelancer']), getUserProfileProgress);
 
 router.delete("/portfolio/delete-portfolio-item",authenticateUser, requireRole(['freelancer']), deleteFreelancerProtfolioItem);
+
+router.get('/niches', requireRole(['freelancer']), getNiches);
 
 module.exports = router

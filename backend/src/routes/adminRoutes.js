@@ -1,6 +1,7 @@
 const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
 const adminController = require('../controller/razor-pay-controllers/adminController')
+const { addNiches, getNiches } = require('../controller/services/serviceController')
 const router = expess.Router()
 
 /**
@@ -161,6 +162,7 @@ router.post('/addServices', addServices)
  */
 router.get('/service-requests', getUserServiceRequestsToAdmin)
 
+router.post('/add-niches',addNiches);
 
 /**
  * @swagger
@@ -554,6 +556,7 @@ router.get('/stats', adminController.getPlatformStats);
  */
 router.put('/commission', adminController.updateCommission);
 
+router.get('/niches', requireRole(['admin']), getNiches);
 
 
 module.exports = router

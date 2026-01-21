@@ -48,15 +48,15 @@ const getNiches = async (req, res, next) => {
     const niche = req.query.niche;
     const nicheTerm = niche ? niche.trim() : '';
     const sql = nicheTerm
-      ? 'SELECT service_name FROM service_options WHERE service_name ILIKE $1 ORDER BY service_name ASC Limit 10'
-      : 'SELECT service_name FROM service_options ORDER BY service_name ASC ';
-    const params = searchTerm ? [`%${searchTerm}%`] : [];
+      ? 'SELECT niche_name FROM niche WHERE niche_name ILIKE $1 ORDER BY niche_name ASC Limit 10'
+      : 'SELECT niche_name FROM niche ORDER BY niche_name ASC ';
+    const params = nicheTerm ? [`%${nicheTerm}%`] : [];
 
     const { rows: services } = await query(
       sql,
       params
     );
-    logger.debug(`Total available services found: ${services.length}`);
+    logger.debug(`Total available niches found: ${services.length}`);
 
     if (services.length < 1) {
       logger.warn("No available services found");
@@ -73,6 +73,40 @@ const getNiches = async (req, res, next) => {
   } catch (error) {
     logger.error("Failed to fetch niches:", error);
     return next(new AppError("Failed to fetch niches", 500));
+  }
+};
+
+const addNiches = async (req, res, next) => {
+  logger.info("Adding niches by admin");
+  try {
+    const { nicheType } = req.body;
+    const user = req.user;
+    const admin = user?.roleWiseId;
+    logger.info("Admin user info:", user);
+    logger.info("Extracted admin ID:", admin);
+    if (!Array.isArray(nicheType) || nicheType.length === 0) {
+      logger.warn("Invalid niche list received", nicheType);
+      return next(new AppError("Please provide valid niches", 400));
+    }
+    const results = await Promise.all(
+      nicheType.map((niche) =>
+        query(
+          `INSERT INTO niche(niche_name, created_by, created_at)
+           VALUES ($1,$2,$3) RETURNING *`,
+          [niche, admin, new Date()]
+        )
+      )
+    );
+    logger.info(`Added ${results.length} niches successfully`);
+    return res.status(201).json({
+      status: "success",
+      message: "Niches added successfully",
+      data: results.map((r) => r.rows[0]),
+    });
+  }
+  catch (error) {
+    logger.error("Failed to add niches:", error);
+    return next(new AppError("Failed to add niches", 500));
   }
 };
 
@@ -505,4 +539,6 @@ module.exports = {
   getUserServiceRequests,
   getUserServiceRequestsSuggestion,
   getUserServiceRequestsToAdmin,
+  getNiches,
+  addNiches
 };
