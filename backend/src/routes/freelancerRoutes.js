@@ -192,7 +192,7 @@ router.post('/add-service',authenticateUser, requireRole(['freelancer']), addSer
  */
 router.get('/get-services',authenticateUser, requireRole(['freelancer']), getServicesByFreelaner)
 
-router.get('/get-available-services', authenticateUser, getServices);
+router.get('/get-available-services', getServices);
 
 /**
  * @swagger
