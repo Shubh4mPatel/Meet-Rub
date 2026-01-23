@@ -1,5 +1,5 @@
 const express = require('express');
-const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion, addFreelancerToWhitelist } = require('../controller');
+const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion, addFreelancerToWishlist } = require('../controller');
 const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { getNiches } = require('../controller/services/serviceController');
@@ -146,9 +146,9 @@ router.get('/service-requests/:requestId/suggestions',authenticateUser, requireR
 
 /**
  * @swagger
- * /user-profile/creator/whitelist:
+ * /user-profile/creator/wishlist:
  *   post:
- *     summary: Add freelancer to user's whitelist
+ *     summary: Add freelancer to user's wishlist
  *     tags: [User Profile]
  *     security:
  *       - bearerAuth: []
@@ -159,10 +159,10 @@ router.get('/service-requests/:requestId/suggestions',authenticateUser, requireR
  *         required: true
  *         schema:
  *           type: string
- *         description: Freelancer ID to add to whitelist
+ *         description: Freelancer ID to add to wishlist
  *     responses:
  *       200:
- *         description: Freelancer added to whitelist successfully
+ *         description: Freelancer added to wishlist successfully
  *         content:
  *           application/json:
  *             schema:
@@ -173,13 +173,13 @@ router.get('/service-requests/:requestId/suggestions',authenticateUser, requireR
  *                   example: success
  *                 message:
  *                   type: string
- *                   example: Freelancer added to whitelist successfully
+ *                   example: Freelancer added to wishlist successfully
  *       401:
  *         description: Unauthorized
  *       500:
  *         description: Server error
  */
-router.post('/whitelist', authenticateUser, requireRole(['creator']), addFreelancerToWhitelist);
+router.post('/wishlist', authenticateUser, requireRole(['creator']), addFreelancerToWishlist);
 
 router.get('/niches', getNiches);
 

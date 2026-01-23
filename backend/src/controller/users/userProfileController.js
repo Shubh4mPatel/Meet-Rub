@@ -1492,7 +1492,7 @@ ORDER BY service_type`,
   }
 };
 
-const addFreelancerToWhitelist = async (req, res, next) => {
+const addFreelancerToWishlist = async (req, res, next) => {
   try {
     const user = req.user;
     const { freelancerId } = req.body;
@@ -1504,7 +1504,7 @@ const addFreelancerToWhitelist = async (req, res, next) => {
 
     // Log the attempt
     logger.info(
-      `Attempting to add freelancer ${freelancerId} to whitelist for user ${user.roleWiseId}`
+      `Attempting to add freelancer ${freelancerId} to wishlist for user ${user.roleWiseId}`
     );
 
 
@@ -1518,9 +1518,9 @@ const addFreelancerToWhitelist = async (req, res, next) => {
       return next(new AppError("Freelancer not found", 404));
     }
 
-    // Insert into whitelist
+    // Insert into wishlist
     const result = await query(
-      `INSERT INTO whitelist (creator_id, freelancer_id, created_at) 
+      `INSERT INTO wishlist (creator_id, freelancer_id, created_at) 
        VALUES ($1, $2, $3) 
        ON CONFLICT (creator_id, freelancer_id) DO NOTHING
        RETURNING *`,
@@ -1530,27 +1530,27 @@ const addFreelancerToWhitelist = async (req, res, next) => {
     // Check if insert was successful or already existed
     if (result.rows.length === 0) {
       logger.info(
-        `Freelancer ${freelancerId} already in whitelist for user ${user.roleWiseId}`
+        `Freelancer ${freelancerId} already in wishlist for user ${user.roleWiseId}`
       );
       return res.status(200).json({
         status: "success",
-        message: "Freelancer already in whitelist",
+        message: "Freelancer already in wishlist",
       });
     }
 
     logger.info(
-      `Freelancer ${freelancerId} added to whitelist for user ${user.roleWiseId}`
+      `Freelancer ${freelancerId} added to wishlist for user ${user.roleWiseId}`
     );
 
     return res.status(200).json({
       status: "success",
-      message: "Freelancer added to whitelist successfully",
+      message: "Freelancer added to wishlist successfully",
       data: result.rows[0]
     });
 
   } catch (error) {
     // Log the ACTUAL error for debugging
-    logger.error("Whitelist add error:", {
+    logger.error("wishlist add error:", {
       message: error.message,
       code: error.code,
       detail: error.detail,
@@ -1561,7 +1561,7 @@ const addFreelancerToWhitelist = async (req, res, next) => {
 
     // Pass the actual error with context
     return next(new AppError(
-      `Failed to add freelancer to whitelist: ${error.message}`,
+      `Failed to add freelancer to wishlist: ${error.message}`,
       500
     ));
   }
@@ -1646,6 +1646,6 @@ module.exports = {
   getFreelancerById,
   getFreelancerPortfolio,
   getFreelancerImpact,
-  addFreelancerToWhitelist,
+  addFreelancerToWishlist,
   getUserProfileProgress,
 };
