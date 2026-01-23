@@ -1504,10 +1504,10 @@ const addFreelancerToWhitelist = async (req, res, next) => {
 
     // Log the attempt
     logger.info(
-      `Attempting to add freelancer ${freelancerId} to whitelist for user ${user.user_id}`
+      `Attempting to add freelancer ${freelancerId} to whitelist for user ${user.roleWiseId}`
     );
 
-    
+
     // Check if freelancer exists first (optional but recommended)
     const freelancerCheck = await query(
       "SELECT freelancer_id FROM freelancer WHERE id = $1",
@@ -1520,17 +1520,17 @@ const addFreelancerToWhitelist = async (req, res, next) => {
 
     // Insert into whitelist
     const result = await query(
-      `INSERT INTO whitelist (user_id, freelancer_id, created_at) 
+      `INSERT INTO whitelist (creator_id, freelancer_id, created_at) 
        VALUES ($1, $2, $3) 
-       ON CONFLICT (user_id, freelancer_id) DO NOTHING
+       ON CONFLICT (creator_id, freelancer_id) DO NOTHING
        RETURNING *`,
-      [user.user_id, freelancerId, new Date()]
+      [user.roleWiseId, freelancerId, new Date()]
     );
 
     // Check if insert was successful or already existed
     if (result.rows.length === 0) {
       logger.info(
-        `Freelancer ${freelancerId} already in whitelist for user ${user.user_id}`
+        `Freelancer ${freelancerId} already in whitelist for user ${user.roleWiseId}`
       );
       return res.status(200).json({
         status: "success",
@@ -1539,7 +1539,7 @@ const addFreelancerToWhitelist = async (req, res, next) => {
     }
 
     logger.info(
-      `Freelancer ${freelancerId} added to whitelist for user ${user.user_id}`
+      `Freelancer ${freelancerId} added to whitelist for user ${user.roleWiseId}`
     );
 
     return res.status(200).json({
@@ -1555,7 +1555,7 @@ const addFreelancerToWhitelist = async (req, res, next) => {
       code: error.code,
       detail: error.detail,
       stack: error.stack,
-      user_id: req.user?.user_id,
+      user_id: req.user?.roleWiseId,
       freelancer_id: req.body?.freelancerId
     });
 
