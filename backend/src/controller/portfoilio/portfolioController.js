@@ -22,7 +22,7 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
     console.log("User :", user);
     if (userPortFolios.length === 0) {
       logger.warn("No portfolio data found");
-      return res.status(204).json({
+      return res.status(200).json({
         status: "success",
         message: "no portfolio data found",
       });
