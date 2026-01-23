@@ -1510,7 +1510,7 @@ const addFreelancerToWhitelist = async (req, res, next) => {
 
     // Check if freelancer exists first (optional but recommended)
     const freelancerCheck = await query(
-      "SELECT freelancer_id FROM freelancer WHERE id = $1",
+      "SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1",
       [freelancerId]
     );
 
