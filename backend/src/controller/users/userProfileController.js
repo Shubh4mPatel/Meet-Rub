@@ -1493,23 +1493,76 @@ ORDER BY service_type`,
 };
 
 const addFreelancerToWhitelist = async (req, res, next) => {
-  // Implementation goes here
   try {
     const user = req.user;
     const freelancerId = req.params.id;
-    await query(
-      "INSERT INTO whitelist (user_id, freelancer_id,created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+
+    // Validate freelancer ID
+    if (!freelancerId) {
+      return next(new AppError("Freelancer ID is required", 400));
+    }
+
+    // Log the attempt
+    logger.info(
+      `Attempting to add freelancer ${freelancerId} to whitelist for user ${user.user_id}`
+    );
+
+    // Check if freelancer exists first (optional but recommended)
+    const freelancerCheck = await query(
+      "SELECT id FROM freelancers WHERE id = $1",
+      [freelancerId]
+    );
+
+    if (freelancerCheck.rows.length === 0) {
+      return next(new AppError("Freelancer not found", 404));
+    }
+
+    // Insert into whitelist
+    const result = await query(
+      `INSERT INTO whitelist (user_id, freelancer_id, created_at) 
+       VALUES ($1, $2, $3) 
+       ON CONFLICT (user_id, freelancer_id) DO NOTHING
+       RETURNING *`,
       [user.user_id, freelancerId, new Date()]
     );
+
+    // Check if insert was successful or already existed
+    if (result.rows.length === 0) {
+      logger.info(
+        `Freelancer ${freelancerId} already in whitelist for user ${user.user_id}`
+      );
+      return res.status(200).json({
+        status: "success",
+        message: "Freelancer already in whitelist",
+      });
+    }
+
     logger.info(
       `Freelancer ${freelancerId} added to whitelist for user ${user.user_id}`
     );
+
     return res.status(200).json({
       status: "success",
       message: "Freelancer added to whitelist successfully",
+      data: result.rows[0]
     });
+
   } catch (error) {
-    return next(new AppError("Failed to add freelancer to whitelist", 500));
+    // Log the ACTUAL error for debugging
+    logger.error("Whitelist add error:", {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      stack: error.stack,
+      user_id: req.user?.user_id,
+      freelancer_id: req.params?.id
+    });
+
+    // Pass the actual error with context
+    return next(new AppError(
+      `Failed to add freelancer to whitelist: ${error.message}`,
+      500
+    ));
   }
 };
 
