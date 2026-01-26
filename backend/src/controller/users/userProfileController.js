@@ -1585,6 +1585,270 @@ const getUserProfileProgress = async (req, res, next) => {
   }
 };
 
+const getAllCreatorProfiles = async (req, res, next) => {
+  logger.info("Fetching all creator profiles with filters");
+  try {
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Search parameter
+    const search = req.query.search || ""; // Search by name
+
+    // Date filter parameters
+    const startDate = req.query.startDate || null; // Filter by joining date (created_at)
+    const endDate = req.query.endDate || null;
+
+    // Build the query based on filters
+    let queryText = `
+      SELECT
+        creator_id,
+        first_name,
+        last_name,
+        full_name,
+        phone_number,
+        email,
+        created_at,
+        profile_image_url
+      FROM creators
+      WHERE 1=1
+    `;
+
+    const queryParams = [];
+    let paramCount = 1;
+
+    // Add search condition (search by first_name, last_name, or full_name)
+    if (search) {
+      queryText += ` AND (
+        first_name ILIKE $${paramCount} OR
+        last_name ILIKE $${paramCount} OR
+        full_name ILIKE $${paramCount}
+      )`;
+      queryParams.push(`%${search}%`);
+      paramCount++;
+    }
+
+    // Add date range filter
+    if (startDate) {
+      queryText += ` AND created_at >= $${paramCount}`;
+      queryParams.push(startDate);
+      paramCount++;
+    }
+
+    if (endDate) {
+      queryText += ` AND created_at <= $${paramCount}`;
+      queryParams.push(endDate);
+      paramCount++;
+    }
+
+    // Add sorting by created_at (newest first)
+    queryText += ` ORDER BY created_at DESC`;
+
+    // Add pagination
+    queryText += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    queryParams.push(limit, offset);
+
+    // Get total count for pagination
+    let countQuery = `
+      SELECT COUNT(*) as count
+      FROM creators
+      WHERE 1=1
+    `;
+
+    const countParams = [];
+    let countParamIndex = 1;
+
+    if (search) {
+      countQuery += ` AND (
+        first_name ILIKE $${countParamIndex} OR
+        last_name ILIKE $${countParamIndex} OR
+        full_name ILIKE $${countParamIndex}
+      )`;
+      countParams.push(`%${search}%`);
+      countParamIndex++;
+    }
+
+    if (startDate) {
+      countQuery += ` AND created_at >= $${countParamIndex}`;
+      countParams.push(startDate);
+      countParamIndex++;
+    }
+
+    if (endDate) {
+      countQuery += ` AND created_at <= $${countParamIndex}`;
+      countParams.push(endDate);
+      countParamIndex++;
+    }
+
+    logger.debug("Query:", queryText);
+    logger.debug("Query Parameters:", queryParams);
+
+    // Execute both queries in parallel
+    const [results, countResult] = await Promise.all([
+      query(queryText, queryParams),
+      query(countQuery, countParams),
+    ]);
+
+    const totalCount = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(totalCount / limit);
+
+    // Generate presigned URLs for profile images
+    const creatorsWithSignedUrls = await Promise.all(
+      results.rows.map(async (creator) => {
+        // Generate presigned URL for profile image if it exists
+        if (creator.profile_image_url) {
+          const parts = creator.profile_image_url.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
+
+          try {
+            const signedUrl = await createPresignedUrl(
+              bucketName,
+              objectName,
+              expirySeconds
+            );
+            creator.profile_image_url = signedUrl;
+          } catch (error) {
+            logger.error(
+              `Error generating signed URL for creator ${creator.creator_id}:`,
+              error
+            );
+            creator.profile_image_url = null;
+          }
+        }
+
+        return {
+          creator_id: creator.creator_id,
+          name: creator.full_name || `${creator.first_name || ""} ${creator.last_name || ""}`.trim(),
+          phone_number: creator.phone_number,
+          email: creator.email,
+          date_of_joining: creator.created_at,
+          profile_image_url: creator.profile_image_url,
+        };
+      })
+    );
+
+    logger.info(`Found ${totalCount} creators matching criteria`);
+    return res.status(200).json({
+      status: "success",
+      message: "Creator profiles fetched successfully",
+      data: {
+        creators: creatorsWithSignedUrls,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalItems: totalCount,
+          itemsPerPage: limit,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching creator profiles:", error);
+    return next(new AppError("Failed to fetch creator profiles", 500));
+  }
+}
+
+const getCreatorById = async (req, res, next) => {
+  logger.info("Fetching creator by ID");
+
+  try {
+    const creatorId = req.params?.id;
+
+    // Validate creator ID parameter
+    if (!creatorId) {
+      logger.warn("Creator ID parameter is missing");
+      return next(new AppError("Creator ID is required", 400));
+    }
+
+    const { rows: creatorData } = await query(
+      `SELECT
+        creator_id,
+        first_name,
+        last_name,
+        full_name,
+        phone_number,
+        email,
+        profile_image_url,
+        social_platform_type,
+        social_links,
+        niche,
+        created_at
+      FROM creators
+      WHERE creator_id = $1`,
+      [creatorId]
+    );
+
+    // Check if creator exists
+    if (!creatorData[0]) {
+      logger.warn(`Creator not found with ID: ${creatorId}`);
+      return next(new AppError("Creator not found", 404));
+    }
+
+    logger.debug("Creator data fetched:", creatorData[0]);
+
+    const creator = creatorData[0];
+
+    // Generate presigned URL for profile image if it exists
+    if (creator.profile_image_url) {
+      try {
+        const profileImagePath = creator.profile_image_url;
+
+        // Extract bucket name and object key
+        // Assuming format: "bucket-name/path/to/object"
+        const firstSlashIndex = profileImagePath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = profileImagePath.substring(0, firstSlashIndex);
+          const objectName = profileImagePath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          creator.profile_image_url = signedUrl;
+        } else {
+          logger.warn(`Invalid profile image URL format: ${profileImagePath}`);
+          creator.profile_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for profile image: ${error}`);
+        creator.profile_image_url = null;
+      }
+    }
+
+    // Format response
+    const response = {
+      creator_id: creator.creator_id,
+      name: creator.full_name || `${creator.first_name || ""} ${creator.last_name || ""}`.trim(),
+      first_name: creator.first_name,
+      last_name: creator.last_name,
+      phone_number: creator.phone_number,
+      email: creator.email,
+      profile_image_url: creator.profile_image_url,
+      social_platform_type: creator.social_platform_type,
+      social_links: creator.social_links,
+      niches: creator.niche || [],
+      date_of_joining: creator.created_at,
+    };
+
+    logger.info(`Creator profile fetched successfully for ID: ${creatorId}`);
+    return res.status(200).json({
+      status: "success",
+      message: "Creator profile fetched successfully",
+      data: response,
+    });
+  } catch (error) {
+    logger.error("Error fetching creator profile:", error);
+    return next(new AppError("Failed to fetch creator profile", 500));
+  }
+}
+
+const editCreatorByAdmin = async (req, res, next) => {
+  // Implementation for editing creator profile by admin goes here
+}
+
 module.exports = {
   getUserProfile,
   editProfile,
@@ -1594,4 +1858,6 @@ module.exports = {
   getFreelancerImpact,
   addFreelancerToWhitelist,
   getUserProfileProgress,
+  getAllCreatorProfiles,
+  getCreatorById,
 };

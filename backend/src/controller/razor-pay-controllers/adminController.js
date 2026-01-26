@@ -192,6 +192,14 @@ const AppError = require("../../../utils/appError");
     }
   }
 
+  const ApproveKYC = async (req, res, next) => {
+    try {
+    }
+    catch (error) {
+      console.error('Approve KYC error:', error);
+      return next(new AppError('Failed to approve KYC', 500));
+    }
+  }
 
 module.exports ={
   getEscrowTransactions,

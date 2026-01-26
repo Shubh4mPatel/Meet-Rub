@@ -530,6 +530,70 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
   }
 };
 
+const AssignFreelancerToRequest = async (req, res, next) => {
+  logger.info("Admin assigning freelancers to service request");
+  try {
+    const { requestId, freelancerIds, adminNotes } = req.body;
+
+    // Validation
+    if (!requestId) {
+      logger.warn("Request ID is missing");
+      return next(new AppError("Request ID is required", 400));
+    }
+
+    if (!freelancerIds || !Array.isArray(freelancerIds) || freelancerIds.length === 0) {
+      logger.warn("Invalid freelancer IDs array");
+      return next(new AppError("At least one freelancer ID is required", 400));
+    }
+
+    // Check if service request exists
+    const { rows: serviceRequest } = await query(
+      `SELECT request_id FROM service_requests WHERE request_id = $1`,
+      [requestId]
+    );
+
+    if (serviceRequest.length === 0) {
+      logger.warn(`Service request ${requestId} not found`);
+      return next(new AppError("Service request not found", 404));
+    }
+
+    // Verify all freelancer IDs exist
+    const { rows: freelancers } = await query(
+      `SELECT id FROM freelancers WHERE id = ANY($1::int[])`,
+      [freelancerIds]
+    );
+
+    if (freelancers.length !== freelancerIds.length) {
+      logger.warn("One or more freelancer IDs are invalid");
+      return next(new AppError("One or more freelancer IDs are invalid", 400));
+    }
+
+    // Insert or update suggestions using UPSERT
+    const { rows } = await query(
+      `INSERT INTO service_request_suggestions
+       (request_id, freelancer_id, admin_notes, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (request_id)
+       DO UPDATE SET
+         freelancer_id = $2,
+         admin_notes = $3,
+         updated_at = $5
+       RETURNING *`,
+      [requestId, freelancerIds, adminNotes || null, new Date().toISOString, new Date().toISOString()]
+    );
+
+    logger.info(`Freelancers assigned to request ${requestId} successfully`);
+    return res.status(200).json({
+      status: "success",
+      message: "Freelancers assigned to service request successfully",
+      data: rows[0],
+    });
+  } catch (error) {
+    logger.error("Failed to assign freelancers to service request:", error);
+    return next(new AppError("Failed to assign freelancers", 500));
+  }
+};
+
 module.exports = {
   getServices,
   addServices,
@@ -542,5 +606,6 @@ module.exports = {
   getUserServiceRequestsSuggestion,
   getUserServiceRequestsToAdmin,
   getNiches,
-  addNiches
+  addNiches,
+  AssignFreelancerToRequest
 };
