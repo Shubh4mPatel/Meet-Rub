@@ -987,7 +987,7 @@
 					"response": []
 				},
 				{
-					"name": "Add Freelancer to Whitelist",
+					"name": "Add Freelancer to wishlist",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -1001,11 +1001,11 @@
 							"raw": "{\n  \"id\": \"{{freelancer_id}}\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/creator/whitelist",
+							"raw": "{{base_url}}/creator/wishlist",
 							"host": ["{{base_url}}"],
-							"path": ["creator", "whitelist"]
+							"path": ["creator", "wishlist"]
 						},
-						"description": "Add a freelancer to your whitelist for preferred collaboration"
+						"description": "Add a freelancer to your wishlist for preferred collaboration"
 					},
 					"response": []
 				}

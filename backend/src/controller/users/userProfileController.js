@@ -387,7 +387,7 @@ const editProfile = async (req, res, next) => {
               full_name || `${first_name} ${last_name}`,
               phone_number,
               social_links || null,
-              nicheArray ,
+              nicheArray,
               email,
               user.user_id,
             ]
@@ -1144,110 +1144,110 @@ const getAllFreelancers = async (req, res, next) => {
 const getFreelancerById = async (req, res, next) => {
   logger.info("Fetching freelancer by ID");
 
-try {
-  const freelancerId = req.params?.id;
+  try {
+    const freelancerId = req.params?.id;
 
-  // Validate freelancer ID parameter
-  if (!freelancerId) {
-    logger.warn("Freelancer ID parameter is missing");
-    return next(new AppError("Freelancer ID is required", 400));
-  }
+    // Validate freelancer ID parameter
+    if (!freelancerId) {
+      logger.warn("Freelancer ID parameter is missing");
+      return next(new AppError("Freelancer ID is required", 400));
+    }
 
-  const { rows: freelancerData } = await query(
-    "SELECT freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
-    [freelancerId]
-  );
+    const { rows: freelancerData } = await query(
+      "SELECT freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
+      [freelancerId]
+    );
 
-  // Check if freelancer exists
-  if (!freelancerData[0]) {
-    logger.warn(`Freelancer not found with ID: ${freelancerId}`);
-    return next(new AppError("Freelancer not found", 404));
-  }
-  
-  logger.debug("Freelancer data fetched:", freelancerData[0]);
+    // Check if freelancer exists
+    if (!freelancerData[0]) {
+      logger.warn(`Freelancer not found with ID: ${freelancerId}`);
+      return next(new AppError("Freelancer not found", 404));
+    }
 
-  // Generate presigned URL for profile image if it exists
-  if (freelancerData[0].profile_image_url) {
-    try {
-      const profileImagePath = freelancerData[0].profile_image_url;
-      
-      // Extract bucket name and object key
-      // Assuming format: "bucket-name/path/to/object"
-      const firstSlashIndex = profileImagePath.indexOf("/");
-      
-      if (firstSlashIndex !== -1) {
-        const bucketName = profileImagePath.substring(0, firstSlashIndex);
-        const objectName = profileImagePath.substring(firstSlashIndex + 1);
+    logger.debug("Freelancer data fetched:", freelancerData[0]);
 
-        const signedUrl = await createPresignedUrl(
-          bucketName,
-          objectName,
-          expirySeconds
-        );
-        freelancerData[0].profile_image_url = signedUrl;
-      } else {
-        logger.warn(
-          `Invalid profile image URL format: ${profileImagePath}`
-        );
+    // Generate presigned URL for profile image if it exists
+    if (freelancerData[0].profile_image_url) {
+      try {
+        const profileImagePath = freelancerData[0].profile_image_url;
+
+        // Extract bucket name and object key
+        // Assuming format: "bucket-name/path/to/object"
+        const firstSlashIndex = profileImagePath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = profileImagePath.substring(0, firstSlashIndex);
+          const objectName = profileImagePath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancerData[0].profile_image_url = signedUrl;
+        } else {
+          logger.warn(
+            `Invalid profile image URL format: ${profileImagePath}`
+          );
+          freelancerData[0].profile_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for profile image: ${error}`);
         freelancerData[0].profile_image_url = null;
       }
-    } catch (error) {
-      logger.error(`Error generating signed URL for profile image: ${error}`);
-      freelancerData[0].profile_image_url = null;
     }
-  }
 
-  // Generate presigned URL for thumbnail image if it exists
-  if (freelancerData[0].freelancer_thumbnail_image) {
-    try {
-      const thumbnailPath = freelancerData[0].freelancer_thumbnail_image;
-      
-      const firstSlashIndex = thumbnailPath.indexOf("/");
-      
-      if (firstSlashIndex !== -1) {
-        const bucketName = thumbnailPath.substring(0, firstSlashIndex);
-        const objectName = thumbnailPath.substring(firstSlashIndex + 1);
-        
-        const thumbSignedUrl = await createPresignedUrl(
-          bucketName,
-          objectName,
-          expirySeconds
-        );
-        freelancerData[0].freelancer_thumbnail_image = thumbSignedUrl;
-      } else {
-        logger.warn(
-          `Invalid thumbnail image URL format: ${thumbnailPath}`
+    // Generate presigned URL for thumbnail image if it exists
+    if (freelancerData[0].freelancer_thumbnail_image) {
+      try {
+        const thumbnailPath = freelancerData[0].freelancer_thumbnail_image;
+
+        const firstSlashIndex = thumbnailPath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = thumbnailPath.substring(0, firstSlashIndex);
+          const objectName = thumbnailPath.substring(firstSlashIndex + 1);
+
+          const thumbSignedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancerData[0].freelancer_thumbnail_image = thumbSignedUrl;
+        } else {
+          logger.warn(
+            `Invalid thumbnail image URL format: ${thumbnailPath}`
+          );
+          freelancerData[0].freelancer_thumbnail_image = null;
+        }
+      } catch (error) {
+        logger.error(
+          `Error generating signed URL for thumbnail image: ${error}`
         );
         freelancerData[0].freelancer_thumbnail_image = null;
       }
-    } catch (error) {
-      logger.error(
-        `Error generating signed URL for thumbnail image: ${error}`
-      );
-      freelancerData[0].freelancer_thumbnail_image = null;
     }
-  }
 
-  const { rows: freelancerServices } = await query(
-    `SELECT id, service_name, service_description, service_price, delivery_time
+    const { rows: freelancerServices } = await query(
+      `SELECT id, service_name, service_description, service_price, delivery_time
      FROM services WHERE freelancer_id = $1`,
-    [freelancerId]
-  );
+      [freelancerId]
+    );
 
-  logger.info(`Successfully fetched freelancer data for ID: ${freelancerId}`);
+    logger.info(`Successfully fetched freelancer data for ID: ${freelancerId}`);
 
-  // Send response with freelancer basic info and services only
-  return res.status(200).json({
-    status: "success",
-    data: {
-      freelancer: freelancerData[0],
-      services: freelancerServices.length > 0 ? freelancerServices : [],
-    },
-  });
-} catch (error) {
-  logger.error("Error fetching freelancer by ID:", error);
-  return next(new AppError("Failed to fetch freelancer by ID", 500));
-}
+    // Send response with freelancer basic info and services only
+    return res.status(200).json({
+      status: "success",
+      data: {
+        freelancer: freelancerData[0],
+        services: freelancerServices.length > 0 ? freelancerServices : [],
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching freelancer by ID:", error);
+    return next(new AppError("Failed to fetch freelancer by ID", 500));
+  }
 };
 
 // ✅ GET FREELANCER PORTFOLIO BY ID
@@ -1312,7 +1312,7 @@ ORDER BY portfolio_item_service_type`,
               if (item.portfolio_item_url) {
                 const portfolioItemPath = item.portfolio_item_url;
                 const firstSlashIndex = portfolioItemPath.indexOf("/");
-                
+
                 if (firstSlashIndex !== -1) {
                   const bucketName = portfolioItemPath.substring(0, firstSlashIndex);
                   const objectName = portfolioItemPath.substring(firstSlashIndex + 1);
@@ -1424,7 +1424,7 @@ ORDER BY service_type`,
               if (item.before_service_url) {
                 const beforePath = item.before_service_url;
                 const beforeSlashIndex = beforePath.indexOf("/");
-                
+
                 if (beforeSlashIndex !== -1) {
                   const beforeBucketName = beforePath.substring(0, beforeSlashIndex);
                   const beforeObjectName = beforePath.substring(beforeSlashIndex + 1);
@@ -1444,7 +1444,7 @@ ORDER BY service_type`,
               if (item.after_service_url) {
                 const afterPath = item.after_service_url;
                 const afterSlashIndex = afterPath.indexOf("/");
-                
+
                 if (afterSlashIndex !== -1) {
                   const afterBucketName = afterPath.substring(0, afterSlashIndex);
                   const afterObjectName = afterPath.substring(afterSlashIndex + 1);
@@ -1492,24 +1492,78 @@ ORDER BY service_type`,
   }
 };
 
-const addFreelancerToWhitelist = async (req, res, next) => {
-  // Implementation goes here
+const addFreelancerToWishlist = async (req, res, next) => {
   try {
     const user = req.user;
-    const freelancerId = req.params.id;
-    await query(
-      "INSERT INTO whitelist (user_id, freelancer_id,created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-      [user.user_id, freelancerId, new Date()]
-    );
+    const { freelancerId } = req.body;
+
+    // Validate freelancer ID
+    if (!freelancerId) {
+      return next(new AppError("Freelancer ID is required", 400));
+    }
+
+    // Log the attempt
     logger.info(
-      `Freelancer ${freelancerId} added to whitelist for user ${user.user_id}`
+      `Attempting to add freelancer ${freelancerId} to wishlist for user ${user.roleWiseId}`
     );
+
+
+    // Check if freelancer exists first (optional but recommended)
+    const freelancerCheck = await query(
+      "SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1",
+      [freelancerId]
+    );
+
+    if (freelancerCheck.rows.length === 0) {
+      return next(new AppError("Freelancer not found", 404));
+    }
+
+    // Insert into wishlist
+    const result = await query(
+      `INSERT INTO wishlist (creator_id, freelancer_id, created_at) 
+       VALUES ($1, $2, $3) 
+       ON CONFLICT (creator_id, freelancer_id) DO NOTHING
+       RETURNING *`,
+      [user.roleWiseId, freelancerId, new Date()]
+    );
+
+    // Check if insert was successful or already existed
+    if (result.rows.length === 0) {
+      logger.info(
+        `Freelancer ${freelancerId} already in wishlist for user ${user.roleWiseId}`
+      );
+      return res.status(200).json({
+        status: "success",
+        message: "Freelancer already in wishlist",
+      });
+    }
+
+    logger.info(
+      `Freelancer ${freelancerId} added to wishlist for user ${user.roleWiseId}`
+    );
+
     return res.status(200).json({
       status: "success",
-      message: "Freelancer added to whitelist successfully",
+      message: "Freelancer added to wishlist successfully",
+      data: result.rows[0]
     });
+
   } catch (error) {
-    return next(new AppError("Failed to add freelancer to whitelist", 500));
+    // Log the ACTUAL error for debugging
+    logger.error("wishlist add error:", {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      stack: error.stack,
+      user_id: req.user?.roleWiseId,
+      freelancer_id: req.body?.freelancerId
+    });
+
+    // Pass the actual error with context
+    return next(new AppError(
+      `Failed to add freelancer to wishlist: ${error.message}`,
+      500
+    ));
   }
 };
 
@@ -1856,7 +1910,7 @@ module.exports = {
   getFreelancerById,
   getFreelancerPortfolio,
   getFreelancerImpact,
-  addFreelancerToWhitelist,
+  addFreelancerToWishlist,
   getUserProfileProgress,
   getAllCreatorProfiles,
   getCreatorById,
