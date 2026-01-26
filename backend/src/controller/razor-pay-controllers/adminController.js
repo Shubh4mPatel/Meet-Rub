@@ -192,8 +192,48 @@ const AppError = require("../../../utils/appError");
     }
   }
 
-  const ApproveKYC = async (req, res, next) => {
+  const ApproveKYCByAdmin = async (req, res, next) => {
     try {
+      const { freelancer_id } = req.params;
+
+      if (!freelancer_id) {
+        return next(new AppError('Freelancer ID is required', 400));
+      }
+
+      // Check if freelancer exists
+      const [freelancers] = await db.query(
+        'SELECT freelancer_id, user_id, verification_status FROM freelancer WHERE freelancer_id = $1',
+        [freelancer_id]
+      );
+
+      if (freelancers.length === 0) {
+        return next(new AppError('Freelancer not found', 404));
+      }
+
+      const freelancer = freelancers[0];
+
+      if (freelancer.verification_status === 'VERIFIED') {
+        return next(new AppError('Freelancer KYC is already verified', 400));
+      }
+
+      // Update verification_status in freelancer table
+      await db.query(
+        'UPDATE freelancer SET verification_status = $1 WHERE freelancer_id = $2',
+        ['VERIFIED', freelancer_id]
+      );
+
+      // Update approval_status in users table
+      await db.query(
+        'UPDATE users SET approval_status = $1, approved_at = CURRENT_TIMESTAMP WHERE id = $2',
+        ['approved', freelancer.user_id]
+      );
+
+      res.json({
+        message: 'KYC approved successfully',
+        freelancer_id: freelancer_id,
+        verification_status: 'VERIFIED',
+        approval_status: 'approved'
+      });
     }
     catch (error) {
       console.error('Approve KYC error:', error);
@@ -207,5 +247,6 @@ module.exports ={
   getAllPayouts,
   getPayoutDetails,
   getPlatformStats,
-  updateCommission
+  updateCommission,
+  ApproveKYCByAdmin
 }

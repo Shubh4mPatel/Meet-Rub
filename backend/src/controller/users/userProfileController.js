@@ -1903,6 +1903,186 @@ const editCreatorByAdmin = async (req, res, next) => {
   // Implementation for editing creator profile by admin goes here
 }
 
+const getFreelancerForAdmin = async (req, res, next) => {
+  try {
+    logger.info("Admin fetching all freelancers with pagination");
+
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Query to get freelancers with only required fields
+    const queryText = `
+      SELECT
+        freelancer_id,
+        freelancer_full_name,
+        created_at as joining_date,
+        gov_id_number,
+        verification_status
+      FROM freelancer
+      ORDER BY created_at DESC
+      LIMIT $1 OFFSET $2
+    `;
+
+    const { rows: freelancers } = await query(queryText, [limit, offset]);
+
+    // Get total count for pagination
+    const { rows: countResult } = await query(
+      'SELECT COUNT(*) as total FROM freelancer'
+    );
+    const totalCount = parseInt(countResult[0].total);
+    const totalPages = Math.ceil(totalCount / limit);
+
+    logger.info(`Fetched ${freelancers.length} freelancers for admin`);
+
+    return res.status(200).json({
+      status: "success",
+      message: "Freelancers fetched successfully",
+      data: {
+        freelancers,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalCount,
+          itemsPerPage: limit,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching freelancers for admin:", error);
+    return next(new AppError("Failed to fetch freelancers", 500));
+  }
+}
+
+const editFreelancerByAdmin = async (req, res, next) => {
+  // Implementation for editing freelancer profile by admin goes here
+}
+
+const getFreeLancerByIdForAdmin = async (req, res, next) => {
+  try {
+    logger.info("Admin fetching freelancer KYC details by ID");
+
+    const { freelancer_id } = req.query;
+
+    if (!freelancer_id) {
+      return next(new AppError('Freelancer ID is required', 400));
+    }
+
+    // Fetch freelancer details
+    const { rows: freelancerData } = await query(
+      `SELECT
+        freelancer_id,
+        freelancer_full_name,
+        phone_number,
+        freelancer_email,
+        date_of_birth,
+        created_at as date_of_joining,
+        gov_id_type,
+        gov_id_number,
+        gov_id_url,
+        profile_image_url,
+        niche,
+        verification_status
+      FROM freelancer
+      WHERE freelancer_id = $1`,
+      [freelancer_id]
+    );
+
+    if (!freelancerData[0]) {
+      logger.warn(`Freelancer not found with ID: ${freelancer_id}`);
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    const freelancer = freelancerData[0];
+
+    // Generate presigned URL for profile image if it exists
+    if (freelancer.profile_image_url) {
+      try {
+        const profileImagePath = freelancer.profile_image_url;
+        const firstSlashIndex = profileImagePath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = profileImagePath.substring(0, firstSlashIndex);
+          const objectName = profileImagePath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancer.profile_image_url = signedUrl;
+        } else {
+          logger.warn(`Invalid profile image URL format: ${profileImagePath}`);
+          freelancer.profile_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for profile image: ${error}`);
+        freelancer.profile_image_url = null;
+      }
+    }
+
+    // Generate presigned URL for government ID proof if it exists
+    if (freelancer.gov_id_url) {
+      try {
+        const govIdPath = freelancer.gov_id_url;
+        const firstSlashIndex = govIdPath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = govIdPath.substring(0, firstSlashIndex);
+          const objectName = govIdPath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancer.gov_id_url = signedUrl;
+        } else {
+          logger.warn(`Invalid govt ID URL format: ${govIdPath}`);
+          freelancer.gov_id_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for govt ID: ${error}`);
+        freelancer.gov_id_url = null;
+      }
+    }
+
+    // Fetch freelancer services
+    const { rows: services } = await query(
+      `SELECT service_name
+       FROM services
+       WHERE freelancer_id = $1`,
+      [freelancer_id]
+    );
+
+    logger.info(`Successfully fetched KYC details for freelancer ID: ${freelancer_id}`);
+
+    return res.status(200).json({
+      status: "success",
+      message: "Freelancer KYC details fetched successfully",
+      data: {
+        freelancer_id: freelancer.freelancer_id,
+        full_name: freelancer.freelancer_full_name,
+        phone_number: freelancer.phone_number,
+        email: freelancer.freelancer_email,
+        date_of_birth: freelancer.date_of_birth,
+        date_of_joining: freelancer.date_of_joining,
+        gov_id_type: freelancer.gov_id_type,
+        gov_id_number: freelancer.gov_id_number,
+        gov_id_url: freelancer.gov_id_url,
+        profile_image_url: freelancer.profile_image_url,
+        niches: freelancer.niche || [],
+        verification_status: freelancer.verification_status,
+        services_offered: services.map(s => s.service_name),
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching freelancer KYC details for admin:", error);
+    return next(new AppError("Failed to fetch freelancer KYC details", 500));
+  }
+}
+
 module.exports = {
   getUserProfile,
   editProfile,
@@ -1914,4 +2094,6 @@ module.exports = {
   getUserProfileProgress,
   getAllCreatorProfiles,
   getCreatorById,
+  getFreelancerForAdmin,
+  getFreeLancerByIdForAdmin,
 };
