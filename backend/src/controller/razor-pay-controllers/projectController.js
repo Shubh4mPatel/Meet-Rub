@@ -1,6 +1,7 @@
 const {pool:db} = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const {logger} = require('../../../utils/logger');
+const { createPresignedUrl } = require('../../../utils/helper');
 
 // Create a new project
 const createProject = async (req, res, next) => {
@@ -255,10 +256,144 @@ const deleteProject = async (req, res, next) => {
   }
 }
 
+const getAllProjects = async (req, res, next) => {
+  try {
+    logger.info('Admin fetching all projects with pagination');
+
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Optional status filter
+    const status = req.query.status;
+
+    // Build query
+    let queryText = `
+      SELECT
+        p.id,
+        p.creator_id,
+        p.freelancer_id,
+        p.service_id,
+        p.number_of_units,
+        p.amount,
+        p.end_date,
+        p.status,
+        p.created_at,
+        p.updated_at,
+        c.full_name AS creator_name,
+        c.email AS creator_email,
+        c.profile_image_url AS creator_profile_image,
+        f.freelancer_full_name AS freelancer_name,
+        f.freelancer_email AS freelancer_email,
+        f.profile_image_url AS freelancer_profile_image,
+        s.service_name,
+        s.service_price,
+        s.service_description
+      FROM projects p
+      LEFT JOIN creators c ON p.creator_id = c.creator_id
+      LEFT JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+      LEFT JOIN services s ON p.service_id = s.id
+    `;
+
+    const queryParams = [];
+    let paramIndex = 1;
+
+    // Add status filter if provided
+    if (status) {
+      queryText += ` WHERE p.status = $${paramIndex++}`;
+      queryParams.push(status);
+    }
+
+    // Order by most recent first
+    queryText += ` ORDER BY p.created_at DESC`;
+
+    // Add pagination
+    queryText += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    queryParams.push(limit, offset);
+
+    // Execute main query
+    const { rows: projects } = await db.query(queryText, queryParams);
+
+    // Generate presigned URLs for profile images
+    const expirySeconds = 4 * 60 * 60; // 4 hours
+
+    const projectsWithImages = await Promise.all(
+      projects.map(async (project) => {
+        // Generate presigned URL for creator profile image
+        if (project.creator_profile_image) {
+          try {
+            const firstSlashIndex = project.creator_profile_image.indexOf("/");
+            if (firstSlashIndex !== -1) {
+              const bucketName = project.creator_profile_image.substring(0, firstSlashIndex);
+              const objectName = project.creator_profile_image.substring(firstSlashIndex + 1);
+              project.creator_profile_image = await createPresignedUrl(bucketName, objectName, expirySeconds);
+            }
+          } catch (error) {
+            logger.error(`Error generating presigned URL for creator profile image: ${error}`);
+            project.creator_profile_image = null;
+          }
+        }
+
+        // Generate presigned URL for freelancer profile image
+        if (project.freelancer_profile_image) {
+          try {
+            const firstSlashIndex = project.freelancer_profile_image.indexOf("/");
+            if (firstSlashIndex !== -1) {
+              const bucketName = project.freelancer_profile_image.substring(0, firstSlashIndex);
+              const objectName = project.freelancer_profile_image.substring(firstSlashIndex + 1);
+              project.freelancer_profile_image = await createPresignedUrl(bucketName, objectName, expirySeconds);
+            }
+          } catch (error) {
+            logger.error(`Error generating presigned URL for freelancer profile image: ${error}`);
+            project.freelancer_profile_image = null;
+          }
+        }
+
+        return project;
+      })
+    );
+
+    // Get total count for pagination
+    let countQuery = 'SELECT COUNT(*) as total FROM projects p';
+    const countParams = [];
+
+    if (status) {
+      countQuery += ' WHERE p.status = $1';
+      countParams.push(status);
+    }
+
+    const { rows: countResult } = await db.query(countQuery, countParams);
+    const totalCount = parseInt(countResult[0].total);
+    const totalPages = Math.ceil(totalCount / limit);
+
+    logger.info(`Fetched ${projects.length} projects for admin (page ${page})`);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'All projects fetched successfully',
+      data: {
+        projects: projectsWithImages,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalCount,
+          itemsPerPage: limit,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Get all projects error:', error);
+    logger.error('Error fetching all projects for admin:', error);
+    return next(new AppError('Failed to fetch all projects', 500));
+  }
+};
+
 module.exports = {
   createProject,
   getProject,
   getMyProjects,
   updateProjectStatus,
-  deleteProject
+  deleteProject,
+  getAllProjects
 }
