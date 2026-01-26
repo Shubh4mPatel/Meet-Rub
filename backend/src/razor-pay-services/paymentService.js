@@ -131,7 +131,7 @@ class PaymentService {
 
       // Get project details
       const [projects] = await connection.query(
-        'SELECT * FROM projects WHERE id = ? AND client_id = ?',
+        'SELECT * FROM projects WHERE id = ? AND creator_id = ?',
         [projectId, clientId]
       );
 
@@ -146,7 +146,7 @@ class PaymentService {
 
       // Get client wallet
       const [wallets] = await connection.query(
-        'SELECT id, balance FROM wallets WHERE user_id = ? FOR UPDATE',
+        'SELECT id, balance FROM wallets WHERE creator_id = ? FOR UPDATE',
         [clientId]
       );
 
@@ -172,7 +172,7 @@ class PaymentService {
       // Create transaction record
       const [result] = await connection.query(
         `INSERT INTO transactions 
-        (project_id, client_id, freelancer_id, total_amount, platform_commission, 
+        (project_id, creator_id freelancer_id, total_amount, platform_commission, 
         platform_commission_percentage, freelancer_amount, payment_source, status, held_at) 
         VALUES (?, ?, ?, ?, ?, ?, ?, 'WALLET', 'HELD', NOW())`,
         [
@@ -210,7 +210,7 @@ class PaymentService {
 
       // Get project details
       const [projects] = await connection.query(
-        'SELECT * FROM projects WHERE id = ? AND client_id = ?',
+        'SELECT * FROM projects WHERE id = ? AND creator_id = ?',
         [projectId, clientId]
       );
 
@@ -224,7 +224,7 @@ class PaymentService {
       // Create transaction record
       const [result] = await connection.query(
         `INSERT INTO transactions 
-        (project_id, client_id, freelancer_id, total_amount, platform_commission, 
+        (project_id, creator_id, freelancer_id, total_amount, platform_commission, 
         platform_commission_percentage, freelancer_amount, payment_source, status) 
         VALUES (?, ?, ?, ?, ?, ?, ?, 'RAZORPAY', 'INITIATED')`,
         [
@@ -338,7 +338,7 @@ class PaymentService {
         f.full_name as freelancer_name, f.email as freelancer_email,
         p.title as project_title
       FROM transactions t
-      JOIN users c ON t.client_id = c.id
+      JOIN users c ON t.creator_id = c.id
       JOIN users f ON t.freelancer_id = f.id
       JOIN projects p ON t.project_id = p.id
       WHERE t.id = ?`,
@@ -356,7 +356,7 @@ class PaymentService {
         p.title as project_title,
         p.status as project_status
       FROM transactions t
-      JOIN users c ON t.client_id = c.id
+      JOIN users c ON t.creator_id = c.id
       JOIN users f ON t.freelancer_id = f.id
       JOIN projects p ON t.project_id = p.id
       WHERE t.status = ?

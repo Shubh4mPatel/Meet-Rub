@@ -154,7 +154,7 @@ const updateProjectStatus = async (req, res, next) => {
   try {
     const projectId = req.params.id;
     const { status } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.roleWiseId;
 
     if (!status) {
       return next(new AppError('Status is required', 400));
@@ -182,7 +182,7 @@ const updateProjectStatus = async (req, res, next) => {
       if (status === 'COMPLETED' && project.freelancer_id !== userId) {
         return next(new AppError('Only freelancer can mark project as completed', 403));
       }
-      if (status === 'CANCELLED' && project.client_id !== userId) {
+      if (status === 'CANCELLED' && project.creator_id !== userId) {
         return next(new AppError('Only client can cancel project', 403));
       }
     }
@@ -213,7 +213,7 @@ const updateProjectStatus = async (req, res, next) => {
 const deleteProject = async (req, res, next) => {
   try {
     const projectId = req.params.id;
-    const userId = req.user.id;
+    const userId = req.user.roleWiseId;
 
     // Get project
     const [projects] = await db.query(
@@ -228,7 +228,7 @@ const deleteProject = async (req, res, next) => {
     const project = projects[0];
 
     // Check if user is client
-    if (project.client_id !== userId && req.user.user_type !== 'ADMIN') {
+    if (project.creator_id !== userId && req.user.user_type !== 'ADMIN') {
       return next(new AppError('Only client can delete project', 403));
     }
 

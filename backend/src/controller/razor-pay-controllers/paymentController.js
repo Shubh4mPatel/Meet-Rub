@@ -6,7 +6,7 @@ const AppError = require("../../../utils/appError");
 const payFromWallet = async (req, res, next) => {
   try {
     const { project_id } = req.body;
-    const clientId = req.user.id;
+    const clientId = req.user.roleWiseId;
 
     if (!project_id) {
       return next(new AppError('Project ID is required', 400));
@@ -14,7 +14,7 @@ const payFromWallet = async (req, res, next) => {
 
     // Verify project belongs to client
     const [projects] = await db.query(
-      'SELECT * FROM projects WHERE id = ? AND client_id = ?',
+      'SELECT * FROM projects WHERE id = ? AND creator_id = ?',
       [project_id, clientId]
     );
 
@@ -38,7 +38,7 @@ const payFromWallet = async (req, res, next) => {
 const createPaymentOrder = async (req, res, next) => {
   try {
     const { project_id } = req.body;
-    const clientId = req.user.id;
+    const clientId = req.user.roleWiseId;
 
     if (!project_id) {
       return next(new AppError('Project ID is required', 400));
@@ -96,7 +96,7 @@ const verifyPayment = async (req, res, next) => {
 const getTransaction = async (req, res, next) => {
   try {
     const transactionId = req.params.id;
-    const userId = req.user.id;
+    const userId = req.user.roleWiseId;
 
     const transaction = await paymentService.getTransaction(transactionId);
 
@@ -105,7 +105,7 @@ const getTransaction = async (req, res, next) => {
     }
 
     // Check if user is involved in transaction
-    if (transaction.client_id !== userId &&
+    if (transaction.creator_id !== userId &&
         transaction.freelancer_id !== userId &&
         req.user.user_type !== 'ADMIN') {
       return next(new AppError('Access denied', 403));
@@ -126,7 +126,7 @@ const getMyTransactions = async (req, res, next) => {
 
     let query;
     if (userType === 'CLIENT') {
-      query = 'SELECT * FROM transactions WHERE client_id = ? ORDER BY created_at DESC';
+      query = 'SELECT * FROM transactions WHERE creator_id = ? ORDER BY created_at DESC';
     } else if (userType === 'FREELANCER') {
       query = 'SELECT * FROM transactions WHERE freelancer_id = ? ORDER BY created_at DESC';
     } else {
