@@ -2718,7 +2718,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, w.freelancer_id`;
 
     // Add sorting based on sortBy parameter
     let orderByClause = "";
@@ -2743,7 +2743,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       SELECT COUNT(DISTINCT f.freelancer_id) as count
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
-      WHERE 1=1
+      WHERE 1=1 AND f.verification_status = 'VERIFIED' AND f.is_active = true
     `;
 
     const countParams = [];
