@@ -1567,6 +1567,291 @@ const addFreelancerToWishlist = async (req, res, next) => {
   }
 };
 
+const removeFreelancerFromWishlist = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const { freelancerId } = req.body;
+
+    // Validate freelancer ID
+    if (!freelancerId) {
+      return next(new AppError("Freelancer ID is required", 400));
+    }
+
+    // Log the attempt
+    logger.info(
+      `Attempting to remove freelancer ${freelancerId} from wishlist for user ${user.roleWiseId}`
+    );
+
+    // Check if freelancer exists first (optional but recommended)
+    const freelancerCheck = await query(
+      "SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1",
+      [freelancerId]
+    );
+
+    if (freelancerCheck.rows.length === 0) {
+      return next(new AppError("Freelancer not found", 404));
+    }
+
+    // Delete from wishlist
+    const result = await query(
+      `DELETE FROM wishlist 
+       WHERE creator_id = $1 AND freelancer_id = $2
+       RETURNING *`,
+      [user.roleWiseId, freelancerId]
+    );
+
+    // Check if delete was successful or item didn't exist
+    if (result.rows.length === 0) {
+      logger.info(
+        `Freelancer ${freelancerId} was not in wishlist for user ${user.roleWiseId}`
+      );
+      return res.status(200).json({
+        status: "success",
+        message: "Freelancer was not in wishlist",
+      });
+    }
+
+    logger.info(
+      `Freelancer ${freelancerId} removed from wishlist for user ${user.roleWiseId}`
+    );
+
+    return res.status(200).json({
+      status: "success",
+      message: "Freelancer removed from wishlist successfully",
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    // Log the ACTUAL error for debugging
+    logger.error("wishlist remove error:", {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      stack: error.stack,
+      user_id: req.user?.roleWiseId,
+      freelancer_id: req.body?.freelancerId
+    });
+
+    // Pass the actual error with context
+    return next(new AppError(
+      `Failed to remove freelancer from wishlist: ${error.message}`,
+      500
+    ));
+  }
+};
+
+const getWishlistFreelancers = async (req, res, next) => {
+  logger.info("Fetching wishlist freelancers with filters");
+  try {
+    const user = req.user;
+
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Search and filter parameters
+    const search = req.query.search || ""; // Search by freelancer name
+    const minPrice = parseFloat(req.query.minPrice) || 0;
+    const maxPrice = parseFloat(req.query.maxPrice) || Number.MAX_SAFE_INTEGER;
+    // Handle serviceType as an array
+    const serviceTypes = req.query.serviceType
+      ? Array.isArray(req.query.serviceType)
+        ? req.query.serviceType
+        : [req.query.serviceType]
+      : [];
+
+    // Sort and delivery time filters
+    const sortBy = req.query.sortBy || "newest"; // toprated, newest
+    const deliveryTime = req.query.deliveryTime || ""; // e.g., "2-3 days"
+
+    // Build the query based on filters
+    let queryText = `
+      SELECT
+        f.freelancer_id,
+        f.freelancer_full_name,
+        f.profile_title,
+        f.profile_image_url,
+        f.freelancer_thumbnail_image,
+        f.rating,
+        ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
+        MIN(s.service_price) as lowest_price,
+        w.created_at as wishlist_added_at
+      FROM freelancer f
+      INNER JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      WHERE 1=1 AND f.verification_status = 'VERIFIED' AND f.is_active = true
+    `;
+
+    const queryParams = [user.roleWiseId];
+    let paramCount = 2;
+
+    // Add search condition
+    if (search) {
+      queryText += ` AND f.freelancer_full_name ILIKE $${paramCount}`;
+      queryParams.push(`%${search}%`);
+      paramCount++;
+    }
+
+    // Add service type filter (using IN clause for array)
+    if (serviceTypes.length > 0) {
+      const serviceTypeParams = serviceTypes
+        .map((_, index) => `$${paramCount + index}`)
+        .join(",");
+      queryText += ` AND s.service_name IN (${serviceTypeParams})`;
+      queryParams.push(...serviceTypes);
+      paramCount += serviceTypes.length;
+    }
+
+    // Add price range filter
+    queryText += ` AND (s.service_price >= $${paramCount} AND s.service_price <= $${paramCount + 1})`;
+    queryParams.push(minPrice, maxPrice);
+    paramCount += 2;
+
+    // Add delivery time filter
+    if (deliveryTime) {
+      queryText += ` AND s.delivery_time = $${paramCount}`;
+      queryParams.push(deliveryTime);
+      paramCount++;
+    }
+
+    // Add GROUP BY clause
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, w.created_at`;
+
+    // Add sorting based on sortBy parameter
+    let orderByClause = "";
+    switch (sortBy) {
+      case "toprated":
+        orderByClause =
+          " ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name";
+        break;
+      case "newest":
+      default:
+        orderByClause =
+          " ORDER BY w.created_at DESC NULLS LAST, f.freelancer_full_name";
+        break;
+    }
+
+    // Add pagination
+    queryText += `${orderByClause} LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    queryParams.push(limit, offset);
+
+    // Get total count for pagination (count distinct freelancers in wishlist)
+    let countQuery = `
+      SELECT COUNT(DISTINCT f.freelancer_id) as count
+      FROM freelancer f
+      INNER JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      WHERE 1=1 AND f.verification_status = 'VERIFIED' AND f.is_active = true
+    `;
+
+    const countParams = [user.roleWiseId];
+    let countParamIndex = 2;
+
+    if (search) {
+      countQuery += ` AND f.freelancer_full_name ILIKE $${countParamIndex}`;
+      countParams.push(`%${search}%`);
+      countParamIndex++;
+    }
+
+    if (serviceTypes.length > 0) {
+      const serviceTypeParams = serviceTypes
+        .map((_, index) => `$${countParamIndex + index}`)
+        .join(",");
+      countQuery += ` AND s.service_name IN (${serviceTypeParams})`;
+      countParams.push(...serviceTypes);
+      countParamIndex += serviceTypes.length;
+    }
+
+    countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${countParamIndex + 1})`;
+    countParams.push(minPrice, maxPrice);
+    countParamIndex += 2;
+
+    if (deliveryTime) {
+      countQuery += ` AND s.delivery_time = $${countParamIndex}`;
+      countParams.push(deliveryTime);
+    }
+
+    logger.debug("Wishlist Query:", queryText);
+    logger.debug("With Parameters:", queryParams);
+
+    const [results, countResult] = await Promise.all([
+      query(queryText, queryParams),
+      query(countQuery, countParams),
+    ]);
+
+    const totalCount = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(totalCount / limit);
+
+    // Generate presigned URLs for profile images
+    const freelancersWithSignedUrls = await Promise.all(
+      results.rows.map(async (freelancer) => {
+        if (freelancer.profile_image_url) {
+          const parts = freelancer.profile_image_url.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
+
+          try {
+            const signedUrl = await createPresignedUrl(
+              bucketName,
+              objectName,
+              expirySeconds
+            );
+            freelancer.profile_image_url = signedUrl;
+          } catch (error) {
+            logger.error(
+              `Error generating signed URL for freelancer ${freelancer.freelancer_id}:`,
+              error
+            );
+            freelancer.profile_image_url = null;
+          }
+        }
+
+        // Generate presigned URL for thumbnail image if it exists
+        if (freelancer.freelancer_thumbnail_image) {
+          const parts = freelancer.freelancer_thumbnail_image.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
+
+          try {
+            const signedUrl = await createPresignedUrl(
+              bucketName,
+              objectName,
+              expirySeconds
+            );
+            freelancer.freelancer_thumbnail_image = signedUrl;
+          } catch (error) {
+            logger.error(
+              `Error generating signed URL for freelancer thumbnail ${freelancer.freelancer_id}:`,
+              error
+            );
+            freelancer.freelancer_thumbnail_image = null;
+          }
+        }
+
+        return freelancer;
+      })
+    );
+
+    logger.info(`Found ${totalCount} wishlist freelancers matching criteria for user ${user.roleWiseId}`);
+    return res.status(200).json({
+      status: "success",
+      data: {
+        freelancers: freelancersWithSignedUrls,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalItems: totalCount,
+          itemsPerPage: limit,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching wishlist freelancers:", error);
+    return next(new AppError("Failed to fetch wishlist freelancers", 500));
+  }
+};
+
 const getUserProfileProgress = async (req, res, next) => {
   logger.info("Calculating user profile completion progress");
   try {
@@ -2116,6 +2401,8 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
 }
 
 module.exports = {
+  removeFreelancerFromWishlist,
+  getWishlistFreelancers,
   getUserProfile,
   editProfile,
   getAllFreelancers,

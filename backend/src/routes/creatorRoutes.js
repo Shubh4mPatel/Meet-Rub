@@ -3,6 +3,7 @@ const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSugg
 const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { getNiches } = require('../controller/services/serviceController');
+const { getWishlistFreelancers, removeFreelancerFromWishlist } = require('../controller/users/userProfileController');
 /**
  * @swagger
  * /creator/service-request:
@@ -180,6 +181,10 @@ router.get('/service-requests/:requestId/suggestions',authenticateUser, requireR
  *         description: Server error
  */
 router.post('/wishlist', authenticateUser, requireRole(['creator']), addFreelancerToWishlist);
+
+router.post('/remove-from-wishlist', authenticateUser, requireRole(['creator']), removeFreelancerFromWishlist);
+
+router.get('/wishlist', authenticateUser, requireRole(['creator']), getWishlistFreelancers);
 
 router.get('/niches', getNiches);
 
