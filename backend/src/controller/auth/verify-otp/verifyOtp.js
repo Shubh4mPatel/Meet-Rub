@@ -243,7 +243,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           client.release();
         }
       } else if (role === "creator") {
-        const { firstName, lastName, niche, socialLinks } = req.body;
+        const { firstName, lastName, niche, socialLinks, phoneNo } = req.body;
 
         // Parse JSON strings from FormData
         const parsedNiche = JSON.parse(niche);
@@ -274,8 +274,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
           await client.query(
             `INSERT INTO creators 
-            (user_id,full_name , first_name, last_name, niche, social_links, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7,$8)
+            (user_id,full_name , first_name, last_name, niche, social_links, phone_number, email, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9, $10)
             RETURNING *`,
             [
               newUserResMeetRub[0].id,
@@ -284,6 +284,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
               lastName,
               parsedNiche,
               parsedSocialLinks ? JSON.stringify(parsedSocialLinks) : null,
+              phoneNo || null,
+              email.toLowerCase(),
               currentDateTime,
               currentDateTime,
             ]
