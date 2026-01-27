@@ -422,8 +422,8 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
         if (freelancer.profile_image_url) {
           try {
             const parts = freelancer.profile_image_url.split("/");
-            const bucketName = parts[2];
-            const objectName = parts.slice(3).join("/");
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join("/");
 
             const signedUrl = await createPresignedUrl(
               bucketName,
