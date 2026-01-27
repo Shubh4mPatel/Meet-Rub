@@ -559,7 +559,7 @@ const AssignFreelancerToRequest = async (req, res, next) => {
 
     // Verify all freelancer IDs exist
     const { rows: freelancers } = await query(
-      `SELECT id FROM freelancers WHERE id = ANY($1::int[])`,
+      `SELECT id FROM freelancer WHERE id = ANY($1::int[])`,
       [freelancerIds]
     );
 
