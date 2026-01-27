@@ -2092,7 +2092,7 @@ const getCreatorById = async (req, res, next) => {
   logger.info("Fetching creator by ID");
 
   try {
-    const creatorId = req.params?.id;
+    const creatorId = req.params?.creator_id;
 
     // Validate creator ID parameter
     if (!creatorId) {
