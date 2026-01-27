@@ -3,7 +3,7 @@ const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSugg
 const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { getNiches } = require('../controller/services/serviceController');
-const { getWishlistFreelancers, removeFreelancerFromWishlist } = require('../controller/users/userProfileController');
+const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersForcreator } = require('../controller/users/userProfileController');
 /**
  * @swagger
  * /creator/service-request:
@@ -186,6 +186,8 @@ router.post('/remove-from-wishlist', authenticateUser, requireRole(['creator']),
 
 router.get('/wishlist', authenticateUser, requireRole(['creator']), getWishlistFreelancers);
 
-router.get('/niches', getNiches);
+router.get('/niches',authenticateUser, requireRole(['creator']), getNiches);
+
+router.get('/all-freelancers',authenticateUser, requireRole(['creator']), getAllfreelancersForcreator);
 
 module.exports = router;
