@@ -47,7 +47,7 @@ LIMIT $1 OFFSET $2`,
 
         const countRes = await query(
             `SELECT COUNT(*) AS total
-       FROM freelancers`
+       FROM freelancer`
         );
         const totalFreelancers = parseInt(countRes.rows[0].total, 10);
         const totalPages = Math.ceil(totalFreelancers / limit);

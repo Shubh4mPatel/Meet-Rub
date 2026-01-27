@@ -410,7 +410,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
       });
     }
     const { rows: freelancers } = await query(
-      `SELECT id, freelancer_full_name, profile_picture, rating  FROM freelancers
+      `SELECT id, freelancer_full_name, profile_picture, rating  FROM freelancer
        WHERE id = ANY($1::int[])`,
       [serviceRequests.map((sr) => sr.freelancer_id)]
     );
