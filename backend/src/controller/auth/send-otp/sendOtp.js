@@ -4,6 +4,7 @@ const { query } = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
 const { logger } = require('../../../../utils/logger');
 const { sendEmailNotification } = require("../../../../producer/notificationProducer");
+const { sendMail } = require("../../../../config/email");
 
 const otpSendApi = async (req, res, next) => {
   let { email, type } = req.body;
@@ -68,7 +69,8 @@ const otpSendApi = async (req, res, next) => {
 
     logger.info("Sending OTP email");
 
-    sendEmailNotification(email, subject, message, false);
+    // sendEmailNotification(email, subject, message, false);
+    sendMail(email, subject, message);
 
     logger.info("OTP sent successfully");
 
