@@ -410,7 +410,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
       });
     }
     const { rows: freelancers } = await query(
-      `SELECT freelancer_id, freelancer_full_name, profile_picture, rating  FROM freelancer
+      `SELECT freelancer_id, freelancer_full_name, profile_image_url, rating  FROM freelancer
        WHERE freelancer_id = ANY($1::int[])`,
       [serviceRequests.map((sr) => sr.freelancer_id)]
     );
@@ -419,9 +419,9 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     // Generate presigned URLs for profile pictures
     const freelancersWithSignedUrls = await Promise.all(
       freelancers.map(async (freelancer) => {
-        if (freelancer.profile_picture) {
+        if (freelancer.profile_image_url) {
           try {
-            const parts = freelancer.profile_picture.split("/");
+            const parts = freelancer.profile_image_url.split("/");
             const bucketName = parts[2];
             const objectName = parts.slice(3).join("/");
 
@@ -430,13 +430,13 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
               objectName,
               expirySeconds
             );
-            freelancer.profile_picture = signedUrl;
+            freelancer.profile_image_url = signedUrl;
           } catch (error) {
             logger.error(
               `Error generating signed URL for freelancer ${freelancer.freelancer_id}:`,
               error
             );
-            freelancer.profile_picture = null;
+            freelancer.profile_image_url = null;
           }
         }
         return freelancer;
