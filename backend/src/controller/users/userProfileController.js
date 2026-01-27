@@ -2644,7 +2644,7 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
   try {
     const user = req.user;
     const creator_id = user?.roleWiseId;
-    const freelancerId = req.params?.id;
+    const freelancerId = req.params?.freelancer_id;
 
     // Validate freelancer ID parameter
     if (!freelancerId) {
@@ -2980,6 +2980,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
 };
 
 module.exports = {
+  getFreelancerByIdForCreator,
   getAllfreelancersForcreator,
   getFreelancerForSuggestion,
   removeFreelancerFromWishlist,
