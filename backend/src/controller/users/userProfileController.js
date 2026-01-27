@@ -2638,6 +2638,126 @@ const getFreelancerForSuggestion = async (req, res, next) => {
   }
 };
 
+const getFreelancerByIdForCreator = async (req, res, next) => {
+
+  logger.info("Fetching freelancer by ID");
+  try {
+    const user = req.user;
+    const creator_id = user?.roleWiseId;
+    const freelancerId = req.params?.id;
+
+    // Validate freelancer ID parameter
+    if (!freelancerId) {
+      logger.warn("Freelancer ID parameter is missing");
+      return next(new AppError("Freelancer ID is required", 400));
+    }
+
+    const { rows: freelancerData } = await query(
+      `SELECT 
+        f.freelancer_full_name, 
+        f.profile_title, 
+        f.freelancer_thumbnail_image, 
+        f.profile_image_url, 
+        f.rating,
+        CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
+      FROM freelancer f
+      LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $2
+      WHERE f.freelancer_id = $1`,
+      [freelancerId, creator_id]
+    );
+
+    // Check if freelancer exists
+    if (!freelancerData[0]) {
+      logger.warn(`Freelancer not found with ID: ${freelancerId}`);
+      return next(new AppError("Freelancer not found", 404));
+    }
+
+    logger.debug("Freelancer data fetched:", freelancerData[0]);
+
+    // Generate presigned URL for profile image if it exists
+    if (freelancerData[0].profile_image_url) {
+      try {
+        const profileImagePath = freelancerData[0].profile_image_url;
+
+        // Extract bucket name and object key
+        // Assuming format: "bucket-name/path/to/object"
+        const firstSlashIndex = profileImagePath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = profileImagePath.substring(0, firstSlashIndex);
+          const objectName = profileImagePath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancerData[0].profile_image_url = signedUrl;
+        } else {
+          logger.warn(
+            `Invalid profile image URL format: ${profileImagePath}`
+          );
+          freelancerData[0].profile_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for profile image: ${error}`);
+        freelancerData[0].profile_image_url = null;
+      }
+    }
+
+    // Generate presigned URL for thumbnail image if it exists
+    if (freelancerData[0].freelancer_thumbnail_image) {
+      try {
+        const thumbnailPath = freelancerData[0].freelancer_thumbnail_image;
+
+        const firstSlashIndex = thumbnailPath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = thumbnailPath.substring(0, firstSlashIndex);
+          const objectName = thumbnailPath.substring(firstSlashIndex + 1);
+
+          const thumbSignedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancerData[0].freelancer_thumbnail_image = thumbSignedUrl;
+        } else {
+          logger.warn(
+            `Invalid thumbnail image URL format: ${thumbnailPath}`
+          );
+          freelancerData[0].freelancer_thumbnail_image = null;
+        }
+      } catch (error) {
+        logger.error(
+          `Error generating signed URL for thumbnail image: ${error}`
+        );
+        freelancerData[0].freelancer_thumbnail_image = null;
+      }
+    }
+
+    const { rows: freelancerServices } = await query(
+      `SELECT id, service_name, service_description, service_price, delivery_time
+     FROM services WHERE freelancer_id = $1`,
+      [freelancerId]
+    );
+
+    logger.info(`Successfully fetched freelancer data for ID: ${freelancerId}`);
+
+    // Send response with freelancer basic info and services only
+    return res.status(200).json({
+      status: "success",
+      data: {
+        freelancer: freelancerData[0],
+        services: freelancerServices.length > 0 ? freelancerServices : [],
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching freelancer by ID:", error);
+    return next(new AppError("Failed to fetch freelancer by ID", 500));
+  }
+};
+
 
 const getAllfreelancersForcreator = async (req, res, next) => {
   logger.info("Fetching all freelancers with filters");
