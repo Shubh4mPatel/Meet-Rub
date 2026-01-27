@@ -1912,6 +1912,38 @@ const getFreelancerForAdmin = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
+    // Search parameter
+    const search = req.query.search || "";
+
+    // Date filter parameters
+    const startDate = req.query.startDate || null;
+    const endDate = req.query.endDate || null;
+
+    // Build WHERE clause dynamically
+    const conditions = [];
+    const queryParams = [];
+    let paramIndex = 1;
+
+    if (search) {
+      conditions.push(`freelancer_full_name ILIKE $${paramIndex}`);
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (startDate) {
+      conditions.push(`created_at >= $${paramIndex}`);
+      queryParams.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      conditions.push(`created_at <= $${paramIndex}`);
+      queryParams.push(endDate);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
     // Query to get freelancers with only required fields
     const queryText = `
       SELECT
@@ -1921,16 +1953,16 @@ const getFreelancerForAdmin = async (req, res, next) => {
         gov_id_number,
         verification_status
       FROM freelancer
+      ${whereClause}
       ORDER BY created_at DESC
-      LIMIT $1 OFFSET $2
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
-    const { rows: freelancers } = await query(queryText, [limit, offset]);
+    const { rows: freelancers } = await query(queryText, [...queryParams, limit, offset]);
 
     // Get total count for pagination
-    const { rows: countResult } = await query(
-      'SELECT COUNT(*) as total FROM freelancer'
-    );
+    const countQueryText = `SELECT COUNT(*) as total FROM freelancer ${whereClause}`;
+    const { rows: countResult } = await query(countQueryText, queryParams);
     const totalCount = parseInt(countResult[0].total);
     const totalPages = Math.ceil(totalCount / limit);
 
