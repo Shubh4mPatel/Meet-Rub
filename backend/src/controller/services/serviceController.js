@@ -579,7 +579,7 @@ const AssignFreelancerToRequest = async (req, res, next) => {
          admin_notes = $3,
          updated_at = $5
        RETURNING *`,
-      [requestId, freelancerIds, adminNotes || null, new Date().toISOString, new Date().toISOString()]
+      [requestId, freelancerIds, adminNotes || null, new Date().toISOString(), new Date().toISOString()]
     );
 
     logger.info(`Freelancers assigned to request ${requestId} successfully`);
