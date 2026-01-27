@@ -42,6 +42,9 @@ const creatorSchema = Joi.object({
   ...baseSchema,
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
+  phoneNo: Joi.string()
+    .pattern(/^\+?[1-9]\d{1,14}$/)
+    .optional(),
   niche: Joi.string().required(), // JSON stringified array
   socialLinks: Joi.string().optional(), // JSON stringified array
 });
