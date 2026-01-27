@@ -190,6 +190,6 @@ router.get('/niches',authenticateUser, requireRole(['creator']), getNiches);
 
 router.get('/all-freelancers',authenticateUser, requireRole(['creator']), getAllfreelancersForcreator);
 
-router.get('/get-freelancer-by-id/:freelancer_id', authenticateUser, requireRole(['creator']),getFreelancerByIdForCreator )
+router.get('/get-freelancer-by-id/:freelancer_id', authenticateUser, requireRole(['creator']),getFreelancerByIdForCreator)
 
 module.exports = router;
