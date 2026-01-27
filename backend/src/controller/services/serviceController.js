@@ -410,8 +410,8 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
       });
     }
     const { rows: freelancers } = await query(
-      `SELECT id, freelancer_full_name, profile_picture, rating  FROM freelancer
-       WHERE id = ANY($1::int[])`,
+      `SELECT freelancer_id, freelancer_full_name, profile_picture, rating  FROM freelancer
+       WHERE freelancer_id = ANY($1::int[])`,
       [serviceRequests.map((sr) => sr.freelancer_id)]
     );
     logger.debug(`Total freelancers found: ${freelancers.length}`);
@@ -433,7 +433,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
             freelancer.profile_picture = signedUrl;
           } catch (error) {
             logger.error(
-              `Error generating signed URL for freelancer ${freelancer.id}:`,
+              `Error generating signed URL for freelancer ${freelancer.freelancer_id}:`,
               error
             );
             freelancer.profile_picture = null;
@@ -559,7 +559,7 @@ const AssignFreelancerToRequest = async (req, res, next) => {
 
     // Verify all freelancer IDs exist
     const { rows: freelancers } = await query(
-      `SELECT id FROM freelancer WHERE id = ANY($1::int[])`,
+      `SELECT freelancer_id FROM freelancer WHERE freelancer_id = ANY($1::int[])`,
       [freelancerIds]
     );
 
