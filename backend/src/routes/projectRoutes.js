@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const{ createProject, getMyProjects, getProject, updateProjectStatus, deleteProject} = require('../controller/razor-pay-controllers/projectController');
+const{ createProject, getMyProjects, getProject, updateProjectStatus, deleteProject, getAllProjects} = require('../controller/razor-pay-controllers/projectController');
 
 /**
  * @swagger
@@ -472,5 +472,8 @@ router.put('/:id/status', updateProjectStatus);
  *         description: Internal server error
  */
 router.delete('/:id',  deleteProject);
+
+
+router.get('/getallprojects', getAllProjects);
 
 module.exports = router;
