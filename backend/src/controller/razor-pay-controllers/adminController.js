@@ -226,17 +226,10 @@ const ApproveKYCByAdmin = async (req, res, next) => {
         ['VERIFIED', freelancer_id]
       );
 
-      // Update approval_status in users table
-      await query(
-        'UPDATE users SET approval_status = $1, approved_at = CURRENT_TIMESTAMP WHERE id = $2',
-        ['approved', freelancer.user_id]
-      );
-
       res.json({
         message: 'KYC approved successfully',
         freelancer_id: freelancer_id,
-        verification_status: 'VERIFIED',
-        approval_status: 'approved'
+        verification_status: 'VERIFIED'
       });
     }
     catch (error) {
