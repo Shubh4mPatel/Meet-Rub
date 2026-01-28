@@ -471,7 +471,7 @@ router.put('/update-project-status/:id/status', updateProjectStatus);
  *       500:
  *         description: Internal server error
  */
-router.delete('/delte-project/:id',  deleteProject);
+router.delete('/delete-project/:id',  deleteProject);
 
 router.get('/get-all-projects', getAllProjects);
 
