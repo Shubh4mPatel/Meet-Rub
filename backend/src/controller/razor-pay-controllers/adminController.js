@@ -271,7 +271,7 @@ const rejectKYCByAdmin = async (req, res, next) => {
     // Update verification_status and reason_for_rejection in freelancer table
     await query(
       'UPDATE freelancer SET verification_status = $1, reason_for_rejection = $2 WHERE freelancer_id = $3',
-      ['REJECTED', reasoreason_for_rejectionForRejection, freelancer_id]
+      ['REJECTED', reason_for_rejection, freelancer_id]
     );
 
     res.json({
