@@ -192,7 +192,7 @@ const AppError = require("../../../utils/appError");
     }
   }
 
-  const ApproveKYCByAdmin = async (req, res, next) => {
+const ApproveKYCByAdmin = async (req, res, next) => {
     try {
       const { freelancer_id } = req.params;
 
@@ -201,10 +201,13 @@ const AppError = require("../../../utils/appError");
       }
 
       // Check if freelancer exists
-      const [freelancers] = await db.query(
+      const queryResult = await db.query(
         'SELECT freelancer_id, user_id, verification_status FROM freelancer WHERE freelancer_id = $1',
         [freelancer_id]
       );
+
+      // This is where the error occurs - check if queryResult.rows exists
+      const freelancers = queryResult.rows || [];
 
       if (freelancers.length === 0) {
         return next(new AppError('Freelancer not found', 404));
