@@ -1,6 +1,7 @@
 const paymentService = require('../../razor-pay-services/paymentService');
 const payoutService = require('../../razor-pay-services/payoutService');
 const {pool:db} = require('../../../config/dbConfig');
+const {query} = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 
 // class AdminController {
@@ -201,7 +202,7 @@ const ApproveKYCByAdmin = async (req, res, next) => {
       }
 
       // Check if freelancer exists
-      const queryResult = await db.query(
+      const queryResult = await query(
         'SELECT freelancer_id, user_id, verification_status FROM freelancer WHERE freelancer_id = $1',
         [freelancer_id]
       );
@@ -220,13 +221,13 @@ const ApproveKYCByAdmin = async (req, res, next) => {
       }
 
       // Update verification_status in freelancer table
-      await db.query(
+      await query(
         'UPDATE freelancer SET verification_status = $1 WHERE freelancer_id = $2',
         ['VERIFIED', freelancer_id]
       );
 
       // Update approval_status in users table
-      await db.query(
+      await query(
         'UPDATE users SET approval_status = $1, approved_at = CURRENT_TIMESTAMP WHERE id = $2',
         ['approved', freelancer.user_id]
       );
