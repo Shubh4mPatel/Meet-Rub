@@ -2254,11 +2254,41 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
 
     logger.info(`Fetched ${freelancers.length} freelancers for admin`);
 
+
+     const freelancersWithSignedUrls = await Promise.all(
+      freelancers.map(async (freelancer) => {
+        // Generate presigned URL for profile image if it exists
+        if (freelancer.profile_image_url) {
+          try {
+            const profileImagePath = freelancer.profile_image_url;
+            const firstSlashIndex = profileImagePath.indexOf("/");
+            if (firstSlashIndex !== -1) {
+              const bucketName = profileImagePath.substring(0, firstSlashIndex);
+              const objectName = profileImagePath.substring(firstSlashIndex + 1);
+              const signedUrl = await createPresignedUrl(
+                bucketName,
+                objectName,
+                expirySeconds
+              );
+              freelancer.profile_image_url = signedUrl;
+            } else {
+              logger.warn(`Invalid profile image URL format: ${profileImagePath}`);
+              freelancer.profile_image_url = null;
+            }
+          } catch (error) {
+            logger.error(`Error generating signed URL for profile image: ${error}`);
+            freelancer.profile_image_url = null;
+          }
+        }
+        return freelancer;
+      })
+    ); 
+
     return res.status(200).json({
       status: "success",
       message: "Freelancers fetched successfully",
       data: {
-        freelancers,
+        freelancers : freelancersWithSignedUrls,
         pagination: {
           currentPage: page,
           totalPages,
@@ -2318,6 +2348,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
     const queryText = `
       SELECT
         freelancer_id,
+        profile_image_url,
         freelancer_full_name,
         phone_number,
         freelancer_email,
@@ -2341,11 +2372,40 @@ const getFreelancerForAdmin = async (req, res, next) => {
 
     logger.info(`Fetched ${freelancers.length} freelancers for admin`);
 
+    const freelancersWithSignedUrls = await Promise.all(
+      freelancers.map(async (freelancer) => {
+        // Generate presigned URL for profile image if it exists
+        if (freelancer.profile_image_url) {
+          try {
+            const profileImagePath = freelancer.profile_image_url;
+            const firstSlashIndex = profileImagePath.indexOf("/");
+            if (firstSlashIndex !== -1) {
+              const bucketName = profileImagePath.substring(0, firstSlashIndex);
+              const objectName = profileImagePath.substring(firstSlashIndex + 1);
+              const signedUrl = await createPresignedUrl(
+                bucketName,
+                objectName,
+                expirySeconds
+              );
+              freelancer.profile_image_url = signedUrl;
+            } else {
+              logger.warn(`Invalid profile image URL format: ${profileImagePath}`);
+              freelancer.profile_image_url = null;
+            }
+          } catch (error) {
+            logger.error(`Error generating signed URL for profile image: ${error}`);
+            freelancer.profile_image_url = null;
+          }
+        }
+        return freelancer;
+      })
+    ); 
+
     return res.status(200).json({
       status: "success",
       message: "Freelancers fetched successfully",
       data: {
-        freelancers,
+        freelancers: freelancersWithSignedUrls,
         pagination: {
           currentPage: page,
           totalPages,
