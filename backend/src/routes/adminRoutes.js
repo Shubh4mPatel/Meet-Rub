@@ -570,7 +570,7 @@ router.get('/get-creatorby-id/:creator_id', requireRole(['admin']), getCreatorBy
 
 router.get('/freelancers-for-KYC-approval', requireRole(['admin']),getFreelancerForKYCApproval);
 
-router.get('/get-freelancers-for-admin', requireRole(['admin']),getFreelancerForAdmin);
+router.get('/get-all-freelancers', requireRole(['admin']),getFreelancerForAdmin);
 
 router.get('/get-freelancerby-id/:freelancer_id', requireRole(['admin']),getFreeLancerByIdForAdmin);
 
