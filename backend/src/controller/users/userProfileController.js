@@ -2188,7 +2188,7 @@ const editCreatorByAdmin = async (req, res, next) => {
   // Implementation for editing creator profile by admin goes here
 }
 
-const getFreelancerForAdmin = async (req, res, next) => {
+const getFreelancerForKYCApproval = async (req, res, next) => {
   try {
     logger.info("Admin fetching all freelancers with pagination");
 
@@ -2273,6 +2273,92 @@ const getFreelancerForAdmin = async (req, res, next) => {
   }
 }
 
+const getFreelancerForAdmin = async (req, res, next) => {
+  try {
+    logger.info("Admin fetching all freelancers with pagination");
+
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Search parameter
+    const search = req.query.search || "";
+
+    // Date filter parameters
+    const startDate = req.query.startDate || null;
+    const endDate = req.query.endDate || null;
+
+    // Build WHERE clause dynamically
+    const conditions = [];
+    const queryParams = [];
+    let paramIndex = 1;
+
+    if (search) {
+      conditions.push(`freelancer_full_name ILIKE $${paramIndex}`);
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (startDate) {
+      conditions.push(`created_at >= $${paramIndex}`);
+      queryParams.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      conditions.push(`created_at <= $${paramIndex}`);
+      queryParams.push(endDate);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? ` ${conditions.join(' AND ')}` : '';
+
+    // Query to get freelancers with only required fields
+    const queryText = `
+      SELECT
+        freelancer_id,
+        freelancer_full_name,
+        phone_number,
+        freelancer_email,
+        created_at as joining_date,
+        gov_id_number,
+        verification_status
+      FROM freelancer
+      WHERE verification_status = 'VERIFIED'
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    const { rows: freelancers } = await query(queryText, [...queryParams, limit, offset]);
+
+    // Get total count for pagination
+    const countQueryText = `SELECT COUNT(*) as total FROM freelancer  WHERE verification_status = 'VERIFIED' ${whereClause}`;
+    const { rows: countResult } = await query(countQueryText, queryParams);
+    const totalCount = parseInt(countResult[0].total);
+    const totalPages = Math.ceil(totalCount / limit);
+
+    logger.info(`Fetched ${freelancers.length} freelancers for admin`);
+
+    return res.status(200).json({
+      status: "success",
+      message: "Freelancers fetched successfully",
+      data: {
+        freelancers,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalCount,
+          itemsPerPage: limit,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching freelancers for admin:", error);
+    return next(new AppError("Failed to fetch freelancers", 500));
+  }
+}
 const editFreelancerByAdmin = async (req, res, next) => {
   // Implementation for editing freelancer profile by admin goes here
 }
@@ -2759,7 +2845,6 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
   }
 };
 
-
 const getAllfreelancersForcreator = async (req, res, next) => {
   logger.info("Fetching all freelancers with filters");
   try {
@@ -2981,6 +3066,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
 };
 
 module.exports = {
+  getFreelancerForAdmin,
   getFreelancerByIdForCreator,
   getAllfreelancersForcreator,
   getFreelancerForSuggestion,
@@ -2996,7 +3082,7 @@ module.exports = {
   getUserProfileProgress,
   getAllCreatorProfiles,
   getCreatorById,
-  getFreelancerForAdmin,
+  getFreelancerForKYCApproval,
   getFreeLancerByIdForAdmin,
   getFreelancerForSuggestion,
 };

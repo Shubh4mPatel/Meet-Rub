@@ -3,7 +3,7 @@ const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin 
 const adminController = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches, AssignFreelancerToRequest } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
-const { getAllCreatorProfiles, getCreatorById, getFreelancerForAdmin, getFreeLancerByIdForAdmin, getFreelancerForSuggestion } = require('../controller/users/userProfileController')
+const { getAllCreatorProfiles, getCreatorById, getFreelancerForAdmin, getFreeLancerByIdForAdmin, getFreelancerForSuggestion, getFreelancerForKYCApproval } = require('../controller/users/userProfileController')
 const router = expess.Router()
 
 /**
@@ -568,7 +568,9 @@ router.get('/get-all-creators', requireRole(['admin']), getAllCreatorProfiles);
 
 router.get('/get-creatorby-id/:creator_id', requireRole(['admin']), getCreatorById);
 
-router.get('/get-all-freelancers', requireRole(['admin']),getFreelancerForAdmin);
+router.get('/freelancers-for-KYC-approval', requireRole(['admin']),getFreelancerForKYCApproval);
+
+router.get('/get-freelancers-for-admin', requireRole(['admin']),getFreelancerForAdmin);
 
 router.get('/get-freelancerby-id/:freelancer_id', requireRole(['admin']),getFreeLancerByIdForAdmin);
 
