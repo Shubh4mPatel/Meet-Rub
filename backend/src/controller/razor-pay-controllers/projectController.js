@@ -265,8 +265,8 @@ const getAllProjects = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    // Optional status filter
-    const status = req.query.status || null;
+    // Optional status filter - properly handle empty strings
+    const status = req.query.status?.trim() || null;
 
     // Build query
     let queryText = `
@@ -299,8 +299,8 @@ const getAllProjects = async (req, res, next) => {
     const queryParams = [];
     let paramIndex = 1;
 
-    // Add status filter if provided
-    if (status) {
+    // Add status filter if provided and not empty
+    if (status && status.length > 0) {
       queryText += ` WHERE p.status = $${paramIndex++}`;
       queryParams.push(status);
     }
@@ -358,7 +358,7 @@ const getAllProjects = async (req, res, next) => {
     let countQuery = 'SELECT COUNT(*) as total FROM projects p';
     const countParams = [];
 
-    if (status) {
+    if (status && status.length > 0) {
       countQuery += ' WHERE p.status = $1';
       countParams.push(status);
     }
@@ -388,7 +388,6 @@ const getAllProjects = async (req, res, next) => {
     return next(new AppError('Failed to fetch all projects', 500));
   }
 };
-
 module.exports = {
   createProject,
   getProject,
