@@ -2238,7 +2238,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
         gov_id_number,
         verification_status
       FROM freelancer
-     WHERE verification_status != 'VERIFIED'
+      WHERE verification_status != 'VERIFIED'
       ${whereClause}
       ORDER BY created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -2247,7 +2247,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
     const { rows: freelancers } = await query(queryText, [...queryParams, limit, offset]);
 
     // Get total count for pagination
-    const countQueryText = `SELECT COUNT(*) as total FROM freelancer ${whereClause}`;
+    const countQueryText = `SELECT COUNT(*) as total FROM freelancer  WHERE verification_status != 'VERIFIED' ${whereClause}`;
     const { rows: countResult } = await query(countQueryText, queryParams);
     const totalCount = parseInt(countResult[0].total);
     const totalPages = Math.ceil(totalCount / limit);
