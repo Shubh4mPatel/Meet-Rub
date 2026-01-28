@@ -2280,7 +2280,7 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
   try {
     logger.info("Admin fetching freelancer KYC details by ID");
 
-    const { freelancer_id } = req.query;
+    const { freelancer_id } = req.params;
 
     if (!freelancer_id) {
       return next(new AppError('Freelancer ID is required', 400));
