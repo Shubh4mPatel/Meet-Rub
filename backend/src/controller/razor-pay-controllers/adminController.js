@@ -240,13 +240,13 @@ const approveKYCByAdmin = async (req, res, next) => {
 
 const rejectKYCByAdmin = async (req, res, next) => {
   try {
-    const { reasonForRejection, freelancer_id } = req.body;
+    const { reason_for_rejection, freelancer_id } = req.body;
 
     if (!freelancer_id) {
       return next(new AppError('Freelancer ID is required', 400));
     }
 
-    if (!reasonForRejection) {
+    if (!reason_for_rejection) {
       return next(new AppError('Reason for rejection is required', 400));
     }
 
@@ -271,14 +271,14 @@ const rejectKYCByAdmin = async (req, res, next) => {
     // Update verification_status and reason_for_rejection in freelancer table
     await query(
       'UPDATE freelancer SET verification_status = $1, reason_for_rejection = $2 WHERE freelancer_id = $3',
-      ['REJECTED', reasonForRejection, freelancer_id]
+      ['REJECTED', reasoreason_for_rejectionForRejection, freelancer_id]
     );
 
     res.json({
       message: 'KYC rejected successfully',
       freelancer_id: freelancer_id,
       verification_status: 'REJECTED',
-      reason_for_rejection: reasonForRejection
+      reason_for_rejection: reason_for_rejection
     });
   }
   catch (error) {
