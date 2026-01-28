@@ -2265,11 +2265,11 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
           try {
             const profileImagePath = freelancer.profile_image_url;
             const firstSlashIndex = profileImagePath.indexOf("/");
-            
+
             if (firstSlashIndex !== -1) {
               const bucketName = profileImagePath.substring(0, firstSlashIndex);
               const objectName = profileImagePath.substring(firstSlashIndex + 1);
-              
+
               const signedUrl = await createPresignedUrl(
                 bucketName,
                 objectName,
@@ -2368,8 +2368,9 @@ const getFreelancerForAdmin = async (req, res, next) => {
     `;
 
     const { rows: freelancers } = await query(queryText, [...queryParams, limit, offset]);
-
-    // Get total count for pagination
+    logger.info("Freelancers Query Text:", queryText);
+    logger.info("Freelancers Query Params:", [...queryParams, limit, offset]);
+    // Get total count for pagination 
     const countQueryText = `SELECT COUNT(*) as total FROM freelancer  WHERE verification_status = 'VERIFIED' ${whereClause}`;
     const { rows: countResult } = await query(countQueryText, queryParams);
     const totalCount = parseInt(countResult[0].total);
@@ -2404,7 +2405,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
         }
         return freelancer;
       })
-    ); 
+    );
 
     return res.status(200).json({
       status: "success",
