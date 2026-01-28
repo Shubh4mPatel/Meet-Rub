@@ -562,7 +562,7 @@ router.get('/niches', requireRole(['admin']), getNiches);
 
 router.post('/assignfreelancer-to-request', requireRole(['admin']), AssignFreelancerToRequest);
 
-router.post('/approve-kyc/:freelancer_id', requireRole(['admin']), adminController.ApproveKYCByAdmin);
+router.post('/approve-kyc/:freelancer_id', requireRole(['admin']), adminController.approveKYCByAdmin);
 
 router.get('/get-all-creators', requireRole(['admin']), getAllCreatorProfiles);
 
@@ -575,6 +575,8 @@ router.get('/get-all-freelancers', requireRole(['admin']),getFreelancerForAdmin)
 router.get('/get-freelancerby-id/:freelancer_id', requireRole(['admin']),getFreeLancerByIdForAdmin);
 
 router.get('/get-freelancers-for-suggestion', requireRole(['admin']),getFreelancerForSuggestion);
+
+router.post('/reject-kyc/', requireRole(['admin']), adminController.rejectKYCByAdmin);
 
 
 module.exports = router
