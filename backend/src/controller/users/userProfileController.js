@@ -2227,7 +2227,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
       paramIndex++;
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = conditions.length > 0 ? ` ${conditions.join(' AND ')}` : '';
 
     // Query to get freelancers with only required fields
     const queryText = `
@@ -2238,6 +2238,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
         gov_id_number,
         verification_status
       FROM freelancer
+     WHERE verification_status != 'VERIFIED'
       ${whereClause}
       ORDER BY created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
