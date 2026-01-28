@@ -266,7 +266,7 @@ const getAllProjects = async (req, res, next) => {
     const offset = (page - 1) * limit;
 
     // Optional status filter - properly handle empty strings
-    const status = req.query.status?.trim() || null;
+    const status = req.query.status?.trim() || 'CREATED';
 
     // Build query
     let queryText = `
