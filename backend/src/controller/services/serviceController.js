@@ -393,6 +393,23 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     const requestId = req.params.requestId;
     const creator_id = user?.roleWiseId;
 
+    // Get the service request details including desired_service
+    const {rows : requestExists} = await query(
+      `SELECT request_id, desired_service FROM service_requests WHERE request_id = $1`,
+      [requestId]
+    );
+
+    if (requestExists.length === 0) {
+      logger.warn("Service request not found");
+      return res.status(404).json({
+        status: "error",
+        message: "Service request not found"
+      });
+    }
+
+    const desiredService = requestExists[0].desired_service;
+    logger.debug(`Desired service for request ${requestId}: ${desiredService}`);
+
     // Pagination parameters
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
@@ -428,7 +445,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     const suggestedFreelancerIds = suggestionRows[0].freelancer_id;
     logger.debug(`Total suggested freelancer IDs: ${suggestedFreelancerIds.length}`);
 
-    // Build the query with search filter
+    // Build the query with search filter and service match
     let queryText = `
       SELECT 
         f.freelancer_id, 
@@ -439,12 +456,15 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
         f.profile_title,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
       FROM freelancer f
+      INNER JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       WHERE f.freelancer_id = ANY($2::int[])
+        AND s.service_name = $3
+        AND s.is_active = true
     `;
 
-    const queryParams = [creator_id, suggestedFreelancerIds];
-    let paramCount = 3;
+    const queryParams = [creator_id, suggestedFreelancerIds, desiredService];
+    let paramCount = 4;
 
     // Add search condition
     if (searchTerm) {
