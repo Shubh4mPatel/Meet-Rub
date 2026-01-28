@@ -198,8 +198,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
             `INSERT INTO freelancer 
             (user_id, profile_title, gov_id_type, gov_id_url, first_name, last_name, 
              date_of_birth, phone_number, created_at, updated_at, freelancer_full_name, 
-             freelancer_email, gov_id_number, niche)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             freelancer_email, gov_id_number, niche, verification_status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14 ,'PENDING')
             RETURNING *`,
             [
               newUserResMeetRub[0].id,
