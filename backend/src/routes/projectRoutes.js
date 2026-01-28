@@ -474,6 +474,6 @@ router.put('/:id/status', updateProjectStatus);
 router.delete('/:id',  deleteProject);
 
 
-router.get('/getallprojects', getAllProjects);
+router.get('/get-all-projects', getAllProjects);
 
 module.exports = router;

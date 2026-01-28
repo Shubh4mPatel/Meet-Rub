@@ -388,6 +388,7 @@ const getAllProjects = async (req, res, next) => {
     return next(new AppError('Failed to fetch all projects', 500));
   }
 };
+
 module.exports = {
   createProject,
   getProject,
