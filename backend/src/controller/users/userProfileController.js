@@ -2227,44 +2227,49 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
       paramIndex++;
     }
 
-    const whereClause = conditions.length > 0 ? ` ${conditions.join(' AND ')}` : '';
+    const whereClause = conditions.length > 0 ? ` AND ${conditions.join(' AND ')}` : '';
 
     // Query to get freelancers with only required fields
     const queryText = `
-      SELECT
-        freelancer_id,
-        freelancer_full_name,
-        created_at as joining_date,
-        gov_id_number,
+      SELECT 
+        freelancer_id, 
+        freelancer_full_name, 
+        created_at as joining_date, 
+        gov_id_number, 
         verification_status
-      FROM freelancer
-      WHERE verification_status != 'VERIFIED'
-      ${whereClause}
-      ORDER BY created_at DESC
+      FROM freelancer 
+      WHERE verification_status != 'VERIFIED' ${whereClause}
+      ORDER BY created_at DESC 
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
     const { rows: freelancers } = await query(queryText, [...queryParams, limit, offset]);
 
     // Get total count for pagination
-    const countQueryText = `SELECT COUNT(*) as total FROM freelancer  WHERE verification_status != 'VERIFIED' ${whereClause}`;
+    const countQueryText = `
+      SELECT COUNT(*) as total 
+      FROM freelancer 
+      WHERE verification_status != 'VERIFIED' ${whereClause}
+    `;
     const { rows: countResult } = await query(countQueryText, queryParams);
+
     const totalCount = parseInt(countResult[0].total);
     const totalPages = Math.ceil(totalCount / limit);
 
     logger.info(`Fetched ${freelancers.length} freelancers for admin`);
 
-
-     const freelancersWithSignedUrls = await Promise.all(
+    const freelancersWithSignedUrls = await Promise.all(
       freelancers.map(async (freelancer) => {
-        // Generate presigned URL for profile image if it exists
+        // Note: profile_image_url is not in the SELECT, so this won't work
         if (freelancer.profile_image_url) {
           try {
             const profileImagePath = freelancer.profile_image_url;
             const firstSlashIndex = profileImagePath.indexOf("/");
+            
             if (firstSlashIndex !== -1) {
               const bucketName = profileImagePath.substring(0, firstSlashIndex);
               const objectName = profileImagePath.substring(firstSlashIndex + 1);
+              
               const signedUrl = await createPresignedUrl(
                 bucketName,
                 objectName,
@@ -2282,13 +2287,13 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
         }
         return freelancer;
       })
-    ); 
+    );
 
     return res.status(200).json({
       status: "success",
       message: "Freelancers fetched successfully",
       data: {
-        freelancers : freelancersWithSignedUrls,
+        freelancers: freelancersWithSignedUrls,
         pagination: {
           currentPage: page,
           totalPages,
@@ -2301,7 +2306,7 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
     logger.error("Error fetching freelancers for admin:", error);
     return next(new AppError("Failed to fetch freelancers", 500));
   }
-}
+};
 
 const getFreelancerForAdmin = async (req, res, next) => {
   try {
@@ -2342,7 +2347,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
       paramIndex++;
     }
 
-    const whereClause = conditions.length > 0 ? ` ${conditions.join(' AND ')}` : '';
+    const whereClause = conditions.length > 0 ? ` AND ${conditions.join(' AND ')}` : '';
 
     // Query to get freelancers with only required fields
     const queryText = `
