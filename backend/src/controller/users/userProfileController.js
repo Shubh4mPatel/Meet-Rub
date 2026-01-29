@@ -178,7 +178,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "govtId") {
         logger.info("Fetching: Freelancer Govt ID");
         const { rows } = await query(
-          "SELECT gov_id_type, gov_id_url, gov_id_number FROM freelancer WHERE user_id = $1",
+          "SELECT gov_id_type, gov_id_url, gov_id_number,verification_status FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -204,6 +204,7 @@ const getUserProfile = async (req, res, next) => {
             userGovtIdUrl: signedUrl,
             userGovtIdType: rows[0]?.gov_id_type,
             userGovtIdNumber: rows[0]?.gov_id_number,
+            verificationStatus: rows[0]?.verification_status
           },
         });
       }
