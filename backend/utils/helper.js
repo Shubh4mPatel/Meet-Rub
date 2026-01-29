@@ -81,8 +81,6 @@ async function createPresignedUrl(bucketName, objectName, expirySeconds) {
 }
 
 function generateTokens(user,roleWiseId) {
-    logger.info(`Generating tokens for user ID: ${user.id}`);
-
     const payload = {
         user_id: user.id,
         email: user.user_email,
