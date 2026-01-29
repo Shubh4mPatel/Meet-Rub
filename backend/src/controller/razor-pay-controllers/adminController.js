@@ -222,8 +222,8 @@ const approveKYCByAdmin = async (req, res, next) => {
 
     // Update verification_status in freelancer table
     await query(
-      'UPDATE freelancer SET verification_status = $1 WHERE freelancer_id = $2',
-      ['VERIFIED', freelancer_id]
+      'UPDATE freelancer SET verification_status = $1, reason_for_rejection = $2 WHERE freelancer_id = $3',
+      ['approved', '', freelancer_id]
     );
 
     res.json({
