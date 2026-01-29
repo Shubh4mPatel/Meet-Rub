@@ -502,6 +502,14 @@ const editProfile = async (req, res, next) => {
 
     // ✅ FREELANCER ROLE HANDLING
     if (role === "freelancer") {
+      const { rows: freelancerExistsResult } = await query(`SELECT verification_status FROM freelancer WHERE user_id=$1`, [user.user_id]);
+      if (freelancerExistsResult.length === 0 || freelancerExistsResult[0].verification_status !== 'verified') {
+        logger.warn("Freelancer not verified or does not exist");
+        if (!freelancerExistsResult.length === 0) {
+          return next(new AppError("Freelancer does not exist", 403));
+        }
+        return next(new AppError("Freelancer not verified. Please complete verification to update profile.", 403));
+      }
       if (type === "bankDetails") {
         logger.info("Updating Freelancer Bank Details");
 
