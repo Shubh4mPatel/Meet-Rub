@@ -578,5 +578,7 @@ router.get('/get-freelancers-for-suggestion', requireRole(['admin']),getFreelanc
 
 router.post('/reject-kyc/', requireRole(['admin']), adminController.rejectKYCByAdmin);
 
+router.post('/suspend-freelancer/:freelancer_id', requireRole(['admin']), adminController.suspendFreelancerByAdmin);
+
 
 module.exports = router

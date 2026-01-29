@@ -287,6 +287,57 @@ const rejectKYCByAdmin = async (req, res, next) => {
   }
 }
 
+
+const suspendFreelancerByAdmin = async (req, res, next) =>  {
+  try {
+    const { reason_for_suspension, freelancer_id } = req.body;
+
+    if (!freelancer_id) {
+      return next(new AppError('Freelancer ID is required', 400));
+    }
+
+    if (!reason_for_suspension) {
+      return next(new AppError('Reason for rejection is required', 400));
+    }
+
+    // Check if freelancer exists
+    const queryResult = await query(
+      'SELECT freelancer_id, user_id, verification_status FROM freelancer WHERE freelancer_id = $1',
+      [freelancer_id]
+    );
+
+    const freelancers = queryResult.rows || [];
+
+    if (freelancers.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    const freelancer = freelancers[0];
+
+    if (freelancer.verification_status === 'SUSPENDED') {
+      return next(new AppError('Freelancer is already suspended', 400));
+    }
+
+    // Update verification_status and reason_for_suspension in freelancer table
+    await query(
+      'UPDATE freelancer SET verification_status = $1, reason_for_suspension = $2 WHERE freelancer_id = $3',
+      ['SUSPENDED', reason_for_suspension, freelancer_id]
+    );
+
+    res.json({
+      message: 'Freelancer suspended successfully',
+      freelancer_id: freelancer_id,
+      verification_status: 'SUSPENDED',
+      reason_for_suspension: reason_for_suspension
+    });
+  }
+  catch (error) {
+    console.error('Suspend Freelancer error:', error);
+    return next(new AppError('Failed to suspend freelancer', 500));
+  }
+}
+
+
 module.exports = {
   getEscrowTransactions,
   releasePayment,
@@ -295,5 +346,6 @@ module.exports = {
   getPlatformStats,
   updateCommission,
   approveKYCByAdmin,
-  rejectKYCByAdmin
+  rejectKYCByAdmin,
+  suspendFreelancerByAdmin
 }
