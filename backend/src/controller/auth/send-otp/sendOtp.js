@@ -35,7 +35,7 @@ const otpSendApi = async (req, res, next) => {
     const otpHash = await bcrypt.hash(otp, 10);
     const expiration = new Date(Date.now() + 10 * 60 * 1000);
 
-    logger.info("OTP generated (not logged for security)");
+    logger.info("OTP generated (not logged for security)",otp);
 
     const existingOtp = await query(
       "SELECT * FROM otp_tokens WHERE email = $1 AND type = $2",

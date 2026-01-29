@@ -1,4 +1,6 @@
 const {minioClient} = require('../config/minio');
+const jwt = require("jsonwebtoken");
+
 function getObjectNameFromUrl(url, bucketName) {
   try {
     const parsedUrl = new URL(url);
@@ -55,7 +57,6 @@ function validateFile(file, allowedTypes, maxSizeMB) {
   return { valid: true };
 }
 
-
 async function createPresignedUrl(bucketName, objectName, expirySeconds) {
   try {
     const presignedUrl = await new Promise((resolve, reject) => {
@@ -79,4 +80,20 @@ async function createPresignedUrl(bucketName, objectName, expirySeconds) {
   }
 }
 
-module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile,createPresignedUrl };
+function generateTokens(user,roleWiseId) {
+    logger.info(`Generating tokens for user ID: ${user.id}`);
+
+    const payload = {
+        user_id: user.id,
+        email: user.user_email,
+        name: user.user_name,
+        role: user.user_role,
+        roleWiseId: roleWiseId
+    };
+    const accessToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "15m" });
+    const refreshToken = jwt.sign({ user_id: user.id }, process.env.JWT_SECRET, { expiresIn: "4h" });
+
+    return { accessToken, refreshToken };
+}
+
+module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile,createPresignedUrl, generateTokens };

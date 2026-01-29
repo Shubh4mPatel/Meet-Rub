@@ -10,7 +10,7 @@ const path = require("path");
 const { minioClient } = require("../../../../config/minio");
 const Joi = require("joi");
 const crypto = require("crypto");
-const { validateFile } = require("../../../../utils/helper");
+const { validateFile, generateTokens } = require("../../../../utils/helper");
 
 // Base schema for common fields
 const baseSchema = {
@@ -66,13 +66,16 @@ const verifyOtpAndProcess = async (req, res, next) => {
   try {
     // Validate based on type and role
     let validationError;
-
+    let user;
+    let roleWiseId;
     if (type === "password-reset") {
       const { error } = passwordResetSchema.validate(req.body, {
         abortEarly: false,
       });
       validationError = error;
-    } else if (type === "email-verification") {
+    }
+    else if (type === "email-verification") {
+
       if (role === "freelancer") {
         const { error } = freelancerSchema.validate(req.body, {
           abortEarly: false,
@@ -88,7 +91,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
           new AppError("Role is required for email verification", 400)
         );
       }
-    } else {
+    }
+    else {
       return next(new AppError("Invalid type", 400));
     }
 
@@ -232,6 +236,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
           }
 
           await client.query("COMMIT");
+          user = newUserResMeetRub[0];
+          roleWiseId = freelancer[0].freelancer_id;
           logger.info("Freelancer registration successful", { email });
         } catch (error) {
           await client.query("ROLLBACK");
@@ -275,7 +281,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
             [email, type]
           );
 
-          await client.query(
+          const { rows: creator } = await client.query(
             `INSERT INTO creators 
             (user_id,full_name , first_name, last_name, niche, social_links, phone_number, email, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9, $10)
@@ -295,6 +301,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
           );
 
           await client.query("COMMIT");
+          user = newUserResMeetRub[0];
+          roleWiseId = creator[0].creator_id;
           logger.info("Creator registration successful", { email });
         } catch (error) {
           await client.query("ROLLBACK");
@@ -304,10 +312,19 @@ const verifyOtpAndProcess = async (req, res, next) => {
         }
       }
 
-      return res.status(200).json({
-        status: "success",
-        message: "Signup successful",
-      });
+      const { accessToken, refreshToken } = generateTokens(user, roleWiseId);
+
+      res.locals.accessToken = accessToken;
+      res.locals.refreshToken = refreshToken;
+      res.locals.user = {
+        user_id: user.id,
+        email: user.user_email,
+        name: user.user_name,
+        role: user.user_role,
+        roleWiseId
+      };
+      return next();
+
     } else if (type === "password-reset") {
       const userRes = await query("SELECT * FROM users WHERE user_email = $1", [
         email,

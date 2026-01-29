@@ -71,7 +71,14 @@ router.post("/send-otp", otpSendApi);
  *       500:
  *         description: Internal server error
  */
-router.post("/verify-otp", upload.single('file'), verifyOtpAndProcess);
+router.post("/verify-otp", upload.single('file'), verifyOtpAndProcess, setTokenCookies, (req, res) => {
+
+  res.status(200).json({
+    message: "Login successful ",
+    tokensCookieSet: true,
+  });
+  
+});
 
 /**
  * @swagger
