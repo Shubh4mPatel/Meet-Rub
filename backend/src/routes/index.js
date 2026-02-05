@@ -9,17 +9,19 @@ const paymentRoutes = require('./paymentRoutes');
 const walletRoutes = require('./walletRoutes');
 const projectRoutes = require('./projectRoutes');
 const webhookRoutes = require('./webhookRoutes');
+const publicRoutes = require('./publicroutes')
 const { authenticateUser, requireRole } = require('../middleware/authMiddleware');
 
 router.use('/auth', authroutes);
 router.use('/user-profile', authenticateUser, userProfileRoutes);
 router.use('/admin', authenticateUser, requireRole(['admin']), adminRoutes)
-router.use('/freelancer',  freelancerRoutes)
-router.use('/creator',  creatorRoutes)
-router.use('/payments',authenticateUser, paymentRoutes);
+router.use('/freelancer', freelancerRoutes)
+router.use('/creator', creatorRoutes)
+router.use('/payments', authenticateUser, paymentRoutes);
 router.use('/wallet', authenticateUser, walletRoutes);
 router.use('/projects', authenticateUser, projectRoutes);
 router.use('/webhooks', webhookRoutes);
+router.use('/public', publicRoutes);
 
 
 module.exports = router;

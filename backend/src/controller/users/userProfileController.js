@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const { logger } = require("../../../utils/logger");
 const { createPresignedUrl } = require("../../../utils/helper");
 const Joi = require("joi");
+const { sendMail } = require("../../../config/email");
 
 const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -3140,6 +3141,74 @@ const getAllfreelancersForcreator = async (req, res, next) => {
   }
 };
 
+const sendContactEmailToAdmin = async (req, res, next) => {
+  try {
+    logger.info("Sending contact email to admin");
+    const { name, email, contactNo, message } = req.body;
+    if (!name || !email || !contactNo || !message) {
+      return next(new AppError("All fields are required", 400));
+    }
+
+    await query(
+      `INSERT INTO contact_form (sender_name, sender_email_address, sender_contact_no, message, created_at) VALUES ($1, $2, $3, $4, NOW())`,
+      [name, email, contactNo, message]
+    );
+
+    const emailSubject = `Contact Form Submission from ${name}`;
+    const emailBody = `
+      You have received a new contact form submission with the following details:
+      Name: ${name}
+      Email: ${email}
+      Contact Number: ${contactNo}
+      Message: ${message}
+    `;
+    const getAdminEmailQuery = `SELECT email FROM admin`;
+    const { rows: adminRows } = await query(getAdminEmailQuery);
+
+    if (adminRows.length > 0) {
+      const BATCH_SIZE = 10;
+      const DELAY_BETWEEN_BATCHES = 1000; // 1 second in milliseconds
+
+      const validAdmins = adminRows.filter(admin => admin.email);
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (let i = 0; i < validAdmins.length; i += BATCH_SIZE) {
+        const batch = validAdmins.slice(i, i + BATCH_SIZE);
+        const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(validAdmins.length / BATCH_SIZE);
+
+        console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`);
+
+        const emailPromises = batch.map(admin =>
+          sendMail(admin.email, emailSubject, emailBody)
+            .then(() => {
+              successCount++;
+              return { success: true, email: admin.email };
+            })
+            .catch(error => {
+              failureCount++;
+              console.error(`Failed to send email to ${admin.email}:`, error.message);
+              return { success: false, email: admin.email, error: error.message };
+            })
+        );
+
+        await Promise.all(emailPromises);
+
+        // Delay between batches (except after the last batch)
+        if (i + BATCH_SIZE < validAdmins.length) {
+          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+        }
+      }
+
+      console.log(`Email sending complete: ${successCount} succeeded, ${failureCount} failed`);
+    }
+  } catch (error) {
+    logger.error("Error sending contact email to admin:", error);
+    return next(new AppError("Failed to send contact email", 500));
+  }
+};
+
 module.exports = {
   getFreelancerForAdmin,
   getFreelancerByIdForCreator,
@@ -3160,4 +3229,5 @@ module.exports = {
   getFreelancerForKYCApproval,
   getFreeLancerByIdForAdmin,
   getFreelancerForSuggestion,
+  sendContactEmailToAdmin,
 };
