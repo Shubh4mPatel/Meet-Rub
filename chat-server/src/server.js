@@ -10,6 +10,7 @@ const { socketAuth } = require('../middleware/authentication');
 const { startMasterWorker } = require('../consumers/worker');
 const { chatController } = require('../controller/chat');
 const AppError = require('../utils/appError');
+const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
