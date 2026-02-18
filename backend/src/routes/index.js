@@ -9,7 +9,7 @@ const paymentRoutes = require('./paymentRoutes');
 const walletRoutes = require('./walletRoutes');
 const projectRoutes = require('./projectRoutes');
 const webhookRoutes = require('./webhookRoutes');
-const publicRoutes = require('./publicroutes')
+const publicRoutes = require('./publicRoutes')
 const { authenticateUser, requireRole } = require('../middleware/authMiddleware');
 
 router.use('/auth', authroutes);
