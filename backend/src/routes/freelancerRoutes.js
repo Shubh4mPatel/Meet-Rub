@@ -8,7 +8,7 @@ const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelanc
 const { getUserProfileProgress } = require('../controller/users/userProfileController');
 const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/portfolioController");
 const { getNiches } = require('../controller/services/serviceController');
-const { raiseDispute } = require('../controller/dispute/disputeController');
+const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
 
 
 router.post('/portfolio/upload-after-before',authenticateUser, requireRole(['freelancer']), upload.fields([
@@ -80,5 +80,7 @@ router.delete("/portfolio/delete-portfolio-item",authenticateUser, requireRole([
 router.get('/niches', getNiches);
 
 router.post('/dispute-raise', authenticateUser, requireRole(['freelancer']), raiseDispute);
+
+router.get('/disputes', authenticateUser, requireRole(['freelancer']), getDisputes);
 
 module.exports = router

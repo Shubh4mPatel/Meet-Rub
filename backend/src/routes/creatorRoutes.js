@@ -3,7 +3,7 @@ const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSugg
 const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { getNiches } = require('../controller/services/serviceController');
-const { raiseDispute } = require('../controller/dispute/disputeController');
+const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
 const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersForcreator, getFreelancerByIdForCreator } = require('../controller/users/userProfileController');
 
 router.post('/service-request',authenticateUser, requireRole(['creator']), createSreviceRequest);
@@ -28,5 +28,7 @@ router.get('/all-freelancers',authenticateUser, requireRole(['creator']), getAll
 router.get('/get-freelancer-by-id/:freelancer_id', authenticateUser, requireRole(['creator']),getFreelancerByIdForCreator)
 
 router.post('/dispute-raise', authenticateUser, requireRole(['creator']), raiseDispute);
+
+router.get('/disputes', authenticateUser, requireRole(['creator']), getDisputes);
 
 module.exports = router;

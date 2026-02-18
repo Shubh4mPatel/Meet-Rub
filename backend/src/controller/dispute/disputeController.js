@@ -53,10 +53,10 @@ const raiseDispute = async (req, res, next) => {
     await db.query('BEGIN');
 
     const disputeResult = await db.query(
-      `INSERT INTO disputes (creator_id, freelancer_id, project_id, reason_of_dispute, description)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO disputes (creator_id, freelancer_id, project_id, reason_of_dispute, description, raised_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [creator_id, freelancer_id, project_id, reason_of_dispute, description || null]
+      [creator_id, freelancer_id, project_id, reason_of_dispute, description || null, role]
     );
 
     await db.query(
@@ -85,4 +85,104 @@ const raiseDispute = async (req, res, next) => {
   }
 };
 
-module.exports = { raiseDispute };
+const getDisputes = async (req, res, next) => {
+  try {
+    const { role, roleWiseId } = req.user;
+    // type: 'by_me' | 'against_me'  (default: against_me to match the UI)
+    const { type = 'against_me', search = '', page = 1, limit = 10 } = req.query;
+
+    const pageNum  = Math.max(1, parseInt(page));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
+    const offset   = (pageNum - 1) * limitNum;
+
+    if (role !== 'creator' && role !== 'freelancer') {
+      return next(new AppError('Only creators and freelancers can view disputes', 403));
+    }
+
+    // Determine whose name we join and which column to filter on
+    // "against_me"  → the OTHER party raised it (raised_by != my role)
+    // "by_me"       → I raised it (raised_by = my role)
+    const raisedByFilter = type === 'against_me'
+      ? (role === 'freelancer' ? 'creator' : 'freelancer')
+      : role;
+
+    // My column in disputes
+    const myCol        = role === 'freelancer' ? 'd.freelancer_id' : 'd.creator_id';
+    // Other party join
+    const otherTable   = raisedByFilter === 'creator' ? 'creators' : 'freelancer';
+    const otherIdCol   = raisedByFilter === 'creator' ? 'c2.creator_id'    : 'f2.freelancer_id';
+    const otherNameCol = raisedByFilter === 'creator' ? 'c2.full_name'     : 'f2.freelancer_full_name';
+    const otherAvatarCol = raisedByFilter === 'creator' ? 'c2.profile_image_url' : 'f2.profile_image_url';
+    const otherAlias   = raisedByFilter === 'creator' ? 'c2' : 'f2';
+    const otherJoinId  = raisedByFilter === 'creator' ? 'd.creator_id'     : 'd.freelancer_id';
+
+    const searchFilter = search.trim()
+      ? `AND ${otherNameCol} ILIKE $3`
+      : '';
+
+    const dataQuery = `
+      SELECT
+        d.id              AS dispute_id,
+        d.reason_of_dispute,
+        d.description,
+        d.admin_note,
+        d.created_at,
+        d.raised_by,
+        ${otherNameCol}   AS other_party_name,
+        ${otherAvatarCol} AS other_party_avatar,
+        s.service_name,
+        p.id              AS project_id,
+        CASE WHEN d.admin_note IS NOT NULL THEN 'Resolved' ELSE 'Under Review' END AS status
+      FROM disputes d
+      JOIN projects p ON d.project_id = p.id
+      LEFT JOIN services s ON p.service_id = s.id
+      JOIN ${otherTable} ${otherAlias} ON ${otherJoinId} = ${otherIdCol}
+      WHERE ${myCol} = $1
+        AND d.raised_by = $2
+        ${searchFilter}
+      ORDER BY d.created_at DESC
+      LIMIT ${limitNum} OFFSET ${offset}
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM disputes d
+      JOIN ${otherTable} ${otherAlias} ON ${otherJoinId} = ${otherIdCol}
+      WHERE ${myCol} = $1
+        AND d.raised_by = $2
+        ${searchFilter}
+    `;
+
+    const params = search.trim()
+      ? [roleWiseId, raisedByFilter, `%${search.trim()}%`]
+      : [roleWiseId, raisedByFilter];
+
+    const [dataResult, countResult] = await Promise.all([
+      db.query(dataQuery, params),
+      db.query(countQuery, params),
+    ]);
+
+    const total      = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / limitNum);
+
+    logger.info(`getDisputes [${type}] for ${role} id=${roleWiseId}, total=${total}`);
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        disputes: dataResult.rows,
+        pagination: {
+          total,
+          totalPages,
+          currentPage: pageNum,
+          limit: limitNum,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('getDisputes error:', error);
+    return next(new AppError('Failed to fetch disputes', 500));
+  }
+};
+
+module.exports = { raiseDispute, getDisputes };
