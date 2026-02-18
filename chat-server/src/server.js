@@ -1,13 +1,8 @@
+const dotenv = require('dotenv');
+dotenv.config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const dotenv = require('dotenv');
-
-// Load .env file only if not running in Docker (Docker Compose injects env vars directly)
-if (!process.env.DOCKER_ENV) {
-  dotenv.config();
-}
-
 const socketConfig = require('../config/socketConfig');
 const { logger } = require('../utils/logger');
 const { manageLogFiles } = require('../cron/logmanager');
@@ -15,10 +10,53 @@ const { socketAuth } = require('../middleware/authentication');
 const { startMasterWorker } = require('../consumers/worker');
 const { chatController } = require('../controller/chat');
 const AppError = require('../utils/appError');
+const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, socketConfig);
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((origin) =>
+  origin.trim()
+);
+
+const corsOptions = {
+  origin:process.env.NODE_ENV=='production'?function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // Use standard Error instead of AppError if AppError isn't defined
+      callback(new Error(`Origin ${origin} not allowed by CORS policy`), false);
+    }
+  }:'*',
+  credentials: true, // Required for cookies/auth
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: [
+    "Origin",
+    "X-Requested-With",
+    "Content-Type",
+    "Accept",
+    "Authorization",
+    "Cache-Control",
+    // 'X-Access-Token',        // CUSTOM - remove
+    // 'X-Report',              // CUSTOM - remove
+    // 'X-PDF',                 // CUSTOM - remove
+    // 'custom-real-ip',        // CUSTOM - remove
+    // 'X-header-user',         // CUSTOM - remove
+    // 'x-razorpay-signature',  // CUSTOM - remove (payment gateway specific)
+    // 'X-User-Has-Subscription', // CUSTOM - remove
+    // 'orangemobileaccesstoken', // CUSTOM - remove
+    // 'X-User-Visited-Profile',  // CUSTOM - remove
+    // 'deviceMobile'         // CUSTOM - remove
+  ],
+  exposedHeaders: ["Set-Cookie"],
+  optionsSuccessStatus: 200, // For legacy browser support
+};
+
+app.use(cors(corsOptions));
 
 // Basic middleware
 app.use(express.json());
@@ -88,19 +126,18 @@ app.use((err, req, res) => {
 
 let serverWithSocket;
 const PORT = process.env.PORT || 5000;
-const HOST = process.env.HOST || ''
 
 if (process.env.NODE_ENV !== 'development') {
-  serverWithSocket = server.listen(PORT, HOST, () => {
+  serverWithSocket = server.listen(PORT, () => {
     manageLogFiles();
     // startMasterWorker();
-    logger.info(`Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`);
+    logger.info(`Server running in ${process.env.NODE_ENV} mode on :${PORT}`);
   });
 } else {
   serverWithSocket = server.listen(PORT, () => {
     // startMasterWorker();
     manageLogFiles();
-    logger.info(`Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`);
+    logger.info(`Server running in ${process.env.NODE_ENV} mode on :${PORT}`);
   });
 }
 

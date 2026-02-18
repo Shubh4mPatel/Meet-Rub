@@ -68,7 +68,7 @@ const socketAuth = (io) => {
               const cookieValue = cookie.serialize('AccessToken', newAccessToken, {
                 maxAge: ACCESS_TOKEN_DURATION / 1000, // in seconds
                 httpOnly: isProduction ? true : false,
-                secure: isProduction? false,
+                secure: isProduction ? true : false,
                 sameSite: 'lax',
                 path: '/',
               });

@@ -6,7 +6,7 @@ const chatModel = {
     const query = `
       SELECT * FROM users WHERE id=$1
     `;
-    
+
     try {
       const result = await pool.query(query, [userId]);
       return result.rows[0];
@@ -40,15 +40,15 @@ const chatModel = {
   },
 
   // Save message
-  async saveMessage(roomId, senderId, recipientId, message) {
+  async saveMessage(roomId, senderId, recipientId, message, messageType = 'text', fileUrl = null, custom_package_id = null) {
     const query = `
-      INSERT INTO messages (room_id, sender_id, recipient_id, message, created_at)
-      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+      INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type, file_url,custom_package_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
 
     try {
-      const result = await pool.query(query, [roomId, senderId, recipientId, message]);
+      const result = await pool.query(query, [roomId, senderId, recipientId, message, messageType, fileUrl, custom_package_id, new Date().toISOString()]);
       return result.rows[0];
     } catch (error) {
       console.error('Error saving message:', error);
@@ -170,6 +170,47 @@ const chatModel = {
       return result.rows[0];
     } catch (error) {
       console.error('Error deleting message:', error);
+      throw error;
+    }
+  },
+
+  // Save custom package
+  async saveCustomPackage(chatRoomId, userId, recipientId, packageData, message_id) {
+    const {
+      title,
+      description,
+      price,
+      delivery_days,
+      deliverables,
+      revisions = 0,
+      expires_at
+    } = packageData;
+
+    const query = `
+      INSERT INTO custom_packages (
+        room_id, freelancer_id, creator_id, title,
+        description, price, delivery_days, deliverables, revisions, expires_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *
+    `;
+
+    try {
+      const result = await pool.query(query, [
+        chatRoomId,
+        recipientId,
+        userId,
+        title,
+        description,
+        price,
+        delivery_days,
+        JSON.stringify(deliverables),
+        revisions,
+        expires_at || null
+      ]);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error saving custom package:', error);
       throw error;
     }
   },

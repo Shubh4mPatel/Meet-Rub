@@ -58,14 +58,14 @@ const getProject = async (req, res, next) => {
     const projectId = req.params.id;
     const userId = req.user.id;
 
-    const [projects] = await db.query(
+    const { rows: projects } = await db.query(
       `SELECT p.*,
         c.full_name as creator_name, c.email as creator_email,
-        f.freelancer_full_name as freelancer_name, f.email as freelancer_email
+        f.freelancer_full_name as freelancer_name, f.freelancer_email as freelancer_email
        FROM projects p
        JOIN creators c ON p.creator_id = c.creator_id
        JOIN freelancer f ON p.freelancer_id = f.freelancer_id
-       WHERE p.id = ?`,
+       WHERE p.id = $1`,
       [projectId]
     );
 
@@ -82,10 +82,11 @@ const getProject = async (req, res, next) => {
       return next(new AppError('Access denied', 403));
     }
 
-    res.status(201).json({
+    res.status(200).json({
       status: 'success',
       message: 'Project fetched successfully',
-      project});
+      project
+    });
   } catch (error) {
     console.error('Get project error:', error);
     return next(new AppError('Failed to get project', 500));
@@ -167,8 +168,8 @@ const updateProjectStatus = async (req, res, next) => {
     }
 
     // Get project
-    const [projects] = await db.query(
-      'SELECT * FROM projects WHERE id = ?',
+    const { rows: projects } = await db.query(
+      'SELECT * FROM projects WHERE id = $1',
       [projectId]
     );
 
@@ -195,7 +196,7 @@ const updateProjectStatus = async (req, res, next) => {
     }
 
     await db.query(
-      'UPDATE projects SET status = ?, completed_at = ?, updated_at = NOW() WHERE id = ?',
+      'UPDATE projects SET status = $1, completed_at = $2, updated_at = NOW() WHERE id = $3',
       [status, updateData.completed_at || null, projectId]
     );
 
@@ -217,8 +218,8 @@ const deleteProject = async (req, res, next) => {
     const userId = req.user.roleWiseId;
 
     // Get project
-    const [projects] = await db.query(
-      'SELECT * FROM projects WHERE id = ?',
+    const { rows: projects } = await db.query(
+      'SELECT * FROM projects WHERE id = $1',
       [projectId]
     );
 
@@ -234,8 +235,8 @@ const deleteProject = async (req, res, next) => {
     }
 
     // Check if payment has been made
-    const [transactions] = await db.query(
-      'SELECT id FROM transactions WHERE project_id = ?',
+    const { rows: transactions } = await db.query(
+      'SELECT id FROM transactions WHERE project_id = $1',
       [projectId]
     );
 
@@ -244,7 +245,7 @@ const deleteProject = async (req, res, next) => {
     }
 
     // Delete project
-    await db.query('DELETE FROM projects WHERE id = ?', [projectId]);
+    await db.query('DELETE FROM projects WHERE id = $1', [projectId]);
 
     res.json({
       message: 'Project deleted successfully',
@@ -265,8 +266,8 @@ const getAllProjects = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    // Optional status filter
-    const status = req.query.status;
+    // Optional status filter - properly handle empty strings
+    const status = req.query.status?.trim() || 'CREATED';
 
     // Build query
     let queryText = `
@@ -299,8 +300,8 @@ const getAllProjects = async (req, res, next) => {
     const queryParams = [];
     let paramIndex = 1;
 
-    // Add status filter if provided
-    if (status) {
+    // Add status filter if provided and not empty
+    if (status && status.length > 0) {
       queryText += ` WHERE p.status = $${paramIndex++}`;
       queryParams.push(status);
     }
@@ -358,7 +359,7 @@ const getAllProjects = async (req, res, next) => {
     let countQuery = 'SELECT COUNT(*) as total FROM projects p';
     const countParams = [];
 
-    if (status) {
+    if (status && status.length > 0) {
       countQuery += ' WHERE p.status = $1';
       countParams.push(status);
     }

@@ -3,6 +3,7 @@ const { createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSugg
 const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { getNiches } = require('../controller/services/serviceController');
+const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersForcreator, getFreelancerByIdForCreator } = require('../controller/users/userProfileController');
 /**
  * @swagger
  * /creator/service-request:
@@ -181,6 +182,14 @@ router.get('/service-requests/:requestId/suggestions',authenticateUser, requireR
  */
 router.post('/wishlist', authenticateUser, requireRole(['creator']), addFreelancerToWishlist);
 
-router.get('/niches', getNiches);
+router.post('/remove-from-wishlist', authenticateUser, requireRole(['creator']), removeFreelancerFromWishlist);
+
+router.get('/wishlist', authenticateUser, requireRole(['creator']), getWishlistFreelancers);
+
+router.get('/niches',authenticateUser, requireRole(['creator']), getNiches);
+
+router.get('/all-freelancers',authenticateUser, requireRole(['creator']), getAllfreelancersForcreator);
+
+router.get('/get-freelancer-by-id/:freelancer_id', authenticateUser, requireRole(['creator']),getFreelancerByIdForCreator)
 
 module.exports = router;

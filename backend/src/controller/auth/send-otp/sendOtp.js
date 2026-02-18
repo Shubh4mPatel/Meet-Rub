@@ -4,6 +4,7 @@ const { query } = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
 const { logger } = require('../../../../utils/logger');
 const { sendEmailNotification } = require("../../../../producer/notificationProducer");
+const { sendMail } = require("../../../../config/email");
 
 const otpSendApi = async (req, res, next) => {
   let { email, type } = req.body;
@@ -34,7 +35,7 @@ const otpSendApi = async (req, res, next) => {
     const otpHash = await bcrypt.hash(otp, 10);
     const expiration = new Date(Date.now() + 10 * 60 * 1000);
 
-    logger.info("OTP generated (not logged for security)");
+    logger.info("OTP generated (not logged for security)",otp);
 
     const existingOtp = await query(
       "SELECT * FROM otp_tokens WHERE email = $1 AND type = $2",
@@ -68,7 +69,8 @@ const otpSendApi = async (req, res, next) => {
 
     logger.info("Sending OTP email");
 
-    sendEmailNotification(email, subject, message, false);
+    // sendEmailNotification(email, subject, message, false);
+    sendMail(email, subject, message);
 
     logger.info("OTP sent successfully");
 

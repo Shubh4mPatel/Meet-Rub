@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const{ createProject, getMyProjects, getProject, updateProjectStatus, deleteProject} = require('../controller/razor-pay-controllers/projectController');
+const{ createProject, getMyProjects, getProject, updateProjectStatus, deleteProject, getAllProjects} = require('../controller/razor-pay-controllers/projectController');
 
 /**
  * @swagger
@@ -96,7 +96,7 @@ const{ createProject, getMyProjects, getProject, updateProjectStatus, deleteProj
  *       500:
  *         description: Internal server error
  */
-router.post('/',  createProject);
+router.post('/create-project',  createProject);
 
 /**
  * @swagger
@@ -196,7 +196,7 @@ router.post('/',  createProject);
  *       500:
  *         description: Internal server error
  */
-router.get('/',getMyProjects);
+router.get('/get-my-projects',getMyProjects);
 
 /**
  * @swagger
@@ -295,7 +295,7 @@ router.get('/',getMyProjects);
  *       500:
  *         description: Internal server error
  */
-router.get('/:id', getProject);
+router.get('/get-project/:id', getProject);
 
 /**
  * @swagger
@@ -399,7 +399,7 @@ router.get('/:id', getProject);
  *       500:
  *         description: Internal server error
  */
-router.put('/:id/status', updateProjectStatus);
+router.put('/update-project-status/:id/status', updateProjectStatus);
 
 /**
  * @swagger
@@ -471,6 +471,8 @@ router.put('/:id/status', updateProjectStatus);
  *       500:
  *         description: Internal server error
  */
-router.delete('/:id',  deleteProject);
+router.delete('/delete-project/:id',  deleteProject);
+
+router.get('/get-all-projects', getAllProjects);
 
 module.exports = router;

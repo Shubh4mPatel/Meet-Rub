@@ -57,14 +57,16 @@ WHERE u.id = $1`,
     // Set new access token cookie
     const ACCESS_TOKEN_DURATION = 15 * 60 * 1000; // 15 minutes
     const isProduction = process.env.NODE_ENV === "production";
+
     res.cookie("AccessToken", newAccessToken, {
       maxAge: ACCESS_TOKEN_DURATION,
-      httpOnly:  false,
+      httpOnly: false,
       secure: false, // ensure the cookie is sent over HTTPS in production
-      sameSite: isProduction ?  "lax":"None", // required for cross-site cookies
+      sameSite: isProduction ? "lax" : "None", // required for cross-site cookies
       path: "/",
     });
-    logger.info("New access token issued",payload);
+
+    logger.info("New access token issued", payload);
     req.user = payload;
     next();
   } catch (error) {

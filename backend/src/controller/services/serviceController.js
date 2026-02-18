@@ -645,60 +645,181 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     const requestId = req.params.requestId;
     const creator_id = user?.roleWiseId;
 
-    const { rows: serviceRequests } = await query(
-      `SELECT freelancer_id FROM service_request_suggestions
-       WHERE request_id = $1
-       ORDER BY created_at DESC`,
+    // Get the service request details including desired_service
+    const {rows : requestExists} = await query(
+      `SELECT request_id, desired_service FROM service_requests WHERE request_id = $1`,
       [requestId]
     );
-    logger.debug(`Total suggestions found: ${serviceRequests.length}`);
 
-    if (serviceRequests.length < 1) {
+    if (requestExists.length === 0) {
+      logger.warn("Service request not found");
+      return res.status(404).json({
+        status: "error",
+        message: "Service request not found"
+      });
+    }
+
+    const desiredService = requestExists[0].desired_service;
+    logger.debug(`Desired service for request ${requestId}: ${desiredService}`);
+
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    
+    // Search and filter parameters
+    const searchTerm = req.query.search?.trim() || '';
+    const sortBy = req.query.sortBy || 'rating'; // rating, name
+    const sortOrder = req.query.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    // First, get the suggested freelancer IDs for this request
+    const { rows: suggestionRows } = await query(
+      `SELECT freelancer_id FROM service_request_suggestions
+       WHERE request_id = $1`,
+      [requestId]
+    );
+
+    if (suggestionRows.length === 0 || !suggestionRows[0].freelancer_id) {
       logger.warn("No suggestions found for service request");
       return res.status(200).json({
         status: "success",
         message: "No suggestions found",
         data: [],
+        pagination: {
+          currentPage: page,
+          totalPages: 0,
+          totalCount: 0,
+          limit
+        }
       });
     }
-    const { rows: freelancers } = await query(
-      `SELECT id, freelancer_full_name, profile_picture, rating  FROM freelancers
-       WHERE id = ANY($1::int[])`,
-      [serviceRequests.map((sr) => sr.freelancer_id)]
+
+    const suggestedFreelancerIds = suggestionRows[0].freelancer_id;
+    logger.debug(`Total suggested freelancer IDs: ${suggestedFreelancerIds.length}`);
+
+    // Build the query with search filter and service match
+    let queryText = `
+      SELECT 
+        f.freelancer_id, 
+        f.freelancer_full_name, 
+        f.profile_image_url, 
+        f.freelancer_thumbnail_image,
+        f.rating,
+        f.profile_title,
+        CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
+      FROM freelancer f
+      INNER JOIN services s ON f.freelancer_id = s.freelancer_id
+      LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
+      WHERE f.freelancer_id = ANY($2::int[])
+        AND s.service_name = $3
+        AND s.is_active = true
+    `;
+
+    const queryParams = [creator_id, suggestedFreelancerIds, desiredService];
+    let paramCount = 4;
+
+    // Add search condition
+    if (searchTerm) {
+      queryText += ` AND f.freelancer_full_name ILIKE $${paramCount}`;
+      queryParams.push(`%${searchTerm}%`);
+      paramCount++;
+    }
+
+    // Count total before pagination
+    const countQuery = queryText.replace(
+      /SELECT[\s\S]+FROM/,
+      'SELECT COUNT(DISTINCT f.freelancer_id) as count FROM'
     );
+    const countResult = await query(countQuery, queryParams);
+    const totalCount = parseInt(countResult.rows[0].count);
+
+    // Add sorting
+    let orderByClause = '';
+    switch (sortBy) {
+      case 'name':
+        orderByClause = `ORDER BY f.freelancer_full_name ${sortOrder}`;
+        break;
+      case 'rating':
+      default:
+        orderByClause = `ORDER BY f.rating ${sortOrder} NULLS LAST`;
+        break;
+    }
+
+    queryText += ` ${orderByClause} LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    queryParams.push(limit, offset);
+
+    const { rows: freelancers } = await query(queryText, queryParams);
     logger.debug(`Total freelancers found: ${freelancers.length}`);
 
-    // Generate presigned URLs for profile pictures
+    // Generate presigned URLs for profile pictures and thumbnails
     const freelancersWithSignedUrls = await Promise.all(
       freelancers.map(async (freelancer) => {
-        if (freelancer.profile_picture) {
+        // Generate presigned URL for profile image
+        if (freelancer.profile_image_url) {
           try {
-            const parts = freelancer.profile_picture.split("/");
-            const bucketName = parts[2];
-            const objectName = parts.slice(3).join("/");
+            const parts = freelancer.profile_image_url.split("/");
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join("/");
 
             const signedUrl = await createPresignedUrl(
               bucketName,
               objectName,
               expirySeconds
             );
-            freelancer.profile_picture = signedUrl;
+            freelancer.profile_image_url = signedUrl;
           } catch (error) {
             logger.error(
-              `Error generating signed URL for freelancer ${freelancer.id}:`,
+              `Error generating signed URL for freelancer ${freelancer.freelancer_id}:`,
               error
             );
-            freelancer.profile_picture = null;
+            freelancer.profile_image_url = null;
           }
         }
+
+        // Generate presigned URL for thumbnail image
+        if (freelancer.freelancer_thumbnail_image) {
+          try {
+            const parts = freelancer.freelancer_thumbnail_image.split("/");
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join("/");
+
+            const signedUrl = await createPresignedUrl(
+              bucketName,
+              objectName,
+              expirySeconds
+            );
+            freelancer.freelancer_thumbnail_image = signedUrl;
+          } catch (error) {
+            logger.error(
+              `Error generating signed URL for freelancer thumbnail ${freelancer.freelancer_id}:`,
+              error
+            );
+            freelancer.freelancer_thumbnail_image = null;
+          }
+        }
+
         return freelancer;
       })
     );
 
+    // Sort to put wishlisted freelancers at the top
+    const sortedFreelancers = freelancersWithSignedUrls.sort((a, b) => {
+      if (a.in_wishlist && !b.in_wishlist) return -1;
+      if (!a.in_wishlist && b.in_wishlist) return 1;
+      return 0;
+    });
+
+    logger.info(`Suggestions fetched successfully. Total: ${totalCount}, Wishlisted: ${sortedFreelancers.filter(f => f.in_wishlist).length}`);
     return res.status(200).json({
       status: "success",
       message: "Suggestions fetched successfully",
-      data: freelancersWithSignedUrls,
+      data: sortedFreelancers,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        limit
+      }
     });
   } catch (error) {
     logger.error("Failed to fetch service request suggestions:", error);
@@ -811,7 +932,7 @@ const AssignFreelancerToRequest = async (req, res, next) => {
 
     // Verify all freelancer IDs exist
     const { rows: freelancers } = await query(
-      `SELECT id FROM freelancers WHERE id = ANY($1::int[])`,
+      `SELECT freelancer_id FROM freelancer WHERE freelancer_id = ANY($1::int[])`,
       [freelancerIds]
     );
 
@@ -831,7 +952,7 @@ const AssignFreelancerToRequest = async (req, res, next) => {
          admin_notes = $3,
          updated_at = $5
        RETURNING *`,
-      [requestId, freelancerIds, adminNotes || null, new Date().toISOString, new Date().toISOString()]
+      [requestId, freelancerIds, adminNotes || null, new Date().toISOString(), new Date().toISOString()]
     );
 
     logger.info(`Freelancers assigned to request ${requestId} successfully`);

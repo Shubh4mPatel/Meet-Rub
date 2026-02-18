@@ -1,25 +1,10 @@
 const bcrypt = require("bcrypt");
 const { query } = require('../../../../config/dbConfig');
 const AppError = require("../../../../utils/appError");
-const jwt = require("jsonwebtoken");
 const { logger } = require('../../../../utils/logger');
+const { generateTokens } = require("../../../../utils/helper");
 
-function generateTokens(user,roleWiseId) {
-    logger.info(`Generating tokens for user ID: ${user.id}`);
 
-    const payload = {
-        user_id: user.id,
-        email: user.user_email,
-        name: user.user_name,
-        role: user.user_role,
-        roleWiseId: roleWiseId
-    };
-    console.log("Token payload:", payload);
-    const accessToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "15m" });
-    const refreshToken = jwt.sign({ user_id: user.id }, process.env.JWT_SECRET, { expiresIn: "4h" });
-
-    return { accessToken, refreshToken };
-}
 
 const loginUser = async (req, res, next) => {
     logger.info("Login request received");

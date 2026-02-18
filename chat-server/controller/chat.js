@@ -4,7 +4,7 @@ const redis = require('../config/reddis');
 const chatController = (io) => {
   io.on('connection', async (socket) => {
     console.log(socket.user)
-    const userId = socket.user.user_id;
+    const userId = socket.user.roleWiseId;
     const username = socket.user.name;
 
     console.log(`User connected: ${username} (${userId})`);
@@ -89,18 +89,84 @@ const chatController = (io) => {
       console.log(`${username} left chat room: ${chatRoomId}`);
     });
 
+    socket.on('custom-package', async (packageData, recipientId) => {
+      const [smallerId, largerId] = [userId, recipientId].sort();
+      const chatRoomId = `${smallerId}-${largerId}`;
+
+      const customPackage = await chatModel.saveCustomPackage(chatRoomId,
+        userId,
+        recipientId,
+        packageData,
+        savedMessage.id
+      );
+
+      const savedMessage = await chatModel.saveMessage(
+        chatRoomId,
+        userId,
+        recipientId,
+        'Package sent',
+        'package',
+        null,
+        customPackage.id
+      );
+
+      const messageData = {
+        id: savedMessage.id,
+        senderId: userId,
+        senderUsername: username,
+        recipientId,
+        message: 'Package sent',
+        timestamp: savedMessage.created_at,
+        chatRoomId,
+        isRead: false,
+        customPackage
+      };
+
+      io.to(chatRoomId).emit('receive-custom-package', messageData);
+
+      const recipientOnline = await redis.get(`user:${recipientId}:online`);
+
+      if (recipientOnline) {
+        const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
+
+        if (recipientSocketId) {
+          // Check if recipient is in the same chat room
+          const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
+
+          if (recipientActiveRoom !== chatRoomId) {
+            // Only send notification if recipient is not in the same chat room
+            io.to(recipientSocketId).emit('new-message-notification', {
+              senderId: userId,
+              senderUsername: username,
+              message: 'Package sent',
+              chatRoomId
+            });
+          }
+        }
+      }
+
+      console.log(`Message saved: ${username} to ${recipientId}`);
+
+    })
+
+    socket.on('accept-package', async (packageId, recipientId) => {
+      const [smallerId, largerId] = [userId, recipientId].sort();
+      const chatRoomId = `${smallerId}-${largerId}`;
+    });
     // Send a message
     socket.on('send-message', async ({ recipientId, message }) => {
       try {
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
+        const messageType = 'text';
 
         // Save message to database
         const savedMessage = await chatModel.saveMessage(
           chatRoomId,
           userId,
           recipientId,
-          message
+          message,
+          messageType
         );
 
         const messageData = {
