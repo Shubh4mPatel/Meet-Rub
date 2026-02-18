@@ -141,4 +141,5 @@ LIMIT $1 OFFSET $2`,
         return next(new AppError(`failed to fetch creators`, 500))
     }
 }
+
 module.exports = { approveProfile, getAllFreelancers, getAllCreators };

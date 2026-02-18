@@ -13,8 +13,6 @@ const http = require("http");
 // const socketHandler = require("../socket/socketHandler");
 const { logger } = require("../utils/logger");
 const { manageLogFiles } = require("../cron/logmanager");
-const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("./config/swagger");
 const globalErrorHandler = require("./middleware/errorHandler");
  
 // Load .env file only if not running in Docker (Docker Compose injects env vars directly)
@@ -99,12 +97,6 @@ if (process.env.NODE_ENV === "development") {
 // Body parser middleware
 // app.use(express.json({ limit: '10mb' }));
 // app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Swagger documentation
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'MeetRub API Documentation',
-}));
 
 // Health check endpoint
 app.get("/api/v1/health", (req, res) => {
