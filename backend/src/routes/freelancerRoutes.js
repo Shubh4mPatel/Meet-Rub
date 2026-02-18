@@ -156,7 +156,7 @@ router.delete('/portfolio/delete-after-before',authenticateUser, requireRole(['f
  *       403:
  *         description: Forbidden - Freelancer role required
  */
-router.post('/add-service',authenticateUser, requireRole(['freelancer']), addServicesByFreelancer)
+router.post('/add-service',authenticateUser, requireRole(['freelancer']),upload.single('file'), addServicesByFreelancer)
 
 /**
  * @swagger
@@ -263,7 +263,7 @@ router.delete('/delete-services',authenticateUser, requireRole(['freelancer']), 
  *       404:
  *         description: Service not found
  */
-router.put('/update-service',authenticateUser, requireRole(['freelancer']), updateServiceByFreelancer)
+router.put('/update-service',authenticateUser, requireRole(['freelancer']), upload.single('file'), updateServiceByFreelancer)
 
 /**
  * @swagger

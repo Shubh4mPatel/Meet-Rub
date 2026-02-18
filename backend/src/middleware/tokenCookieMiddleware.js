@@ -1,4 +1,3 @@
-const { none } = require("../../config/multer");
 
 function setTokenCookies(req, res, next) {
   const isProduction = process.env.NODE_ENV === "production";
