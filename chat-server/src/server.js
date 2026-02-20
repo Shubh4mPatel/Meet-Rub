@@ -16,23 +16,23 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, socketConfig);
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((origin) =>
-  origin.trim()
-);
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const corsOptions = {
-  origin:process.env.NODE_ENV=='production'?function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, etc.)
+  origin: function (origin, callback) {
+    // Allow requests with no origin (Postman, mobile apps, server-to-server)
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      // Use standard Error instead of AppError if AppError isn't defined
       callback(new Error(`Origin ${origin} not allowed by CORS policy`), false);
     }
-  }:'*',
-  credentials: true, // Required for cookies/auth
+  },
+  credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
     "Origin",
@@ -41,20 +41,11 @@ const corsOptions = {
     "Accept",
     "Authorization",
     "Cache-Control",
-    // 'X-Access-Token',        // CUSTOM - remove
-    // 'X-Report',              // CUSTOM - remove
-    // 'X-PDF',                 // CUSTOM - remove
-    // 'custom-real-ip',        // CUSTOM - remove
-    // 'X-header-user',         // CUSTOM - remove
-    // 'x-razorpay-signature',  // CUSTOM - remove (payment gateway specific)
-    // 'X-User-Has-Subscription', // CUSTOM - remove
-    // 'orangemobileaccesstoken', // CUSTOM - remove
-    // 'X-User-Visited-Profile',  // CUSTOM - remove
-    // 'deviceMobile'         // CUSTOM - remove
   ],
   exposedHeaders: ["Set-Cookie"],
-  optionsSuccessStatus: 200, // For legacy browser support
+  optionsSuccessStatus: 200,
 };
+
 
 app.use(cors(corsOptions));
 

@@ -23,9 +23,15 @@ const allowedOrigins = '*'
 // const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
 const socketConfig = {
   cors: {
-    origin: "*",
+    origin: function (origin, callback) {
+      const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim());
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`Origin ${origin} not allowed`));
+    },
     credentials: true,
-    allowedHeaders: ["*"]   // ✅ allow all custom headers
-  }
-};
+    methods: ["GET", "POST"],
+  },
+  transports: ['websocket', 'polling'],
+}; 
+
 module.exports = socketConfig;
