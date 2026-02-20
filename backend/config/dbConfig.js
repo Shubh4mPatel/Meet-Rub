@@ -1,10 +1,10 @@
 const { Pool, types } = require('pg');
-// const dotenv = require('dotenv');
+const dotenv = require('dotenv');
 const { logger } = require('../utils/logger');
 
 // Load .env file only if not running in Docker (Docker Compose injects env vars directly)
 // if (!process.env.DOCKER_ENV) {
-//     dotenv.config();
+    dotenv.config();
 // }
 
 // Select database based on environment

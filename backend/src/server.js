@@ -1,10 +1,13 @@
+// const dotenv = require('dotenv');
+
+const dotenv = require("dotenv");
+dotenv.config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
 const routes = require("./routes");
-const dotenv = require("dotenv");
 const AppError = require("../utils/appError");
 const cookieParser = require("cookie-parser");
 // const socketConfig = require("../socket/socketConfig");
@@ -17,7 +20,6 @@ const globalErrorHandler = require("./middleware/errorHandler");
 
 // Load .env file only if not running in Docker (Docker Compose injects env vars directly)
 // if (!process.env.DOCKER_ENV) {
-dotenv.config();
 // }
 
 // Parse allowed origins
