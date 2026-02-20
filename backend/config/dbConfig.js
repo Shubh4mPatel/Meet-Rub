@@ -1,23 +1,24 @@
-const { Pool, types  } = require('pg');
-const dotenv = require('dotenv');
+const { Pool, types } = require('pg');
+// const dotenv = require('dotenv');
 const { logger } = require('../utils/logger');
 
 // Load .env file only if not running in Docker (Docker Compose injects env vars directly)
-if (!process.env.DOCKER_ENV) {
-  dotenv.config();
-}
+// if (!process.env.DOCKER_ENV) {
+//     dotenv.config();
+// }
 
 // Select database based on environment
 const getDatabaseUrl = () => {
-    const env = process.env.NODE_ENV;
+    // const env = process.env.NODE_ENV;
+    types.setTypeParser(1114, val => new Date(val + 'Z'));
+    return process.env.STAGING_DATABASE_URL;
+    // if (env === 'production') {
+    //     return process.env.LIVE_DATABASE_URL;
+    // } else {
+    //     types.setTypeParser(1114, val => new Date(val + 'Z'));
+    //     return process.env.STAGING_DATABASE_URL;
 
-    if (env === 'production') {
-        return process.env.LIVE_DATABASE_URL;
-    } else {
-        types.setTypeParser(1114, val => new Date(val + 'Z'));
-        return process.env.STAGING_DATABASE_URL;
-
-    }
+    // }
 };
 
 const pool = new Pool({
@@ -37,4 +38,4 @@ pool.connect((err, client, release) => {
     });
 });
 
-module.exports ={query: pool.query.bind(pool),pool:pool};
+module.exports = { query: pool.query.bind(pool), pool: pool };

@@ -2,25 +2,25 @@
 function setTokenCookies(req, res, next) {
   const isProduction = process.env.NODE_ENV === "production";
   // const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV !== 'production';
-  const isHttps = false;
+  const isHttps = isProduction ? true : false;
   const ACCESS_TOKEN_DURATION_WEB = 15 * 60 * 1000; // 15 minutes
   const REFRESH_TOKEN_DURATION_WEB = 4 * 60 * 60 * 1000; // 4 hours
 
   if (res.locals.accessToken) {
     res.cookie("AccessToken", res.locals.accessToken, {
       maxAge: ACCESS_TOKEN_DURATION_WEB,
-      httpOnly: false,
+      httpOnly: isHttps,
       secure: isHttps,
-      sameSite: isProduction ?  "lax":"None",
+      sameSite: isProduction ?  "strict":"lax",
       path: "/",
     });
   }
   if (res.locals.refreshToken) {
     res.cookie("RefreshToken", res.locals.refreshToken, {
       maxAge: REFRESH_TOKEN_DURATION_WEB,
-      httpOnly:  false,
+      httpOnly:  isHttps,
       secure: isHttps,
-      sameSite: isProduction ?  "lax":"None",
+      sameSite: isProduction ?  "strict":"lax",
       path: "/",
     });
   }
