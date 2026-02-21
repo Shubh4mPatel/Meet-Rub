@@ -1,10 +1,13 @@
+// const dotenv = require('dotenv');
+
+const dotenv = require("dotenv");
+dotenv.config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
 const routes = require("./routes");
-const dotenv = require("dotenv");
 const AppError = require("../utils/appError");
 const cookieParser = require("cookie-parser");
 // const socketConfig = require("../socket/socketConfig");
@@ -14,30 +17,28 @@ const http = require("http");
 const { logger } = require("../utils/logger");
 const { manageLogFiles } = require("../cron/logmanager");
 const globalErrorHandler = require("./middleware/errorHandler");
- 
+
 // Load .env file only if not running in Docker (Docker Compose injects env vars directly)
 // if (!process.env.DOCKER_ENV) {
-  dotenv.config();
 // }
 
 // Parse allowed origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((origin) =>
   origin.trim()
 );
-logger.info("Allowed Origins for CORS:", allowedOrigins,process.env.NODE_ENV);
-const corsOptions = {
-  origin:process.env.NODE_ENV=='production'?function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
 
+logger.info("Allowed Origins for CORS:", allowedOrigins, process.env.NODE_ENV);
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // Postman, server-to-server
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      // Use standard Error instead of AppError if AppError isn't defined
       callback(new Error(`Origin ${origin} not allowed by CORS policy`), false);
     }
-  }:'*',
-  credentials: true, // Required for cookies/auth
+  },
+  credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
     "Origin",
@@ -46,19 +47,9 @@ const corsOptions = {
     "Accept",
     "Authorization",
     "Cache-Control",
-    // 'X-Access-Token',        // CUSTOM - remove
-    // 'X-Report',              // CUSTOM - remove
-    // 'X-PDF',                 // CUSTOM - remove
-    // 'custom-real-ip',        // CUSTOM - remove
-    // 'X-header-user',         // CUSTOM - remove
-    // 'x-razorpay-signature',  // CUSTOM - remove (payment gateway specific)
-    // 'X-User-Has-Subscription', // CUSTOM - remove
-    // 'orangemobileaccesstoken', // CUSTOM - remove
-    // 'X-User-Visited-Profile',  // CUSTOM - remove
-    // 'deviceMobile'         // CUSTOM - remove
   ],
   exposedHeaders: ["Set-Cookie"],
-  optionsSuccessStatus: 200, // For legacy browser support
+  optionsSuccessStatus: 200,
 };
 
 const app = express();
