@@ -5,6 +5,7 @@ const { authenticateUser, refreshAccessToken, logout } = require('../middleware/
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
 const { logger } = require('../../utils/logger');
 const upload = require('../../config/multer');
+const { userInfo } = require('node:os');
 
 
 router.post("/send-otp", otpSendApi);
@@ -25,6 +26,7 @@ router.post("/login", loginUser, setTokenCookies, (req, res) => {
   res.status(200).json({
     message: "Login successful ",
     tokensCookieSet: true,
+    userInfo: res.locals.userInfo
   });
 
 });
