@@ -26,7 +26,7 @@ router.post("/login", loginUser, setTokenCookies, (req, res) => {
   res.status(200).json({
     message: "Login successful ",
     tokensCookieSet: true,
-    userInfo: res.locals.userInfo
+    userInfo: res.locals.user
   });
 
 });
