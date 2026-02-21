@@ -221,7 +221,7 @@ const chatController = (io) => {
 
         // Store typing status in Redis with short expiry
         if (isTyping) {
-          await redis.setex(`typing:${chatRoomId}:${userId}`, 5, "true");
+          await redis.set(`typing:${chatRoomId}:${userId}`, "true", { EX: 5 });
         } else {
           await redis.del(`typing:${chatRoomId}:${userId}`);
         }
