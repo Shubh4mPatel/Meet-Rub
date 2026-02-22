@@ -2,38 +2,16 @@ const chatModel = require('../model/chatmodel');
 const redis = require('../config/reddis');
 
 const chatController = (io) => {
-  io.on('connection', async (socket) => {
+  io.on('connection', (socket) => {
     console.log(socket.user)
     const userId = socket.user.roleWiseId;
     const username = socket.user.name;
 
     console.log(`User connected: ${username} (${userId})`);
 
-    try {
-      // Create or update user in database
-      await chatModel.GetUser(userId, username);
-
-      // Store user's socket connection in Redis
-      await redis.set(`user:${userId}:socketId`, socket.id, "EX", 3600);
-      await redis.set(`user:${userId}:username`, username, "EX", 3600);
-      await redis.set(`user:${userId}:online`, "true", "EX", 3600);
-
-      // Add user to online users set
-      await redis.sAdd("online_users", `${userId}`);
-
-      // Get all online users from Redis
-      const onlineUserIds = await redis.sMembers("online_users");
-
-      // Emit online users list to all clients
-      io.emit('online-users', onlineUserIds);
-
-      // Get unread count for this user
-      const unreadCount = await chatModel.getUnreadCount(userId);
-      socket.emit('unread-count', { count: unreadCount });
-
-    } catch (error) {
-      console.error('Error on connection:', error);
-    }
+    // Register ALL event handlers synchronously first.
+    // If handlers are registered after async operations, clients can emit events
+    // before the listeners exist and those events are silently dropped.
 
     // Join a private chat room
     socket.on('join-chat', async ({ recipientId }) => {
@@ -42,7 +20,7 @@ const chatController = (io) => {
         // Create a unique room ID (sorted to ensure same room for both users)
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
-
+        console.log(`Generated chat room ID: ${chatRoomId}`);
         // Create or get chat room from database
         await chatModel.getOrCreateChatRoom(userId, recipientId);
 
@@ -55,6 +33,7 @@ const chatController = (io) => {
 
         // Get chat history
         const chatHistory = await chatModel.getChatHistory(chatRoomId);
+        console.log(`Chat history for room ${chatRoomId}:`, chatHistory);
 
         // Mark messages as read
         await chatModel.markMessagesAsRead(chatRoomId, userId);
@@ -93,13 +72,6 @@ const chatController = (io) => {
       const [smallerId, largerId] = [userId, recipientId].sort();
       const chatRoomId = `${smallerId}-${largerId}`;
 
-      const customPackage = await chatModel.saveCustomPackage(chatRoomId,
-        userId,
-        recipientId,
-        packageData,
-        savedMessage.id
-      );
-
       const savedMessage = await chatModel.saveMessage(
         chatRoomId,
         userId,
@@ -107,7 +79,14 @@ const chatController = (io) => {
         'Package sent',
         'package',
         null,
-        customPackage.id
+        null
+      );
+
+      const customPackage = await chatModel.saveCustomPackage(chatRoomId,
+        userId,
+        recipientId,
+        packageData,
+        savedMessage.id
       );
 
       const messageData = {
@@ -146,13 +125,13 @@ const chatController = (io) => {
       }
 
       console.log(`Message saved: ${username} to ${recipientId}`);
-
-    })
+    });
 
     socket.on('accept-package', async (packageId, recipientId) => {
       const [smallerId, largerId] = [userId, recipientId].sort();
       const chatRoomId = `${smallerId}-${largerId}`;
     });
+
     // Send a message
     socket.on('send-message', async ({ recipientId, message }) => {
       try {
@@ -239,6 +218,7 @@ const chatController = (io) => {
     // Get user's all chat rooms
     socket.on('get-chat-rooms', async () => {
       try {
+        console.log(`Getting chat rooms for user: ${username} ${userId}`);
         const chatRooms = await chatModel.getUserChatRooms(userId);
 
         // Enhance chat rooms with online status from Redis
@@ -353,6 +333,35 @@ const chatController = (io) => {
         console.error('Error handling disconnect:', error);
       }
     });
+
+    // Run async setup AFTER all handlers are registered
+    (async () => {
+      try {
+        // Create or update user in database
+        await chatModel.GetUser(userId, username);
+
+        // Store user's socket connection in Redis
+        await redis.set(`user:${userId}:socketId`, socket.id, "EX", 3600);
+        await redis.set(`user:${userId}:username`, username, "EX", 3600);
+        await redis.set(`user:${userId}:online`, "true", "EX", 3600);
+
+        // Add user to online users set
+        await redis.sAdd("online_users", `${userId}`);
+
+        // Get all online users from Redis
+        const onlineUserIds = await redis.sMembers("online_users");
+
+        // Emit online users list to all clients
+        io.emit('online-users', onlineUserIds);
+
+        // Get unread count for this user
+        const unreadCount = await chatModel.getUnreadCount(userId);
+        socket.emit('unread-count', { count: unreadCount });
+
+      } catch (error) {
+        console.error('Error on connection setup:', error);
+      }
+    })();
   });
 };
 

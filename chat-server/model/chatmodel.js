@@ -1,4 +1,4 @@
-const pool = require('../config/dbConfig');
+const pool = require("../config/dbConfig");
 
 const chatModel = {
   // Create or get user
@@ -11,7 +11,7 @@ const chatModel = {
       const result = await pool.query(query, [userId]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error creating/updating user:', error);
+      console.error("Error creating/updating user:", error);
       throw error;
     }
   },
@@ -34,13 +34,21 @@ const chatModel = {
       const result = await pool.query(query, [roomId, smallerId, largerId]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error creating/getting chat room:', error);
+      console.error("Error creating/getting chat room:", error);
       throw error;
     }
   },
 
   // Save message
-  async saveMessage(roomId, senderId, recipientId, message, messageType = 'text', fileUrl = null, custom_package_id = null) {
+  async saveMessage(
+    roomId,
+    senderId,
+    recipientId,
+    message,
+    messageType = "text",
+    fileUrl = null,
+    custom_package_id = null
+  ) {
     const query = `
       INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type, file_url,custom_package_id, created_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -48,10 +56,19 @@ const chatModel = {
     `;
 
     try {
-      const result = await pool.query(query, [roomId, senderId, recipientId, message, messageType, fileUrl, custom_package_id, new Date().toISOString()]);
+      const result = await pool.query(query, [
+        roomId,
+        senderId,
+        recipientId,
+        message,
+        messageType,
+        fileUrl,
+        custom_package_id,
+        new Date().toISOString(),
+      ]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error saving message:', error);
+      console.error("Error saving message:", error);
       throw error;
     }
   },
@@ -59,27 +76,48 @@ const chatModel = {
   // Get chat history
   async getChatHistory(roomId, limit = 50, offset = 0) {
     const query = `
-      SELECT 
-        m.id,
-        m.room_id,
-        m.sender_id,
-        m.recipient_id,
-        m.message,
-        m.is_read,
-        m.created_at,
-        u.user_name as sender_username
-      FROM messages m
-      JOIN users u ON m.sender_id = u.id
-      WHERE m.room_id = $1
-      ORDER BY m.created_at DESC
-      LIMIT $2 OFFSET $3
+     SELECT
+    m.id,
+    m.room_id,
+    m.sender_id,
+    m.recipient_id,
+    m.message,
+    m.message_type,
+    m.is_read,
+    m.created_at,
+    COALESCE(f.user_name, c.user_name) as sender_username,
+    CASE 
+        WHEN f.freelancer_id IS NOT NULL THEN 'freelancer'
+        WHEN c.creator_id IS NOT NULL THEN 'creator'
+    END as sender_type
+FROM messages m
+LEFT JOIN freelancer f ON m.sender_id = f.freelancer_id
+LEFT JOIN creators c ON m.sender_id = c.creator_id
+WHERE m.room_id = $1
+ORDER BY m.created_at DESC
+LIMIT $2 OFFSET $3;
     `;
 
     try {
       const result = await pool.query(query, [roomId, limit, offset]);
-      return result.rows.reverse(); // Reverse to show oldest first
+      console.log(
+        `Fetched ${result.rows} messages for room ${roomId} with limit ${limit} and offset ${offset}`
+      );
+      // Reverse to oldest-first and map to camelCase to match real-time message format
+      return result.rows.reverse().map((row) => ({
+        id: row.id,
+        chatRoomId: row.room_id,
+        senderId: row.sender_id,
+        recipientId: row.recipient_id,
+        message: row.message,
+        message_type: row.message_type || "text",
+        isRead: row.is_read,
+        timestamp: row.created_at,
+        created_at: row.created_at,
+        senderUsername: row.sender_username,
+      }));
     } catch (error) {
-      console.error('Error getting chat history:', error);
+      console.error("Error getting chat history:", error);
       throw error;
     }
   },
@@ -87,16 +125,18 @@ const chatModel = {
   // Get user's all chat rooms with last message
   async getUserChatRooms(userId) {
     const query = `
-      SELECT 
+      SELECT
+        cr.room_id as id,
         cr.room_id,
         cr.user1_id,
         cr.user2_id,
         cr.created_at as room_created_at,
-        u1.user_name as user1_username,
-        u2.user_name as user2_username,
+        u1.user_name as user1_name,
+        u2.user_name as user2_name,
         m.message as last_message,
         m.created_at as last_message_time,
-        m.sender_id as last_message_sender
+        m.sender_id as last_message_sender,
+        COALESCE(unread.unread_count, 0) as unread_count
       FROM chat_rooms cr
       LEFT JOIN users u1 ON cr.user1_id = u1.id
       LEFT JOIN users u2 ON cr.user2_id = u2.id
@@ -107,6 +147,13 @@ const chatModel = {
         ORDER BY created_at DESC
         LIMIT 1
       ) m ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*) as unread_count
+        FROM messages
+        WHERE room_id = cr.room_id
+          AND recipient_id = $1
+          AND is_read = FALSE
+      ) unread ON true
       WHERE cr.user1_id = $1 OR cr.user2_id = $1
       ORDER BY m.created_at DESC NULLS LAST
     `;
@@ -115,7 +162,7 @@ const chatModel = {
       const result = await pool.query(query, [userId]);
       return result.rows;
     } catch (error) {
-      console.error('Error getting user chat rooms:', error);
+      console.error("Error getting user chat rooms:", error);
       throw error;
     }
   },
@@ -135,7 +182,7 @@ const chatModel = {
       const result = await pool.query(query, [roomId, userId]);
       return result.rows;
     } catch (error) {
-      console.error('Error marking messages as read:', error);
+      console.error("Error marking messages as read:", error);
       throw error;
     }
   },
@@ -152,7 +199,7 @@ const chatModel = {
       const result = await pool.query(query, [userId]);
       return parseInt(result.rows[0].unread_count);
     } catch (error) {
-      console.error('Error getting unread count:', error);
+      console.error("Error getting unread count:", error);
       throw error;
     }
   },
@@ -169,13 +216,19 @@ const chatModel = {
       const result = await pool.query(query, [messageId, userId]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error deleting message:', error);
+      console.error("Error deleting message:", error);
       throw error;
     }
   },
 
   // Save custom package
-  async saveCustomPackage(chatRoomId, userId, recipientId, packageData, message_id) {
+  async saveCustomPackage(
+    chatRoomId,
+    userId,
+    recipientId,
+    packageData,
+    message_id
+  ) {
     const {
       title,
       description,
@@ -183,7 +236,7 @@ const chatModel = {
       delivery_days,
       deliverables,
       revisions = 0,
-      expires_at
+      expires_at,
     } = packageData;
 
     const query = `
@@ -191,7 +244,7 @@ const chatModel = {
         room_id, freelancer_id, creator_id, title,
         description, price, delivery_days, deliverables, revisions, expires_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
 
@@ -206,11 +259,11 @@ const chatModel = {
         delivery_days,
         JSON.stringify(deliverables),
         revisions,
-        expires_at || null
+        expires_at || null,
       ]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error saving custom package:', error);
+      console.error("Error saving custom package:", error);
       throw error;
     }
   },
@@ -239,10 +292,10 @@ const chatModel = {
       const result = await pool.query(query, [userId, `%${searchTerm}%`]);
       return result.rows;
     } catch (error) {
-      console.error('Error searching messages:', error);
+      console.error("Error searching messages:", error);
       throw error;
     }
-  }
+  },
 };
 
 module.exports = chatModel;
