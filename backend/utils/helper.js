@@ -1,5 +1,23 @@
 const {minioClient} = require('../config/minio');
 const jwt = require("jsonwebtoken");
+const { query } = require('../config/dbConfig');
+const redisClient = require('../config/reddis');
+const { logger } = require('./logger');
+
+const USERNAMES_SET_KEY = "usernames:set";
+
+async function loadUsernamesIntoRedis() {
+  try {
+    const result = await query("SELECT user_name FROM users WHERE user_name IS NOT NULL");
+    const usernames = result.rows.map((r) => r.user_name).filter(Boolean);
+    if (usernames.length > 0) {
+      await redisClient.sAdd(USERNAMES_SET_KEY, usernames);
+    }
+    logger.info(`Loaded ${usernames.length} usernames into Redis set`);
+  } catch (err) {
+    logger.error("Failed to load usernames into Redis on startup:", err);
+  }
+}
 
 function getObjectNameFromUrl(url, bucketName) {
   try {
@@ -94,4 +112,4 @@ function generateTokens(user,roleWiseId) {
     return { accessToken, refreshToken };
 }
 
-module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile,createPresignedUrl, generateTokens };
+module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile, createPresignedUrl, generateTokens, loadUsernamesIntoRedis, USERNAMES_SET_KEY };
