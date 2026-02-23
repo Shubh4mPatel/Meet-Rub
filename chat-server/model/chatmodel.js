@@ -125,7 +125,7 @@ LIMIT $2 OFFSET $3;
   // Get user's all chat rooms with last message
   async getUserChatRooms(userId) {
     const query = `
-    SELECT
+   SELECT
   cr.room_id as id,
   cr.room_id,
   cr.user1_id,
@@ -133,6 +133,8 @@ LIMIT $2 OFFSET $3;
   cr.created_at as room_created_at,
   COALESCE(f1.user_name, c1.user_name) as user1_name,
   COALESCE(f2.user_name, c2.user_name) as user2_name,
+  COALESCE(f1.profile_image_url, c1.profile_image_url) as user1_profile_image_url,
+  COALESCE(f2.profile_image_url, c2.profile_image_url) as user2_profile_image_url,
   CASE 
     WHEN f1.freelancer_id IS NOT NULL THEN 'freelancer'
     WHEN c1.creator_id IS NOT NULL THEN 'creator'
