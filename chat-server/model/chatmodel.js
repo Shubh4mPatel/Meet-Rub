@@ -1,5 +1,32 @@
 const pool = require("../config/dbConfig");
 
+// Converts a time string to UTC.
+// If the value already carries a UTC indicator (Z or +00:00) it is returned unchanged.
+// If it carries a non-UTC offset the time is shifted to UTC.
+// If there is no timezone information at all the value is returned unchanged.
+function toUTCTime(timeStr) {
+  if (!timeStr) return timeStr;
+
+  const s = String(timeStr).trim();
+
+  // Already UTC
+  if (s.endsWith("Z") || s.endsWith("+00:00") || s.endsWith("+0000")) {
+    return s;
+  }
+
+  // Has a non-UTC numeric offset, e.g. "+05:30" or "-04:00"
+  if (/[+-]\d{2}:?\d{2}$/.test(s)) {
+    const d = new Date(`1970-01-01T${s}`);
+    if (!isNaN(d.getTime())) {
+      // Return HH:MM:SSZ
+      return d.toISOString().slice(11, 19) + "Z";
+    }
+  }
+
+  // No timezone info — return as-is
+  return s;
+}
+
 const chatModel = {
   // Create or get user
   async GetUser(userId, username) {
@@ -241,36 +268,56 @@ ORDER BY m.created_at DESC NULLS LAST
     packageData
   ) {
     const {
-      title,
-      description,
+      plan_type,
       price,
-      delivery_days,
-      deliverables,
-      revisions = 0,
-      expires_at,
+      units,
+      package_type,
+      delivery_date,
+      delivery_time,
+      status,
     } = packageData;
+
+    // Determine which participant is the freelancer and which is the creator
+    const roleCheck = await pool.query(
+      `SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1 OR freelancer_id = $2`,
+      [userId, recipientId]
+    );
+
+    const freelancerIds = roleCheck.rows.map((r) => r.freelancer_id);
+    let freelancerId, creatorId;
+
+    if (freelancerIds.includes(userId)) {
+      freelancerId = userId;
+      creatorId = recipientId;
+    } else {
+      freelancerId = recipientId;
+      creatorId = userId;
+    }
 
     const query = `
       INSERT INTO custom_packages (
-        room_id, freelancer_id, creator_id, title,
-        description, price, delivery_days, deliverables, revisions, expires_at
+        room_id, freelancer_id, creator_id,
+        plan_type, price, units, package_type, status, expires_at, created_at,
+        delivery_date, delivery_time
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `;
 
     try {
       const result = await pool.query(query, [
         chatRoomId,
-        recipientId,
-        userId,
-        title,
-        description,
+        freelancerId,
+        creatorId,
+        plan_type,
         price,
-        delivery_days,
-        JSON.stringify(deliverables),
-        revisions,
-        expires_at || null,
+        units,
+        package_type,
+        status || 'pending',
+        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        new Date().toISOString(),
+        delivery_date || null,
+        toUTCTime(delivery_time) || null,
       ]);
       return result.rows[0];
     } catch (error) {
@@ -315,6 +362,29 @@ ORDER BY m.created_at DESC NULLS LAST
     }
   },
 
+  // Extend deadline on a custom package
+  async extendDeadline(packageId, freelancerId, newDeliveryDays, newExpiresAt) {
+    const query = `
+      UPDATE custom_packages
+      SET delivery_days = $3, expires_at = $4
+      WHERE id = $1 AND freelancer_id = $2
+      RETURNING *
+    `;
+
+    try {
+      const result = await pool.query(query, [
+        packageId,
+        freelancerId,
+        newDeliveryDays,
+        newExpiresAt || null,
+      ]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error extending deadline:", error);
+      throw error;
+    }
+  },
+
   // Search messages
   async searchMessages(userId, searchTerm) {
     const query = `
@@ -343,7 +413,7 @@ ORDER BY m.created_at DESC NULLS LAST
       throw error;
     }
   },
-  
+
 };
 
 module.exports = chatModel;

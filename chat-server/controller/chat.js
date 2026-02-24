@@ -235,6 +235,64 @@ const chatController = (io) => {
       }
     });
 
+    socket.on("extend-deadline", async (projectId, recipientId, extensionData) => {
+      try {
+        const [smallerId, largerId] = [userId, recipientId].sort();
+        const chatRoomId = `${smallerId}-${largerId}`;
+
+        const { newDeliveryDays, newExpiresAt } = extensionData;
+
+        const updatedPackage = await chatModel.extendDeadline(
+          projectId,
+          userId,
+          newDeliveryDays,
+          newExpiresAt
+        );
+
+        if (!updatedPackage) {
+          socket.emit("error", {
+            message: "Package not found or unauthorized",
+          });
+          return;
+        }
+
+        io.to(chatRoomId).emit("deadline-extended", {
+          packageId,
+          chatRoomId,
+          extendedBy: userId,
+          package: updatedPackage,
+        });
+
+        const recipientOnline = await redis.get(`user:${recipientId}:online`);
+
+        if (recipientOnline) {
+          const recipientSocketId = await redis.get(
+            `user:${recipientId}:socketId`
+          );
+
+          if (recipientSocketId) {
+            const recipientActiveRoom = await redis.get(
+              `user:${recipientId}:activeRoom`
+            );
+
+            if (recipientActiveRoom !== chatRoomId) {
+              io.to(recipientSocketId).emit("new-message-notification", {
+                senderId: userId,
+                senderUsername: username,
+                message: "Deadline extended",
+                chatRoomId,
+              });
+            }
+          }
+        }
+
+        console.log(`Deadline extended for package ${packageId} by ${username} (${userId})`);
+      } catch (error) {
+        console.error("Error extending deadline:", error);
+        socket.emit("error", { message: "Failed to extend deadline" });
+      }
+    });
+
     // Send a message
     socket.on("send-message", async ({ recipientId, message }) => {
       try {
@@ -470,7 +528,7 @@ const chatController = (io) => {
         console.error("Error on connection setup:", error);
       }
     })();
-    
+
   });
 };
 
