@@ -279,6 +279,42 @@ ORDER BY m.created_at DESC NULLS LAST
     }
   },
 
+  // Accept custom package - update status to 'accepted'
+  async acceptPackage(packageId, recipientId) {
+    const query = `
+      UPDATE custom_packages
+      SET status = 'accepted'
+      WHERE id = $1 AND creator_id = $2
+      RETURNING *
+    `;
+
+    try {
+      const result = await pool.query(query, [packageId, recipientId]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error accepting package:", error);
+      throw error;
+    }
+  },
+
+  // Reject custom package - update status to 'rejected'
+  async rejectPackage(packageId, recipientId) {
+    const query = `
+      UPDATE custom_packages
+      SET status = 'rejected'
+      WHERE id = $1 AND creator_id = $2
+      RETURNING *
+    `;
+
+    try {
+      const result = await pool.query(query, [packageId, recipientId]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error rejecting package:", error);
+      throw error;
+    }
+  },
+
   // Search messages
   async searchMessages(userId, searchTerm) {
     const query = `
@@ -307,6 +343,7 @@ ORDER BY m.created_at DESC NULLS LAST
       throw error;
     }
   },
+  
 };
 
 module.exports = chatModel;

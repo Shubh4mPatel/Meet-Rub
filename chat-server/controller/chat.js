@@ -130,8 +130,109 @@ const chatController = (io) => {
     });
 
     socket.on("accept-package", async (packageId, recipientId) => {
-      const [smallerId, largerId] = [userId, recipientId].sort();
-      const chatRoomId = `${smallerId}-${largerId}`;
+      try {
+        const [smallerId, largerId] = [userId, recipientId].sort();
+        const chatRoomId = `${smallerId}-${largerId}`;
+
+        const updatedPackage = await chatModel.acceptPackage(packageId, userId);
+
+        if (!updatedPackage) {
+          socket.emit("error", {
+            message: "Package not found or unauthorized",
+          });
+          return;
+        }
+
+        io.to(chatRoomId).emit("package-accepted", {
+          packageId,
+          chatRoomId,
+          acceptedBy: userId,
+          package: updatedPackage,
+        });
+
+        const recipientOnline = await redis.get(`user:${recipientId}:online`);
+
+        if (recipientOnline) {
+          const recipientSocketId = await redis.get(
+            `user:${recipientId}:socketId`
+          );
+
+          if (recipientSocketId) {
+            // Check if recipient is in the same chat room
+            const recipientActiveRoom = await redis.get(
+              `user:${recipientId}:activeRoom`
+            );
+
+            if (recipientActiveRoom !== chatRoomId) {
+              // Only send notification if recipient is not in the same chat room
+              io.to(recipientSocketId).emit("new-message-notification", {
+                senderId: userId,
+                senderUsername: username,
+                message: "Package accepted",
+                chatRoomId,
+              });
+            }
+          }
+        }
+
+        console.log(`Package ${packageId} accepted by ${username} (${userId})`);
+      } catch (error) {
+        console.error("Error accepting package:", error);
+        socket.emit("error", { message: "Failed to accept package" });
+      }
+    });
+
+    socket.on("reject-package", async (packageId, recipientId) => {
+      try {
+        const [smallerId, largerId] = [userId, recipientId].sort();
+        const chatRoomId = `${smallerId}-${largerId}`;
+
+        const updatedPackage = await chatModel.rejectPackage(packageId, userId);
+
+        if (!updatedPackage) {
+          socket.emit("error", {
+            message: "Package not found or unauthorized",
+          });
+          return;
+        }
+
+        io.to(chatRoomId).emit("package-rejected", {
+          packageId,
+          chatRoomId,
+          rejectedBy: userId,
+          package: updatedPackage,
+        });
+        // Check if recipient is online using Redis
+        const recipientOnline = await redis.get(`user:${recipientId}:online`);
+
+        if (recipientOnline) {
+          const recipientSocketId = await redis.get(
+            `user:${recipientId}:socketId`
+          );
+
+          if (recipientSocketId) {
+            // Check if recipient is in the same chat room
+            const recipientActiveRoom = await redis.get(
+              `user:${recipientId}:activeRoom`
+            );
+
+            if (recipientActiveRoom !== chatRoomId) {
+              // Only send notification if recipient is not in the same chat room
+              io.to(recipientSocketId).emit("new-message-notification", {
+                senderId: userId,
+                senderUsername: username,
+                message: "Package rejected",
+                chatRoomId,
+              });
+            }
+          }
+        }
+
+        console.log(`Package ${packageId} rejected by ${username} (${userId})`);
+      } catch (error) {
+        console.error("Error rejecting package:", error);
+        socket.emit("error", { message: "Failed to reject package" });
+      }
     });
 
     // Send a message
@@ -369,6 +470,7 @@ const chatController = (io) => {
         console.error("Error on connection setup:", error);
       }
     })();
+    
   });
 };
 
