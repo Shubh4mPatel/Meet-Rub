@@ -1,9 +1,9 @@
-const chatModel = require('../model/chatmodel');
-const redis = require('../config/reddis');
+const chatModel = require("../model/chatmodel");
+const redis = require("../config/reddis");
 
 const chatController = (io) => {
-  io.on('connection', (socket) => {
-    console.log(socket.user)
+  io.on("connection", (socket) => {
+    console.log(socket.user);
     const userId = socket.user.roleWiseId;
     const username = socket.user.name;
 
@@ -14,7 +14,7 @@ const chatController = (io) => {
     // before the listeners exist and those events are silently dropped.
 
     // Join a private chat room
-    socket.on('join-chat', async ({ recipientId }) => {
+    socket.on("join-chat", async ({ recipientId }) => {
       try {
         console.log(`${username} is joining chat with user ID: ${recipientId}`);
         // Create a unique room ID (sorted to ensure same room for both users)
@@ -39,24 +39,23 @@ const chatController = (io) => {
         await chatModel.markMessagesAsRead(chatRoomId, userId);
 
         // Send chat history to the user
-        socket.emit('chat-joined', {
+        socket.emit("chat-joined", {
           chatRoomId,
           recipientId,
-          chatHistory
+          chatHistory,
         });
 
         // Update unread count
         const unreadCount = await chatModel.getUnreadCount(userId);
-        socket.emit('unread-count', { count: unreadCount });
-
+        socket.emit("unread-count", { count: unreadCount });
       } catch (error) {
-        console.error('Error joining chat:', error);
-        socket.emit('error', { message: 'Failed to join chat' });
+        console.error("Error joining chat:", error);
+        socket.emit("error", { message: "Failed to join chat" });
       }
     });
 
     // Leave a chat room
-    socket.on('leave-chat', async ({ recipientId }) => {
+    socket.on("leave-chat", async ({ recipientId }) => {
       const [smallerId, largerId] = [userId, recipientId].sort();
       const chatRoomId = `${smallerId}-${largerId}`;
 
@@ -68,25 +67,24 @@ const chatController = (io) => {
       console.log(`${username} left chat room: ${chatRoomId}`);
     });
 
-    socket.on('custom-package', async (packageData, recipientId) => {
+    socket.on("custom-package", async (packageData, recipientId) => {
       const [smallerId, largerId] = [userId, recipientId].sort();
       const chatRoomId = `${smallerId}-${largerId}`;
+
+      const customPackage = await chatModel.saveCustomPackage(
+        chatRoomId,
+        userId,
+        recipientId,
+        packageData
+      );
 
       const savedMessage = await chatModel.saveMessage(
         chatRoomId,
         userId,
         recipientId,
-        'Package sent',
-        'package',
-        null,
-        null
-      );
-
-      const customPackage = await chatModel.saveCustomPackage(chatRoomId,
-        userId,
-        recipientId,
-        packageData,
-        savedMessage.id
+        "Package sent",
+        "package",
+        customPackage.id
       );
 
       const messageData = {
@@ -94,31 +92,35 @@ const chatController = (io) => {
         senderId: userId,
         senderUsername: username,
         recipientId,
-        message: 'Package sent',
+        message: "Package sent",
         timestamp: savedMessage.created_at,
         chatRoomId,
         isRead: false,
-        customPackage
+        customPackage,
       };
 
-      io.to(chatRoomId).emit('receive-custom-package', messageData);
+      io.to(chatRoomId).emit("receive-custom-package", messageData);
 
       const recipientOnline = await redis.get(`user:${recipientId}:online`);
 
       if (recipientOnline) {
-        const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
+        const recipientSocketId = await redis.get(
+          `user:${recipientId}:socketId`
+        );
 
         if (recipientSocketId) {
           // Check if recipient is in the same chat room
-          const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
+          const recipientActiveRoom = await redis.get(
+            `user:${recipientId}:activeRoom`
+          );
 
           if (recipientActiveRoom !== chatRoomId) {
             // Only send notification if recipient is not in the same chat room
-            io.to(recipientSocketId).emit('new-message-notification', {
+            io.to(recipientSocketId).emit("new-message-notification", {
               senderId: userId,
               senderUsername: username,
-              message: 'Package sent',
-              chatRoomId
+              message: "Package sent",
+              chatRoomId,
             });
           }
         }
@@ -127,17 +129,17 @@ const chatController = (io) => {
       console.log(`Message saved: ${username} to ${recipientId}`);
     });
 
-    socket.on('accept-package', async (packageId, recipientId) => {
+    socket.on("accept-package", async (packageId, recipientId) => {
       const [smallerId, largerId] = [userId, recipientId].sort();
       const chatRoomId = `${smallerId}-${largerId}`;
     });
 
     // Send a message
-    socket.on('send-message', async ({ recipientId, message }) => {
+    socket.on("send-message", async ({ recipientId, message }) => {
       try {
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
-        const messageType = 'text';
+        const messageType = "text";
 
         // Save message to database
         const savedMessage = await chatModel.saveMessage(
@@ -156,44 +158,47 @@ const chatController = (io) => {
           message,
           timestamp: savedMessage.created_at,
           chatRoomId,
-          isRead: false
+          isRead: false,
         };
 
         // Send message to the chat room (both users)
-        io.to(chatRoomId).emit('receive-message', messageData);
+        io.to(chatRoomId).emit("receive-message", messageData);
 
         // Check if recipient is online using Redis
         const recipientOnline = await redis.get(`user:${recipientId}:online`);
 
         if (recipientOnline) {
-          const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
+          const recipientSocketId = await redis.get(
+            `user:${recipientId}:socketId`
+          );
 
           if (recipientSocketId) {
             // Check if recipient is in the same chat room
-            const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
+            const recipientActiveRoom = await redis.get(
+              `user:${recipientId}:activeRoom`
+            );
 
             if (recipientActiveRoom !== chatRoomId) {
               // Only send notification if recipient is not in the same chat room
-              io.to(recipientSocketId).emit('new-message-notification', {
+              io.to(recipientSocketId).emit("new-message-notification", {
                 senderId: userId,
                 senderUsername: username,
                 message,
-                chatRoomId
+                chatRoomId,
               });
             }
           }
         }
 
         console.log(`Message saved: ${username} to ${recipientId}`);
-
       } catch (error) {
-        console.error('Error sending message:', error);
-        socket.emit('error', { message: 'Failed to send message' });
+        console.error("Error sending message:", error);
+        socket.emit("error", { message: "Failed to send message" });
       }
     });
 
     // Typing indicator
-    socket.on('typing', async ({ recipientId, isTyping }) => {
+    socket.on("typing", async ({ recipientId, isTyping }) => {
       try {
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
@@ -205,18 +210,18 @@ const chatController = (io) => {
           await redis.del(`typing:${chatRoomId}:${userId}`);
         }
 
-        socket.to(chatRoomId).emit('user-typing', {
+        socket.to(chatRoomId).emit("user-typing", {
           userId,
           username,
-          isTyping
+          isTyping,
         });
       } catch (error) {
-        console.error('Error handling typing indicator:', error);
+        console.error("Error handling typing indicator:", error);
       }
     });
 
     // Get user's all chat rooms
-    socket.on('get-chat-rooms', async () => {
+    socket.on("get-chat-rooms", async () => {
       try {
         console.log(`Getting chat rooms for user: ${username} ${userId}`);
         const chatRooms = await chatModel.getUserChatRooms(userId);
@@ -224,24 +229,25 @@ const chatController = (io) => {
         // Enhance chat rooms with online status from Redis
         const enhancedChatRooms = await Promise.all(
           chatRooms.map(async (room) => {
-            const otherUserId = room.user1_id === userId ? room.user2_id : room.user1_id;
+            const otherUserId =
+              room.user1_id === userId ? room.user2_id : room.user1_id;
             const isOnline = await redis.get(`user:${otherUserId}:online`);
 
             return {
               ...room,
-              isOnline: !!isOnline
+              isOnline: !!isOnline,
             };
           })
         );
 
-        socket.emit('chat-rooms-list', { chatRooms: enhancedChatRooms });
+        socket.emit("chat-rooms-list", { chatRooms: enhancedChatRooms });
       } catch (error) {
-        console.error('Error getting chat rooms:', error);
-        socket.emit('error', { message: 'Failed to get chat rooms' });
+        console.error("Error getting chat rooms:", error);
+        socket.emit("error", { message: "Failed to get chat rooms" });
       }
     });
 
-    socket.on('mark-as-read', async ({ recipientId }) => {
+    socket.on("mark-as-read", async ({ recipientId }) => {
       try {
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
@@ -249,69 +255,71 @@ const chatController = (io) => {
         await chatModel.markMessagesAsRead(chatRoomId, userId);
 
         const unreadCount = await chatModel.getUnreadCount(userId);
-        socket.emit('unread-count', { count: unreadCount });
+        socket.emit("unread-count", { count: unreadCount });
 
         // Check if recipient is online and notify them
         const recipientOnline = await redis.get(`user:${recipientId}:online`);
 
         if (recipientOnline) {
-          const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
+          const recipientSocketId = await redis.get(
+            `user:${recipientId}:socketId`
+          );
 
           if (recipientSocketId) {
-            io.to(recipientSocketId).emit('messages-read', {
+            io.to(recipientSocketId).emit("messages-read", {
               userId,
-              chatRoomId
+              chatRoomId,
             });
           }
         }
       } catch (error) {
-        console.error('Error marking as read:', error);
+        console.error("Error marking as read:", error);
       }
     });
 
     // Delete message
-    socket.on('delete-message', async ({ messageId }) => {
+    socket.on("delete-message", async ({ messageId }) => {
       try {
         const deletedMessage = await chatModel.deleteMessage(messageId, userId);
 
         if (deletedMessage) {
-          io.to(deletedMessage.room_id).emit('message-deleted', {
+          io.to(deletedMessage.room_id).emit("message-deleted", {
             messageId: deletedMessage.id,
-            roomId: deletedMessage.room_id
+            roomId: deletedMessage.room_id,
           });
         }
       } catch (error) {
-        console.error('Error deleting message:', error);
-        socket.emit('error', { message: 'Failed to delete message' });
+        console.error("Error deleting message:", error);
+        socket.emit("error", { message: "Failed to delete message" });
       }
     });
 
     // Search messages
-    socket.on('search-messages', async ({ searchTerm }) => {
+    socket.on("search-messages", async ({ searchTerm }) => {
       try {
         const results = await chatModel.searchMessages(userId, searchTerm);
-        socket.emit('search-results', { results });
+        socket.emit("search-results", { results });
       } catch (error) {
-        console.error('Error searching messages:', error);
-        socket.emit('error', { message: 'Failed to search messages' });
+        console.error("Error searching messages:", error);
+        socket.emit("error", { message: "Failed to search messages" });
       }
     });
 
     // Get online status of specific user
-    socket.on('check-user-status', async ({ targetUserId }) => {
+    socket.on("check-user-status", async ({ targetUserId }) => {
       try {
         const isOnline = await redis.get(`user:${targetUserId}:online`);
-        socket.emit('user-status', {
+        socket.emit("user-status", {
           userId: targetUserId,
-          isOnline: !!isOnline
+          isOnline: !!isOnline,
         });
       } catch (error) {
-        console.error('Error checking user status:', error);
+        console.error("Error checking user status:", error);
       }
     });
 
     // Handle disconnect
-    socket.on('disconnect', async () => {
+    socket.on("disconnect", async () => {
       console.log(`User disconnected: ${username} (${userId})`);
 
       try {
@@ -328,9 +336,9 @@ const chatController = (io) => {
         const onlineUserIds = await redis.sMembers("online_users");
 
         // Notify all clients about updated online users
-        io.emit('online-users', onlineUserIds);
+        io.emit("online-users", onlineUserIds);
       } catch (error) {
-        console.error('Error handling disconnect:', error);
+        console.error("Error handling disconnect:", error);
       }
     });
 
@@ -352,14 +360,13 @@ const chatController = (io) => {
         const onlineUserIds = await redis.sMembers("online_users");
 
         // Emit online users list to all clients
-        io.emit('online-users', onlineUserIds);
+        io.emit("online-users", onlineUserIds);
 
         // Get unread count for this user
         const unreadCount = await chatModel.getUnreadCount(userId);
-        socket.emit('unread-count', { count: unreadCount });
-
+        socket.emit("unread-count", { count: unreadCount });
       } catch (error) {
-        console.error('Error on connection setup:', error);
+        console.error("Error on connection setup:", error);
       }
     })();
   });

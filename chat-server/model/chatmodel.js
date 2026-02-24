@@ -46,12 +46,11 @@ const chatModel = {
     recipientId,
     message,
     messageType = "text",
-    fileUrl = null,
     custom_package_id = null
   ) {
     const query = `
-      INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type, file_url,custom_package_id, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type,custom_package_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `;
 
@@ -62,7 +61,6 @@ const chatModel = {
         recipientId,
         message,
         messageType,
-        fileUrl,
         custom_package_id,
         new Date().toISOString(),
       ]);
@@ -226,8 +224,7 @@ LIMIT $2 OFFSET $3;
     chatRoomId,
     userId,
     recipientId,
-    packageData,
-    message_id
+    packageData
   ) {
     const {
       title,
