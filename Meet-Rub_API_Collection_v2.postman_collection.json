@@ -511,7 +511,7 @@
 									"host": ["{{base_url}}"],
 									"path": ["freelancer", "get-services"]
 								},
-								"description": "Get all services listed by the authenticated freelancer."
+								"description": "Get all services listed by the authenticated freelancer. Services are grouped by `service_name`.\n\n**Response 200:**\n```json\n{\n  \"status\": \"success\",\n  \"message\": \"Services fetched successfully\",\n  \"data\": [\n    {\n      \"service_name\": \"Web Development\",\n      \"service_options\": [\n        {\n          \"id\": 1,\n          \"plan_type\": \"basic\",\n          \"service_description\": \"...\",\n          \"service_price\": 5000,\n          \"delivery_time\": \"5-7 days\",\n          \"thumbnail_file\": \"<presigned_url>\",\n          \"is_active\": true,\n          \"created_at\": \"...\",\n          \"updated_at\": \"...\"\n        }\n      ]\n    }\n  ]\n}\n```"
 							},
 							"response": []
 						},
@@ -860,11 +860,18 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/creator/service-requests/{{request_id}}/suggestions",
+									"raw": "{{base_url}}/creator/service-requests/{{request_id}}/suggestions?page=1&limit=10",
 									"host": ["{{base_url}}"],
-									"path": ["creator", "service-requests", "{{request_id}}", "suggestions"]
+									"path": ["creator", "service-requests", "{{request_id}}", "suggestions"],
+									"query": [
+										{ "key": "page", "value": "1", "description": "Default: 1" },
+										{ "key": "limit", "value": "10", "description": "Default: 10" },
+										{ "key": "search", "value": "", "description": "Optional: filter by freelancer name", "disabled": true },
+										{ "key": "sortBy", "value": "rating", "description": "rating | name. Default: rating", "disabled": true },
+										{ "key": "sortOrder", "value": "DESC", "description": "ASC | DESC. Default: DESC", "disabled": true }
+									]
 								},
-								"description": "Get freelancer suggestions for a specific service request."
+								"description": "Get freelancer suggestions for a specific service request. Wishlisted freelancers are sorted to the top.\n\n**Response 200:**\n```json\n{\n  \"status\": \"success\",\n  \"data\": [\n    {\n      \"freelancer_id\": 5,\n      \"freelancer_full_name\": \"John Doe\",\n      \"profile_image_url\": \"<presigned_url>\",\n      \"freelancer_thumbnail_image\": \"<presigned_url>\",\n      \"rating\": 4.8,\n      \"profile_title\": \"Web Developer\",\n      \"in_wishlist\": true\n    }\n  ],\n  \"pagination\": { \"currentPage\": 1, \"totalPages\": 2, \"totalCount\": 15, \"limit\": 10 }\n}\n```"
 							},
 							"response": []
 						}
@@ -1164,14 +1171,14 @@
 								"header": [{ "key": "Content-Type", "value": "application/json" }],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"freelancer_id\": \"{{freelancer_id}}\",\n  \"request_id\": \"{{request_id}}\"\n}"
+									"raw": "{\n  \"requestId\": \"{{request_id}}\",\n  \"freelancerIds\": [{{freelancer_id}}],\n  \"adminNotes\": \"This freelancer matches the creator's requirements.\"\n}"
 								},
 								"url": {
 									"raw": "{{base_url}}/admin/assignfreelancer-to-request",
 									"host": ["{{base_url}}"],
 									"path": ["admin", "assignfreelancer-to-request"]
 								},
-								"description": "Assign a freelancer to a creator's service request."
+								"description": "Assign one or more freelancers to a creator's service request.\n\n**Body fields:**\n- `requestId` (string/number, required) — service request ID\n- `freelancerIds` (array of numbers, required) — one or more freelancer IDs\n- `adminNotes` (string, optional) — notes visible to the creator\n\n**Response 200:**\n```json\n{\n  \"status\": \"success\",\n  \"message\": \"Freelancers assigned to service request successfully\",\n  \"data\": { \"request_id\": \"1\", \"freelancer_id\": [5, 8], \"admin_notes\": \"...\" }\n}\n```"
 							},
 							"response": []
 						}
@@ -1311,11 +1318,18 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/admin/service-requests",
+									"raw": "{{base_url}}/admin/service-requests?page=1&limit=10",
 									"host": ["{{base_url}}"],
-									"path": ["admin", "service-requests"]
+									"path": ["admin", "service-requests"],
+									"query": [
+										{ "key": "page", "value": "1", "description": "Default: 1" },
+										{ "key": "limit", "value": "10", "description": "Default: 10" },
+										{ "key": "search", "value": "", "description": "Optional: filter by creator name", "disabled": true },
+										{ "key": "sortBy", "value": "created_at", "description": "created_at | creator_name. Default: created_at", "disabled": true },
+										{ "key": "sortOrder", "value": "DESC", "description": "ASC | DESC. Default: DESC", "disabled": true }
+									]
 								},
-								"description": "Get all active service requests from creators."
+								"description": "Get all active service requests from creators (excludes `assigned` and `completed` statuses).\n\n**Response 200:**\n```json\n{\n  \"status\": \"success\",\n  \"data\": [...],\n  \"pagination\": { \"currentPage\": 1, \"totalPages\": 3, \"totalCount\": 25, \"limit\": 10 }\n}\n```"
 							},
 							"response": []
 						}
