@@ -17,6 +17,8 @@ const http = require("http");
 const { logger } = require("../utils/logger");
 const { manageLogFiles } = require("../cron/logmanager");
 const globalErrorHandler = require("./middleware/errorHandler");
+const redisClient = require("../config/reddis");
+const { loadUsernamesIntoRedis, USERNAMES_SET_KEY } = require("../utils/helper");
 
 // Load .env file only if not running in Docker (Docker Compose injects env vars directly)
 // if (!process.env.DOCKER_ENV) {
@@ -117,20 +119,39 @@ const HOST = process.env.HOST;
 let server;
 
 if (process.env.NODE_ENV !== "development") {
-  server = serverWithSocket.listen(PORT, HOST, () => {
+  server = serverWithSocket.listen(PORT, HOST, async () => {
     manageLogFiles();
+    await loadUsernamesIntoRedis();
     // startCronJobs(io);
     logger.info(
       `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
     );
   });
 } else {
-  server = serverWithSocket.listen(PORT, () => {
+  server = serverWithSocket.listen(PORT, async () => {
     manageLogFiles();
+    await loadUsernamesIntoRedis();
     // startCronJobs(io);
     logger.info(
       `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
     );
   });
 }
+
+async function gracefulShutdown(signal) {
+  logger.info(`Received ${signal}, flushing usernames from Redis and shutting down...`);
+  try {
+    await redisClient.del(USERNAMES_SET_KEY);
+    logger.info("Usernames set deleted from Redis");
+  } catch (err) {
+    logger.error("Failed to delete usernames set from Redis during shutdown:", err);
+  }
+  server.close(() => {
+    logger.info("HTTP server closed");
+    process.exit(0);
+  });
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 

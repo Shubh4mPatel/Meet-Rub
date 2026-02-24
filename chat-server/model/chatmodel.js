@@ -123,37 +123,51 @@ LIMIT $2 OFFSET $3;
   // Get user's all chat rooms with last message
   async getUserChatRooms(userId) {
     const query = `
-      SELECT
-        cr.room_id as id,
-        cr.room_id,
-        cr.user1_id,
-        cr.user2_id,
-        cr.created_at as room_created_at,
-        u1.user_name as user1_name,
-        u2.user_name as user2_name,
-        m.message as last_message,
-        m.created_at as last_message_time,
-        m.sender_id as last_message_sender,
-        COALESCE(unread.unread_count, 0) as unread_count
-      FROM chat_rooms cr
-      LEFT JOIN users u1 ON cr.user1_id = u1.id
-      LEFT JOIN users u2 ON cr.user2_id = u2.id
-      LEFT JOIN LATERAL (
-        SELECT message, created_at, sender_id
-        FROM messages
-        WHERE room_id = cr.room_id
-        ORDER BY created_at DESC
-        LIMIT 1
-      ) m ON true
-      LEFT JOIN LATERAL (
-        SELECT COUNT(*) as unread_count
-        FROM messages
-        WHERE room_id = cr.room_id
-          AND recipient_id = $1
-          AND is_read = FALSE
-      ) unread ON true
-      WHERE cr.user1_id = $1 OR cr.user2_id = $1
-      ORDER BY m.created_at DESC NULLS LAST
+   SELECT
+  cr.room_id as id,
+  cr.room_id,
+  cr.user1_id,
+  cr.user2_id,
+  cr.created_at as room_created_at,
+  COALESCE(f1.user_name, c1.user_name) as user1_name,
+  COALESCE(f2.user_name, c2.user_name) as user2_name,
+  COALESCE(f1.profile_image_url, c1.profile_image_url) as user1_profile_image_url,
+  COALESCE(f2.profile_image_url, c2.profile_image_url) as user2_profile_image_url,
+  CASE 
+    WHEN f1.freelancer_id IS NOT NULL THEN 'freelancer'
+    WHEN c1.creator_id IS NOT NULL THEN 'creator'
+    ELSE NULL
+  END as user1_role,
+  CASE 
+    WHEN f2.freelancer_id IS NOT NULL THEN 'freelancer'
+    WHEN c2.creator_id IS NOT NULL THEN 'creator'
+    ELSE NULL
+  END as user2_role,
+  m.message as last_message,
+  m.created_at as last_message_time,
+  m.sender_id as last_message_sender,
+  COALESCE(unread.unread_count, 0) as unread_count
+FROM chat_rooms cr
+LEFT JOIN freelancer f1 ON cr.user1_id = f1.freelancer_id
+LEFT JOIN creators c1 ON cr.user1_id = c1.creator_id
+LEFT JOIN freelancer f2 ON cr.user2_id = f2.freelancer_id
+LEFT JOIN creators c2 ON cr.user2_id = c2.creator_id
+LEFT JOIN LATERAL (
+  SELECT message, created_at, sender_id
+  FROM messages
+  WHERE room_id = cr.room_id
+  ORDER BY created_at DESC
+  LIMIT 1
+) m ON true
+LEFT JOIN LATERAL (
+  SELECT COUNT(*) as unread_count
+  FROM messages
+  WHERE room_id = cr.room_id
+    AND recipient_id = $1
+    AND is_read = FALSE
+) unread ON true
+WHERE cr.user1_id = $1 OR cr.user2_id = $1
+ORDER BY m.created_at DESC NULLS LAST
     `;
 
     try {

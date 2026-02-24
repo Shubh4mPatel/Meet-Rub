@@ -11,6 +11,9 @@ const { minioClient } = require("../../../../config/minio");
 const Joi = require("joi");
 const crypto = require("crypto");
 const { validateFile, generateTokens } = require("../../../../utils/helper");
+const redisClient = require("../../../../config/reddis");
+
+const USERNAMES_SET_KEY = "usernames:set";
 
 // Base schema for common fields
 const baseSchema = {
@@ -158,6 +161,12 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
         const userName = `${firstName} ${lastName}`;
 
+        // Check username availability in Redis before starting the transaction
+        const isUsernameTaken = await redisClient.sIsMember(USERNAMES_SET_KEY, userName);
+        if (isUsernameTaken) {
+          return next(new AppError("Username already taken", 400));
+        }
+
         if (!req.file) {
           return next(new AppError("Document is required", 400));
         }
@@ -199,9 +208,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
           );
 
           const { rows: freelancer } = await client.query(
-            `INSERT INTO freelancer 
-            (user_id, profile_title, gov_id_type, gov_id_url, first_name, last_name, 
-             date_of_birth, phone_number, created_at, updated_at, freelancer_full_name, 
+            `INSERT INTO freelancer
+            (user_id, profile_title, gov_id_type, gov_id_url, first_name, last_name,
+             date_of_birth, phone_number, created_at, updated_at, freelancer_full_name,
              freelancer_email, gov_id_number, niche, verification_status)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14 ,'PENDING')
             RETURNING *`,
@@ -235,6 +244,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
             );
           }
 
+          // Add username to Redis before committing — rollback PG if Redis fails
+          await redisClient.sAdd(USERNAMES_SET_KEY, userName);
+
           await client.query("COMMIT");
           user = newUserResMeetRub[0];
           roleWiseId = freelancer[0].freelancer_id;
@@ -260,6 +272,12 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
         const userName = `${firstName} ${lastName}`;
 
+        // Check username availability in Redis before starting the transaction
+        const isUsernameTaken = await redisClient.sIsMember(USERNAMES_SET_KEY, userName);
+        if (isUsernameTaken) {
+          return next(new AppError("Username already taken", 400));
+        }
+
         const client = await pool.connect();
 
         try {
@@ -282,7 +300,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           );
 
           const { rows: creator } = await client.query(
-            `INSERT INTO creators 
+            `INSERT INTO creators
             (user_id,full_name , first_name, last_name, niche, social_links, phone_number, email, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9, $10)
             RETURNING *`,
@@ -299,6 +317,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
               currentDateTime,
             ]
           );
+
+          // Add username to Redis before committing — rollback PG if Redis fails
+          await redisClient.sAdd(USERNAMES_SET_KEY, userName);
 
           await client.query("COMMIT");
           user = newUserResMeetRub[0];
