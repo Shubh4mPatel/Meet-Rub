@@ -137,6 +137,11 @@ const chatController = (io) => {
 
     socket.on("accept-package", async (packageId, recipientId) => {
       try {
+        if (userRole !== "creator") {
+          socket.emit("error", { message: "Only creators can accept packages" });
+          return;
+        }
+
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
 
@@ -149,11 +154,14 @@ const chatController = (io) => {
           return;
         }
 
+        const project = await chatModel.createProjectFromPackage(updatedPackage);
+
         io.to(chatRoomId).emit("package-accepted", {
           packageId,
           chatRoomId,
           acceptedBy: userId,
           package: updatedPackage,
+          project,
         });
 
         const recipientOnline = await redis.get(`user:${recipientId}:online`);
@@ -310,6 +318,11 @@ const chatController = (io) => {
 
     socket.on("accept-deadline-extension", async (requestId, recipientId) => {
       try {
+        if (userRole !== "creator") {
+          socket.emit("error", { message: "Only creators can accept deadline extensions" });
+          return;
+        }
+
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
 
@@ -325,6 +338,7 @@ const chatController = (io) => {
           chatRoomId,
           acceptedBy: userId,
           deadlineExtension: updatedRequest,
+          project: updatedRequest.project,
         });
 
         const recipientOnline = await redis.get(`user:${recipientId}:online`);

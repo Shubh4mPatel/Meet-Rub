@@ -290,12 +290,7 @@ ORDER BY m.created_at DESC NULLS LAST
   },
 
   // Save custom package
-  async saveCustomPackage(
-    chatRoomId,
-    userId,
-    recipientId,
-    packageData
-  ) {
+  async saveCustomPackage(chatRoomId, userId, recipientId, packageData) {
     const {
       plan_type,
       price,
@@ -342,7 +337,7 @@ ORDER BY m.created_at DESC NULLS LAST
         price,
         units,
         package_type,
-        status || 'pending',
+        status || "pending",
         new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         new Date().toISOString(),
         delivery_date || null,
@@ -391,6 +386,30 @@ ORDER BY m.created_at DESC NULLS LAST
     }
   },
 
+  // Create a project from an accepted custom package
+  async createProjectFromPackage(pkg) {
+    const query = `
+      INSERT INTO projects (creator_id, freelancer_id, number_of_units, amount, status, end_date, service_id)
+      VALUES ($1, $2, $3, $4, 'CREATED', $5, $6)
+      RETURNING *
+    `;
+
+    try {
+      const result = await pool.query(query, [
+        pkg.creator_id,
+        pkg.freelancer_id,
+        pkg.units || null,
+        pkg.price,
+        pkg.delivery_date || null,
+        pkg.service_id || null,
+      ]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error creating project from package:", error);
+      throw error;
+    }
+  },
+
   // Extend deadline on a custom package
   async extendDeadline(packageId, freelancerId, newDeliveryDays, newExpiresAt) {
     const query = `
@@ -415,7 +434,12 @@ ORDER BY m.created_at DESC NULLS LAST
   },
 
   // Save deadline extension request
-  async saveDeadlineExtensionRequest(chatRoomId, userId, recipientId, extensionData) {
+  async saveDeadlineExtensionRequest(
+    chatRoomId,
+    userId,
+    recipientId,
+    extensionData
+  ) {
     const { project_id, new_delivery_date, new_delivery_time } = extensionData;
 
     const roleCheck = await pool.query(
@@ -460,21 +484,46 @@ ORDER BY m.created_at DESC NULLS LAST
     }
   },
 
-  // Accept deadline extension request
+  // Accept deadline extension request and update the project's end_date
   async acceptDeadlineExtension(requestId, creatorId) {
-    const query = `
-      UPDATE deadline_extension_requested
-      SET status = 'accepted', approved_at = NOW()
-      WHERE id = $1 AND creator_id = $2
-      RETURNING *
-    `;
-
+    const client = await pool.connect();
     try {
-      const result = await pool.query(query, [requestId, creatorId]);
-      return result.rows[0];
+      await client.query("BEGIN");
+
+      const extResult = await client.query(
+        `UPDATE deadline_extension_requested
+         SET status = 'accepted', approved_at = NOW()
+         WHERE id = $1 AND creator_id = $2
+         RETURNING *`,
+        [requestId, creatorId]
+      );
+
+      const extension = extResult.rows[0];
+      if (!extension) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+
+      const projectResult = await client.query(
+        `UPDATE projects
+         SET end_date = $1, updated_at = NOW()
+         WHERE id = $2
+         RETURNING *`,
+        [extension.new_delivery_date, extension.project_id]
+      );
+
+      await client.query("COMMIT");
+
+      return {
+        ...extension,
+        project: projectResult.rows[0] || null,
+      };
     } catch (error) {
+      await client.query("ROLLBACK");
       console.error("Error accepting deadline extension:", error);
       throw error;
+    } finally {
+      client.release();
     }
   },
 
@@ -524,7 +573,8 @@ ORDER BY m.created_at DESC NULLS LAST
       throw error;
     }
   },
-
 };
+
+/// we are storing date time in the custome package and in the project we have only end date col so add date and time and fill that col and also add no of units per service and also we have to ask question about the hire feature will freelancer have to accept that what will happen when i heir a freelancer
 
 module.exports = chatModel;
