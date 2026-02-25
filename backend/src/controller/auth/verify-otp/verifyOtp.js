@@ -266,13 +266,13 @@ const verifyOtpAndProcess = async (req, res, next) => {
           client.release();
         }
       } else if (role === "creator") {
-        const { firstName, lastName, niche, socialLinks, phoneNo } = req.body;
+        const { firstName, lastName, niche, socialLinks, phoneNo,userName } = req.body;
 
         // Parse JSON strings from FormData
         const parsedNiche = JSON.parse(niche);
         const parsedSocialLinks = socialLinks ? JSON.parse(socialLinks) : null;
 
-        const userName = `${firstName} ${lastName}`;
+        // const userName = `${firstName} ${lastName}`;
 
         // Check username availability in Redis before starting the transaction
         const isUsernameTaken = await redisClient.sIsMember(USERNAMES_SET_KEY, userName);
