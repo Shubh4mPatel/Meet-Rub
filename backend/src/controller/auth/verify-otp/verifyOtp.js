@@ -27,6 +27,7 @@ const baseSchema = {
 // Freelancer-specific schema
 const freelancerSchema = Joi.object({
   ...baseSchema,
+  userRole: Joi.string().valid("freelancer").required(),
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
   dateOfBirth: Joi.string().optional(), // comes as string from FormData
@@ -44,6 +45,7 @@ const freelancerSchema = Joi.object({
 const creatorSchema = Joi.object({
   ...baseSchema,
   firstName: Joi.string().required(),
+  userRole: Joi.string().valid("freelancer").required(),
   lastName: Joi.string().required(),
   phoneNo: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
