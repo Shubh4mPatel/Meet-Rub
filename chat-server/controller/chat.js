@@ -6,6 +6,7 @@ const chatController = (io) => {
     console.log(socket.user);
     const userId = socket.user.roleWiseId;
     const username = socket.user.name;
+    const userRole = socket.user.role;
 
     console.log(`User connected: ${username} (${userId})`);
 
@@ -68,6 +69,11 @@ const chatController = (io) => {
     });
 
     socket.on("custom-package", async (packageData, recipientId) => {
+      if (userRole !== "freelancer") {
+        socket.emit("error", { message: "Only freelancers can create custom packages" });
+        return;
+      }
+
       const [smallerId, largerId] = [userId, recipientId].sort();
       const chatRoomId = `${smallerId}-${largerId}`;
 
@@ -237,6 +243,11 @@ const chatController = (io) => {
 
     socket.on("deadline-extension-request", async (extensionData, recipientId) => {
       try {
+        if (userRole !== "freelancer") {
+          socket.emit("error", { message: "Only freelancers can request a deadline extension" });
+          return;
+        }
+
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
 
@@ -386,7 +397,7 @@ const chatController = (io) => {
         socket.emit("error", { message: "Failed to reject deadline extension" });
       }
     });
-    
+    // socket.on("hier-freelancer", async ({ requestId }) => {
     // Send a message
     socket.on("send-message", async ({ recipientId, message }) => {
       try {
