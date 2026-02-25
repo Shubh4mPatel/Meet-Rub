@@ -235,64 +235,158 @@ const chatController = (io) => {
       }
     });
 
-    socket.on("extend-deadline", async (projectId, recipientId, extensionData) => {
+    socket.on("deadline-extension-request", async (extensionData, recipientId) => {
       try {
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
 
-        const { newDeliveryDays, newExpiresAt } = extensionData;
-
-        const updatedPackage = await chatModel.extendDeadline(
-          projectId,
+        const extensionRequest = await chatModel.saveDeadlineExtensionRequest(
+          chatRoomId,
           userId,
-          newDeliveryDays,
-          newExpiresAt
+          recipientId,
+          extensionData
         );
 
-        if (!updatedPackage) {
-          socket.emit("error", {
-            message: "Package not found or unauthorized",
-          });
-          return;
-        }
-
-        io.to(chatRoomId).emit("deadline-extended", {
-          packageId,
+        const savedMessage = await chatModel.saveMessage(
           chatRoomId,
-          extendedBy: userId,
-          package: updatedPackage,
-        });
+          userId,
+          recipientId,
+          "Deadline extension requested",
+          "deadline_extension",
+          null,
+          extensionRequest.id
+        );
+
+        const messageData = {
+          id: savedMessage.id,
+          senderId: userId,
+          senderUsername: username,
+          recipientId,
+          message: "Deadline extension requested",
+          timestamp: savedMessage.created_at,
+          chatRoomId,
+          isRead: false,
+          deadlineExtension: extensionRequest,
+        };
+
+        io.to(chatRoomId).emit("receive-deadline-extension-request", messageData);
 
         const recipientOnline = await redis.get(`user:${recipientId}:online`);
 
         if (recipientOnline) {
-          const recipientSocketId = await redis.get(
-            `user:${recipientId}:socketId`
-          );
+          const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
 
           if (recipientSocketId) {
-            const recipientActiveRoom = await redis.get(
-              `user:${recipientId}:activeRoom`
-            );
+            const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
 
             if (recipientActiveRoom !== chatRoomId) {
               io.to(recipientSocketId).emit("new-message-notification", {
                 senderId: userId,
                 senderUsername: username,
-                message: "Deadline extended",
+                message: "Deadline extension requested",
                 chatRoomId,
               });
             }
           }
         }
 
-        console.log(`Deadline extended for package ${packageId} by ${username} (${userId})`);
+        console.log(`Deadline extension request sent by ${username} (${userId})`);
       } catch (error) {
-        console.error("Error extending deadline:", error);
-        socket.emit("error", { message: "Failed to extend deadline" });
+        console.error("Error sending deadline extension request:", error);
+        socket.emit("error", { message: "Failed to send deadline extension request" });
       }
     });
 
+    socket.on("accept-deadline-extension", async (requestId, recipientId) => {
+      try {
+        const [smallerId, largerId] = [userId, recipientId].sort();
+        const chatRoomId = `${smallerId}-${largerId}`;
+
+        const updatedRequest = await chatModel.acceptDeadlineExtension(requestId, userId);
+
+        if (!updatedRequest) {
+          socket.emit("error", { message: "Request not found or unauthorized" });
+          return;
+        }
+
+        io.to(chatRoomId).emit("deadline-extension-accepted", {
+          requestId,
+          chatRoomId,
+          acceptedBy: userId,
+          deadlineExtension: updatedRequest,
+        });
+
+        const recipientOnline = await redis.get(`user:${recipientId}:online`);
+
+        if (recipientOnline) {
+          const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
+
+          if (recipientSocketId) {
+            const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
+
+            if (recipientActiveRoom !== chatRoomId) {
+              io.to(recipientSocketId).emit("new-message-notification", {
+                senderId: userId,
+                senderUsername: username,
+                message: "Deadline extension accepted",
+                chatRoomId,
+              });
+            }
+          }
+        }
+
+        console.log(`Deadline extension ${requestId} accepted by ${username} (${userId})`);
+      } catch (error) {
+        console.error("Error accepting deadline extension:", error);
+        socket.emit("error", { message: "Failed to accept deadline extension" });
+      }
+    });
+
+    socket.on("reject-deadline-extension", async (requestId, recipientId) => {
+      try {
+        const [smallerId, largerId] = [userId, recipientId].sort();
+        const chatRoomId = `${smallerId}-${largerId}`;
+
+        const updatedRequest = await chatModel.rejectDeadlineExtension(requestId, userId);
+
+        if (!updatedRequest) {
+          socket.emit("error", { message: "Request not found or unauthorized" });
+          return;
+        }
+
+        io.to(chatRoomId).emit("deadline-extension-rejected", {
+          requestId,
+          chatRoomId,
+          rejectedBy: userId,
+          deadlineExtension: updatedRequest,
+        });
+
+        const recipientOnline = await redis.get(`user:${recipientId}:online`);
+
+        if (recipientOnline) {
+          const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
+
+          if (recipientSocketId) {
+            const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
+
+            if (recipientActiveRoom !== chatRoomId) {
+              io.to(recipientSocketId).emit("new-message-notification", {
+                senderId: userId,
+                senderUsername: username,
+                message: "Deadline extension rejected",
+                chatRoomId,
+              });
+            }
+          }
+        }
+
+        console.log(`Deadline extension ${requestId} rejected by ${username} (${userId})`);
+      } catch (error) {
+        console.error("Error rejecting deadline extension:", error);
+        socket.emit("error", { message: "Failed to reject deadline extension" });
+      }
+    });
+    
     // Send a message
     socket.on("send-message", async ({ recipientId, message }) => {
       try {
