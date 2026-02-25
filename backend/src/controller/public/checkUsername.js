@@ -1,5 +1,5 @@
-const redisClient = require("../../../../config/reddis");
-const AppError = require("../../../../utils/appError");
+const redisClient = require("../../../config/reddis");
+const AppError = require("../../../utils/appError");
 
 const USERNAMES_SET_KEY = "usernames:set";
 

@@ -3,9 +3,7 @@ const router = express.Router();
 const { loginUser, otpSendApi, verifyOtpAndProcess } = require('../controller');
 const { authenticateUser, refreshAccessToken, logout } = require('../middleware/authMiddleware');
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
-const { logger } = require('../../utils/logger');
 const upload = require('../../config/multer');
-const { userInfo } = require('node:os');
 
 
 router.post("/send-otp", otpSendApi);

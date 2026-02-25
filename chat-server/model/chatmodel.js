@@ -73,11 +73,12 @@ const chatModel = {
     recipientId,
     message,
     messageType = "text",
-    custom_package_id = null
+    custom_package_id = null,
+    deadline_extension_id = null
   ) {
     const query = `
-      INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type,custom_package_id, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type, custom_package_id, deadline_extension_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
 
@@ -89,6 +90,7 @@ const chatModel = {
         message,
         messageType,
         custom_package_id,
+        deadline_extension_id,
         new Date().toISOString(),
       ]);
       return result.rows[0];
@@ -110,14 +112,26 @@ const chatModel = {
     m.message_type,
     m.is_read,
     m.created_at,
+    m.deadline_extension_id,
     COALESCE(f.user_name, c.user_name) as sender_username,
-    CASE 
+    CASE
         WHEN f.freelancer_id IS NOT NULL THEN 'freelancer'
         WHEN c.creator_id IS NOT NULL THEN 'creator'
-    END as sender_type
+    END as sender_type,
+    der.project_id as der_project_id,
+    der.freelancer_id as der_freelancer_id,
+    der.creator_id as der_creator_id,
+    der.chat_room_id as der_chat_room_id,
+    der.new_delivery_date as der_new_delivery_date,
+    der.new_delivery_time as der_new_delivery_time,
+    der.status as der_status,
+    der.requested_at as der_requested_at,
+    der.approved_at as der_approved_at,
+    der.expires_at as der_expires_at
 FROM messages m
 LEFT JOIN freelancer f ON m.sender_id = f.freelancer_id
 LEFT JOIN creators c ON m.sender_id = c.creator_id
+LEFT JOIN deadline_extension_requested der ON m.deadline_extension_id = der.id
 WHERE m.room_id = $1
 ORDER BY m.created_at DESC
 LIMIT $2 OFFSET $3;
@@ -140,6 +154,21 @@ LIMIT $2 OFFSET $3;
         timestamp: row.created_at,
         created_at: row.created_at,
         senderUsername: row.sender_username,
+        deadlineExtension: row.deadline_extension_id
+          ? {
+              id: row.deadline_extension_id,
+              project_id: row.der_project_id,
+              freelancer_id: row.der_freelancer_id,
+              creator_id: row.der_creator_id,
+              chat_room_id: row.der_chat_room_id,
+              new_delivery_date: row.der_new_delivery_date,
+              new_delivery_time: row.der_new_delivery_time,
+              status: row.der_status,
+              requested_at: row.der_requested_at,
+              approved_at: row.der_approved_at,
+              expires_at: row.der_expires_at,
+            }
+          : null,
       }));
     } catch (error) {
       console.error("Error getting chat history:", error);
@@ -381,6 +410,88 @@ ORDER BY m.created_at DESC NULLS LAST
       return result.rows[0];
     } catch (error) {
       console.error("Error extending deadline:", error);
+      throw error;
+    }
+  },
+
+  // Save deadline extension request
+  async saveDeadlineExtensionRequest(chatRoomId, userId, recipientId, extensionData) {
+    const { project_id, new_delivery_date, new_delivery_time } = extensionData;
+
+    const roleCheck = await pool.query(
+      `SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1 OR freelancer_id = $2`,
+      [userId, recipientId]
+    );
+
+    const freelancerIds = roleCheck.rows.map((r) => r.freelancer_id);
+    let freelancerId, creatorId;
+
+    if (freelancerIds.includes(userId)) {
+      freelancerId = userId;
+      creatorId = recipientId;
+    } else {
+      freelancerId = recipientId;
+      creatorId = userId;
+    }
+
+    const query = `
+      INSERT INTO deadline_extension_requested (
+        project_id, freelancer_id, creator_id, chat_room_id,
+        new_delivery_date, new_delivery_time, status, expires_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
+      RETURNING *
+    `;
+
+    try {
+      const result = await pool.query(query, [
+        project_id,
+        freelancerId,
+        creatorId,
+        chatRoomId,
+        new_delivery_date,
+        toUTCTime(new_delivery_time),
+        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      ]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error saving deadline extension request:", error);
+      throw error;
+    }
+  },
+
+  // Accept deadline extension request
+  async acceptDeadlineExtension(requestId, creatorId) {
+    const query = `
+      UPDATE deadline_extension_requested
+      SET status = 'accepted', approved_at = NOW()
+      WHERE id = $1 AND creator_id = $2
+      RETURNING *
+    `;
+
+    try {
+      const result = await pool.query(query, [requestId, creatorId]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error accepting deadline extension:", error);
+      throw error;
+    }
+  },
+
+  // Reject deadline extension request
+  async rejectDeadlineExtension(requestId, creatorId) {
+    const query = `
+      UPDATE deadline_extension_requested
+      SET status = 'rejected'
+      WHERE id = $1 AND creator_id = $2
+      RETURNING *
+    `;
+
+    try {
+      const result = await pool.query(query, [requestId, creatorId]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error rejecting deadline extension:", error);
       throw error;
     }
   },
