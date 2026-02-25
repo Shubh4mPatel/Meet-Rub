@@ -149,6 +149,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           dateOfBirth,
           profileTitle,
           serviceOffered,
+          userName,
           niche,
           govId,
           phoneNumber,
@@ -159,7 +160,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
         const parsedServiceOffered = JSON.parse(serviceOffered);
         const parsedNiche = JSON.parse(niche);
 
-        const userName = `${firstName} ${lastName}`;
+        const fullName = `${firstName} ${lastName}`;
 
         // Check username availability in Redis before starting the transaction
         const isUsernameTaken = await redisClient.sIsMember(USERNAMES_SET_KEY, userName);
@@ -211,8 +212,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
             `INSERT INTO freelancer
             (user_id, profile_title, gov_id_type, gov_id_url, first_name, last_name,
              date_of_birth, phone_number, created_at, updated_at, freelancer_full_name,
-             freelancer_email, gov_id_number, niche, verification_status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14 ,'PENDING')
+             freelancer_email, gov_id_number, niche, verification_status,user_name)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14 ,'PENDING',$15)
             RETURNING *`,
             [
               newUserResMeetRub[0].id,
@@ -225,10 +226,11 @@ const verifyOtpAndProcess = async (req, res, next) => {
               phoneNumber || null,
               currentDateTime,
               currentDateTime,
-              userName,
+              fullName,
               email,
               govId,
               parsedNiche,
+              userName,
             ]
           );
 
@@ -301,8 +303,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
           const { rows: creator } = await client.query(
             `INSERT INTO creators
-            (user_id,full_name , first_name, last_name, niche, social_links, phone_number, email, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9, $10)
+            (user_id,full_name , first_name, last_name, niche, social_links, phone_number, email, created_at, updated_at,user_name)
+            VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9, $10, $11)
             RETURNING *`,
             [
               newUserResMeetRub[0].id,
@@ -315,6 +317,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
               email.toLowerCase(),
               currentDateTime,
               currentDateTime,
+              userName,
             ]
           );
 
