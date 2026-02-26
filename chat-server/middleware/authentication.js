@@ -69,7 +69,7 @@ const socketAuth = (io) => {
                 maxAge: ACCESS_TOKEN_DURATION / 1000, // in seconds
                 httpOnly: isProduction ? true : false,
                 secure: isProduction ? true : false,
-                sameSite: 'lax',
+                sameSite: 'strict',
                 path: '/',
               });
 

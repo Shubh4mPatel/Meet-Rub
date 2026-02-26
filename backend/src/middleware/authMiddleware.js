@@ -63,7 +63,7 @@ WHERE u.id = $1`,
       maxAge: ACCESS_TOKEN_DURATION,
       httpOnly: isHttps,
       secure: isHttps,
-      sameSite: isProduction ? "None" : "strict",
+      sameSite: isProduction ? "strict":"None",
       path: "/",
     });
 
