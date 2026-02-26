@@ -2817,7 +2817,7 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
 
     const { rows: freelancerData } = await query(
       `SELECT 
-        f.user_id
+        f.user_id,
         f.freelancer_full_name, 
         f.profile_title, 
         f.freelancer_thumbnail_image, 
