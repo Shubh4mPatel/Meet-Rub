@@ -1164,10 +1164,10 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerData } = await query(
-      "SELECT usr_id, freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
+      "SELECT user_id, freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
       [freelancerId]
     );
-
+    logger.debug("Freelancer data query executed for ID:", freelancerData[0]);
     // Check if freelancer exists
     if (!freelancerData[0]) {
       logger.warn(`Freelancer not found with ID: ${freelancerId}`);

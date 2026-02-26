@@ -3,8 +3,7 @@ const redis = require("../config/reddis");
 
 const chatController = (io) => {
   io.on("connection", (socket) => {
-    console.log(socket.user);
-    const userId = socket.user.roleWiseId;
+    const userId = socket.user.user_id;
     const username = socket.user.name;
     const userRole = socket.user.role;
 
