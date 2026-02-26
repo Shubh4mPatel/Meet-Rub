@@ -129,8 +129,8 @@ const chatModel = {
     der.approved_at as der_approved_at,
     der.expires_at as der_expires_at
 FROM messages m
-LEFT JOIN freelancer f ON m.sender_id = f.freelancer_id
-LEFT JOIN creators c ON m.sender_id = c.creator_id
+LEFT JOIN freelancer f ON m.sender_id = f.user_id
+LEFT JOIN creators c ON m.sender_id = c.user_id
 LEFT JOIN deadline_extension_requested der ON m.deadline_extension_id = der.id
 WHERE m.room_id = $1
 ORDER BY m.created_at DESC
@@ -204,10 +204,10 @@ LIMIT $2 OFFSET $3;
   m.sender_id as last_message_sender,
   COALESCE(unread.unread_count, 0) as unread_count
 FROM chat_rooms cr
-LEFT JOIN freelancer f1 ON cr.user1_id = f1.freelancer_id
-LEFT JOIN creators c1 ON cr.user1_id = c1.creator_id
-LEFT JOIN freelancer f2 ON cr.user2_id = f2.freelancer_id
-LEFT JOIN creators c2 ON cr.user2_id = c2.creator_id
+LEFT JOIN freelancer f1 ON cr.user1_id = f1.user_id
+LEFT JOIN creators c1 ON cr.user1_id = c1.user_id
+LEFT JOIN freelancer f2 ON cr.user2_id = f2.user_id
+LEFT JOIN creators c2 ON cr.user2_id = c2.user_id
 LEFT JOIN LATERAL (
   SELECT message, created_at, sender_id
   FROM messages
