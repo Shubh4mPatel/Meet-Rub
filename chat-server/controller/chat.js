@@ -437,7 +437,7 @@ const chatController = (io) => {
           chatRoomId,
           isRead: false,
         };
-
+        console.log("Message saved to database:", messageData);
         // Send message to the chat room (both users)
         io.to(chatRoomId).emit("receive-message", messageData);
 
