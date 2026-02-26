@@ -1164,7 +1164,7 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerData } = await query(
-      "SELECT freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
+      "SELECT usr_id, freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
       [freelancerId]
     );
 
