@@ -45,7 +45,7 @@ const freelancerSchema = Joi.object({
 const creatorSchema = Joi.object({
   ...baseSchema,
   firstName: Joi.string().required(),
-  userRole: Joi.string().valid("freelancer").required(),
+  userRole: Joi.string().valid("creator").required(),
   lastName: Joi.string().required(),
   phoneNo: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
