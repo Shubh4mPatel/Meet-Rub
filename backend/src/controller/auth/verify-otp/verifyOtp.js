@@ -1,16 +1,12 @@
 const bcrypt = require("bcrypt");
 const { query, pool } = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
-const { decryptId } = require("../../../../config/encryptDecryptId");
 const { logger } = require("../../../../utils/logger");
-const {
-  sendEmailNotification,
-} = require("../../../../producer/notificationProducer");
 const path = require("path");
 const { minioClient } = require("../../../../config/minio");
 const Joi = require("joi");
 const crypto = require("crypto");
-const { validateFile, generateTokens } = require("../../../../utils/helper");
+const { generateTokens } = require("../../../../utils/helper");
 const redisClient = require("../../../../config/reddis");
 
 const USERNAMES_SET_KEY = "usernames:set";
@@ -30,6 +26,7 @@ const freelancerSchema = Joi.object({
   userRole: Joi.string().valid("freelancer").required(),
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
+  userName: Joi.string().required(),
   dateOfBirth: Joi.string().optional(), // comes as string from FormData
   profileTitle: Joi.string().optional(),
   serviceOffered: Joi.string().required(), // JSON stringified array
@@ -47,6 +44,7 @@ const creatorSchema = Joi.object({
   firstName: Joi.string().required(),
   userRole: Joi.string().valid("creator").required(),
   lastName: Joi.string().required(),
+  userName: Joi.string().required(),
   phoneNo: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .optional(),
@@ -257,6 +255,12 @@ const verifyOtpAndProcess = async (req, res, next) => {
           logger.info("Freelancer registration successful", { email });
         } catch (error) {
           await client.query("ROLLBACK");
+          // Clean up Redis username if it was already added before the commit failed
+          try {
+            await redisClient.sRem(USERNAMES_SET_KEY, userName);
+          } catch (redisError) {
+            console.error("Failed to cleanup Redis username:", redisError);
+          }
           try {
             await minioClient.removeObject(BUCKET_NAME, objectName);
             console.log("Rolled back MinIO upload due to database error");
@@ -332,6 +336,12 @@ const verifyOtpAndProcess = async (req, res, next) => {
           logger.info("Creator registration successful", { email });
         } catch (error) {
           await client.query("ROLLBACK");
+          // Clean up Redis username if it was already added before the commit failed
+          try {
+            await redisClient.sRem(USERNAMES_SET_KEY, userName);
+          } catch (redisError) {
+            console.error("Failed to cleanup Redis username:", redisError);
+          }
           throw error;
         } finally {
           client.release();
