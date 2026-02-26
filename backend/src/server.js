@@ -82,7 +82,9 @@ app.use(express.json());
 app.use(cookieParser());
 
 if (process.env.NODE_ENV === "development") {
-  app.use(morgan("dev"));
+  // app.use(morgan("dev"));
+  app.use(morgan("combined"));
+
 } else {
   app.use(morgan("combined"));
 }
@@ -119,7 +121,7 @@ const HOST = process.env.HOST;
 let server;
 
 if (process.env.NODE_ENV !== "development") {
-  server = serverWithSocket.listen(PORT, HOST, async () => {
+  server = serverWithSocket.listen(PORT, async () => {
     manageLogFiles();
     await loadUsernamesIntoRedis();
     // startCronJobs(io);
