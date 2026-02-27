@@ -22,6 +22,7 @@ const allowedOrigins = '*'
 
 // const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
 const socketConfig = {
+  path: '/socket/socket.io',
   cors: {
     origin: function (origin, callback) {
       const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim());
