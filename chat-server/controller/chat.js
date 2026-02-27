@@ -68,10 +68,10 @@ const chatController = (io) => {
     });
 
     socket.on("custom-package", async (packageData, recipientId) => {
-      if (userRole !== "freelancer") {
-        socket.emit("error", { message: "Only freelancers can create custom packages" });
-        return;
-      }
+      // if (userRole !== "freelancer") {
+      //   socket.emit("error", { message: "Only freelancers can create custom packages" });
+      //   return;
+      // }
 
       const [smallerId, largerId] = [userId, recipientId].sort();
       const chatRoomId = `${smallerId}-${largerId}`;
@@ -136,10 +136,10 @@ const chatController = (io) => {
 
     socket.on("accept-package", async (packageId, recipientId) => {
       try {
-        if (userRole !== "creator") {
-          socket.emit("error", { message: "Only creators can accept packages" });
-          return;
-        }
+        // if (userRole !== "creator") {
+        //   socket.emit("error", { message: "Only creators can accept packages" });
+        //   return;
+        // }
 
         const [smallerId, largerId] = [userId, recipientId].sort();
         const chatRoomId = `${smallerId}-${largerId}`;
@@ -568,6 +568,26 @@ const chatController = (io) => {
       } catch (error) {
         console.error("Error deleting message:", error);
         socket.emit("error", { message: "Failed to delete message" });
+      }
+    });
+
+    // Load older messages (pagination)
+    socket.on("load-more-messages", async ({ recipientId, offset = 0, limit = 50 }) => {
+      try {
+        const [smallerId, largerId] = [userId, recipientId].sort();
+        const chatRoomId = `${smallerId}-${largerId}`;
+
+        const messages = await chatModel.getChatHistory(chatRoomId, limit, offset);
+
+        socket.emit("older-messages", {
+          chatRoomId,
+          messages,
+          offset,
+          hasMore: messages.length === limit,
+        });
+      } catch (error) {
+        console.error("Error loading older messages:", error);
+        socket.emit("error", { message: "Failed to load older messages" });
       }
     });
 

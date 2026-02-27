@@ -179,7 +179,7 @@ LIMIT $2 OFFSET $3;
   // Get user's all chat rooms with last message
   async getUserChatRooms(userId) {
     const query = `
-   SELECT
+SELECT
   cr.room_id as id,
   cr.room_id,
   cr.user1_id,
@@ -204,10 +204,10 @@ LIMIT $2 OFFSET $3;
   m.sender_id as last_message_sender,
   COALESCE(unread.unread_count, 0) as unread_count
 FROM chat_rooms cr
-LEFT JOIN freelancer f1 ON cr.user1_id = f1.freelancer_id
-LEFT JOIN creators c1 ON cr.user1_id = c1.creator_id
-LEFT JOIN freelancer f2 ON cr.user2_id = f2.freelancer_id
-LEFT JOIN creators c2 ON cr.user2_id = c2.creator_id
+LEFT JOIN freelancer f1 ON cr.user1_id = f1.user_id
+LEFT JOIN creators c1 ON cr.user1_id = c1.user_id
+LEFT JOIN freelancer f2 ON cr.user2_id = f2.user_id
+LEFT JOIN creators c2 ON cr.user2_id = c2.user_id
 LEFT JOIN LATERAL (
   SELECT message, created_at, sender_id
   FROM messages
@@ -223,9 +223,7 @@ LEFT JOIN LATERAL (
     AND is_read = FALSE
 ) unread ON true
 WHERE cr.user1_id = $1 OR cr.user2_id = $1
-ORDER BY m.created_at DESC NULLS LAST
-    `;
-
+ORDER BY m.created_at DESC NULLS LAST; `;
     try {
       const result = await pool.query(query, [userId]);
       return result.rows;
@@ -298,33 +296,37 @@ ORDER BY m.created_at DESC NULLS LAST
       package_type,
       delivery_date,
       delivery_time,
+      service_id,
+      service_type,
       status,
     } = packageData;
 
     // Determine which participant is the freelancer and which is the creator
     const roleCheck = await pool.query(
-      `SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1 OR freelancer_id = $2`,
+      `SELECT freelancer_id FROM freelancer WHERE user_id = $1 OR user_id = $2`,
       [userId, recipientId]
     );
 
     const freelancerIds = roleCheck.rows.map((r) => r.freelancer_id);
-    let freelancerId, creatorId;
+    let freelancerId, creatorId, initiator_role;
 
     if (freelancerIds.includes(userId)) {
       freelancerId = userId;
       creatorId = recipientId;
+      initiator_role = "freelancer";
     } else {
       freelancerId = recipientId;
       creatorId = userId;
+      initiator_role = "creator";
     }
 
     const query = `
       INSERT INTO custom_packages (
         room_id, freelancer_id, creator_id,
         plan_type, price, units, package_type, status, expires_at, created_at,
-        delivery_date, delivery_time
+        delivery_date, delivery_time,service_id,service_type,initiator_role
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `;
 
@@ -342,6 +344,9 @@ ORDER BY m.created_at DESC NULLS LAST
         new Date().toISOString(),
         delivery_date || null,
         toUTCTime(delivery_time) || null,
+        service_id,
+        service_type,
+        initiator_role,
       ]);
       return result.rows[0];
     } catch (error) {
@@ -355,12 +360,14 @@ ORDER BY m.created_at DESC NULLS LAST
     const query = `
       UPDATE custom_packages
       SET status = 'accepted'
-      WHERE id = $1 AND creator_id = $2
+      and expires_at = null
+      and responded_at = NOW()
+      WHERE id = $1 
       RETURNING *
     `;
 
     try {
-      const result = await pool.query(query, [packageId, recipientId]);
+      const result = await pool.query(query, [packageId]);
       return result.rows[0];
     } catch (error) {
       console.error("Error accepting package:", error);
@@ -373,12 +380,13 @@ ORDER BY m.created_at DESC NULLS LAST
     const query = `
       UPDATE custom_packages
       SET status = 'rejected'
-      WHERE id = $1 AND creator_id = $2
+      and responded_at = NOW()
+      WHERE id = $1 
       RETURNING *
     `;
 
     try {
-      const result = await pool.query(query, [packageId, recipientId]);
+      const result = await pool.query(query, [packageId]);
       return result.rows[0];
     } catch (error) {
       console.error("Error rejecting package:", error);
