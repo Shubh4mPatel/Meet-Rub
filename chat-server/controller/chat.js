@@ -68,10 +68,6 @@ const chatController = (io) => {
     });
 
     socket.on("custom-package", async (packageData, recipientId) => {
-      // if (userRole !== "freelancer") {
-      //   socket.emit("error", { message: "Only freelancers can create custom packages" });
-      //   return;
-      // }
 
       const [smallerId, largerId] = [userId, recipientId].sort();
       const chatRoomId = `${smallerId}-${largerId}`;
