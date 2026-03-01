@@ -58,12 +58,14 @@ WHERE u.id = $1`,
     const ACCESS_TOKEN_DURATION = 15 * 60 * 1000; // 15 minutes
     const isProduction = process.env.NODE_ENV === "production";
     const isHttps = isProduction ? true : false;
+    // sameSite "None" requires secure:true — use "Lax" in dev so cookies work over HTTP (Postman, localhost)
+    const sameSite = isProduction ? "strict" : "Lax";
 
     res.cookie("AccessToken", newAccessToken, {
       maxAge: ACCESS_TOKEN_DURATION,
-      httpOnly: isHttps,
+      httpOnly: true,
       secure: isHttps,
-      sameSite: isProduction ? "strict":"None",
+      sameSite,
       path: "/",
     });
 
@@ -79,7 +81,24 @@ WHERE u.id = $1`,
 
 // Combined middleware that tries access token first, then refresh token
 const authenticateUser = async (req, res, next) => {
-  // First try to verify access token
+  // Support Bearer token in Authorization header (useful for Postman / mobile clients)
+  const authHeader = req.headers?.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const bearerToken = authHeader.slice(7).trim();
+    if (bearerToken) {
+      try {
+        const decoded = jwt.verify(bearerToken, process.env.JWT_SECRET);
+        req.user = decoded;
+        logger.info("Bearer token verified successfully:", { user_id: decoded.user_id, role: decoded.role });
+        return next();
+      } catch (error) {
+        logger.warn("Bearer token verification failed:", error.message);
+        return res.status(401).json({ status: "failed", message: "Invalid or expired bearer token" });
+      }
+    }
+  }
+
+  // First try to verify access token from cookie
   let token = req.cookies?.AccessToken;
 
   logger.info(`Auth middleware called for ${req.method} ${req.path}`);
