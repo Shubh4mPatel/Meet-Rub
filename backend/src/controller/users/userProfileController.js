@@ -3120,11 +3120,39 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
       }
     }
 
-    const { rows: freelancerServices } = await query(
-      `SELECT id, service_name, service_description, service_price, delivery_time
-     FROM services WHERE freelancer_id = $1`,
+    const { rows: serviceRows } = await query(
+      `SELECT id, service_name, service_description, service_price, delivery_time, plan_type, thumbnail_file, is_active, created_at, updated_at
+       FROM services WHERE freelancer_id = $1 ORDER BY service_name, created_at DESC`,
       [freelancerId]
     );
+
+    // Generate presigned URLs for thumbnails and group by service_name
+    const servicesMap = {};
+    for (const row of serviceRows) {
+      if (row.thumbnail_file) {
+        try {
+          const firstSlashIndex = row.thumbnail_file.indexOf("/");
+          if (firstSlashIndex !== -1) {
+            const bucketName = row.thumbnail_file.substring(0, firstSlashIndex);
+            const objectName = row.thumbnail_file.substring(firstSlashIndex + 1);
+            row.thumbnail_file = await createPresignedUrl(bucketName, objectName, expirySeconds);
+          } else {
+            row.thumbnail_file = null;
+          }
+        } catch (error) {
+          logger.error(`Error generating signed URL for service thumbnail: ${error}`);
+          row.thumbnail_file = null;
+        }
+      }
+
+      const { service_name, ...serviceOption } = row;
+      if (!servicesMap[service_name]) {
+        servicesMap[service_name] = { service_name, service_options: [] };
+      }
+      servicesMap[service_name].service_options.push(serviceOption);
+    }
+
+    const freelancerServices = Object.values(servicesMap);
 
     logger.info(`Successfully fetched freelancer data for ID: ${freelancerId}`);
 
@@ -3133,7 +3161,7 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
       status: "success",
       data: {
         freelancer: freelancerData[0],
-        services: freelancerServices.length > 0 ? freelancerServices : [],
+        services: freelancerServices,
       },
     });
   } catch (error) {
