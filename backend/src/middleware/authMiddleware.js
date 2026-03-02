@@ -81,24 +81,7 @@ WHERE u.id = $1`,
 
 // Combined middleware that tries access token first, then refresh token
 const authenticateUser = async (req, res, next) => {
-  // Support Bearer token in Authorization header (useful for Postman / mobile clients)
-  const authHeader = req.headers?.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const bearerToken = authHeader.slice(7).trim();
-    if (bearerToken) {
-      try {
-        const decoded = jwt.verify(bearerToken, process.env.JWT_SECRET);
-        req.user = decoded;
-        logger.info("Bearer token verified successfully:", { user_id: decoded.user_id, role: decoded.role });
-        return next();
-      } catch (error) {
-        logger.warn("Bearer token verification failed:", error.message);
-        return res.status(401).json({ status: "failed", message: "Invalid or expired bearer token" });
-      }
-    }
-  }
-
-  // First try to verify access token from cookie
+  // First try to verify access token
   let token = req.cookies?.AccessToken;
 
   logger.info(`Auth middleware called for ${req.method} ${req.path}`);
