@@ -5,7 +5,7 @@ const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
-const { getUserProfileProgress } = require('../controller/users/userProfileController');
+const { getUserProfileProgress, getCreatorByUserId } = require('../controller/users/userProfileController');
 const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/portfolioController");
 const { getNiches } = require('../controller/services/serviceController');
 const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
@@ -82,5 +82,7 @@ router.get('/niches', getNiches);
 router.post('/dispute-raise', authenticateUser, requireRole(['freelancer']), raiseDispute);
 
 router.get('/disputes', authenticateUser, requireRole(['freelancer']), getDisputes);
+
+router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(['freelancer']), getCreatorByUserId);
 
 module.exports = router

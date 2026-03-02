@@ -2194,6 +2194,102 @@ const getCreatorById = async (req, res, next) => {
   }
 }
 
+const getCreatorByUserId = async (req, res, next) => {
+  logger.info("Fetching creator by ID");
+
+  try {
+    const creatorId = req.params?.creator_id;
+
+    // Validate creator ID parameter
+    if (!creatorId) {
+      logger.warn("Creator ID parameter is missing");
+      return next(new AppError("Creator ID is required", 400));
+    }
+
+    const { rows: creatorData } = await query(
+      `SELECT
+        creator_id,
+        first_name,
+        last_name,
+        full_name,
+        phone_number,
+        email,
+        profile_image_url,
+        social_platform_type,
+        social_links,
+        niche,
+        created_at
+      FROM creators
+      WHERE user_id = $1`,
+      [creatorId]
+    );
+
+    // Check if creator exists
+    if (!creatorData[0]) {
+      logger.warn(`Creator not found with ID: ${creatorId}`);
+      return next(new AppError("Creator not found", 404));
+    }
+
+    logger.debug("Creator data fetched:", creatorData[0]);
+
+    const creator = creatorData[0];
+
+    // Generate presigned URL for profile image if it exists
+    if (creator.profile_image_url) {
+      try {
+        const profileImagePath = creator.profile_image_url;
+
+        // Extract bucket name and object key
+        // Assuming format: "bucket-name/path/to/object"
+        const firstSlashIndex = profileImagePath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = profileImagePath.substring(0, firstSlashIndex);
+          const objectName = profileImagePath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          creator.profile_image_url = signedUrl;
+        } else {
+          logger.warn(`Invalid profile image URL format: ${profileImagePath}`);
+          creator.profile_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for profile image: ${error}`);
+        creator.profile_image_url = null;
+      }
+    }
+
+    // Format response
+    const response = {
+      creator_id: creator.creator_id,
+      name: creator.full_name || `${creator.first_name || ""} ${creator.last_name || ""}`.trim(),
+      first_name: creator.first_name,
+      last_name: creator.last_name,
+      phone_number: creator.phone_number,
+      email: creator.email,
+      profile_image_url: creator.profile_image_url,
+      social_platform_type: creator.social_platform_type,
+      social_links: creator.social_links,
+      niches: creator.niche || [],
+      date_of_joining: creator.created_at,
+    };
+
+    logger.info(`Creator profile fetched successfully for ID: ${creatorId}`);
+    return res.status(200).json({
+      status: "success",
+      message: "Creator profile fetched successfully",
+      data: response,
+    });
+  } catch (error) {
+    logger.error("Error fetching creator profile:", error);
+    return next(new AppError("Failed to fetch creator profile", 500));
+  }
+}
+
 const editCreatorByAdmin = async (req, res, next) => {
   // Implementation for editing creator profile by admin goes here
 }
@@ -2440,6 +2536,130 @@ const editFreelancerByAdmin = async (req, res, next) => {
 }
 
 const getFreeLancerByIdForAdmin = async (req, res, next) => {
+  try {
+    logger.info("Admin fetching freelancer KYC details by ID");
+
+    const { freelancer_id } = req.params;
+
+    if (!freelancer_id) {
+      return next(new AppError('Freelancer ID is required', 400));
+    }
+
+    // Fetch freelancer details
+    const { rows: freelancerData } = await query(
+      `SELECT
+        freelancer_id,
+        freelancer_full_name,
+        phone_number,
+        freelancer_email,
+        date_of_birth,
+        created_at as date_of_joining,
+        gov_id_type,
+        gov_id_number,
+        gov_id_url,
+        profile_image_url,
+        niche,
+        verification_status
+      FROM freelancer
+      WHERE freelancer_id = $1`,
+      [freelancer_id]
+    );
+
+    if (!freelancerData[0]) {
+      logger.warn(`Freelancer not found with ID: ${freelancer_id}`);
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    const freelancer = freelancerData[0];
+
+    // Generate presigned URL for profile image if it exists
+    if (freelancer.profile_image_url) {
+      try {
+        const profileImagePath = freelancer.profile_image_url;
+        const firstSlashIndex = profileImagePath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = profileImagePath.substring(0, firstSlashIndex);
+          const objectName = profileImagePath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancer.profile_image_url = signedUrl;
+        } else {
+          logger.warn(`Invalid profile image URL format: ${profileImagePath}`);
+          freelancer.profile_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for profile image: ${error}`);
+        freelancer.profile_image_url = null;
+      }
+    }
+
+    // Generate presigned URL for government ID proof if it exists
+    if (freelancer.gov_id_url) {
+      try {
+        const govIdPath = freelancer.gov_id_url;
+        const firstSlashIndex = govIdPath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = govIdPath.substring(0, firstSlashIndex);
+          const objectName = govIdPath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancer.gov_id_url = signedUrl;
+        } else {
+          logger.warn(`Invalid govt ID URL format: ${govIdPath}`);
+          freelancer.gov_id_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for govt ID: ${error}`);
+        freelancer.gov_id_url = null;
+      }
+    }
+
+    // Fetch freelancer services
+    const { rows: services } = await query(
+      `SELECT service_name
+       FROM services
+       WHERE freelancer_id = $1`,
+      [freelancer_id]
+    );
+
+    logger.info(`Successfully fetched KYC details for freelancer ID: ${freelancer_id}`);
+
+    return res.status(200).json({
+      status: "success",
+      message: "Freelancer KYC details fetched successfully",
+      data: {
+        freelancer_id: freelancer.freelancer_id,
+        full_name: freelancer.freelancer_full_name,
+        phone_number: freelancer.phone_number,
+        email: freelancer.freelancer_email,
+        date_of_birth: freelancer.date_of_birth,
+        date_of_joining: freelancer.date_of_joining,
+        gov_id_type: freelancer.gov_id_type,
+        gov_id_number: freelancer.gov_id_number,
+        gov_id_url: freelancer.gov_id_url,
+        profile_image_url: freelancer.profile_image_url,
+        niches: freelancer.niche || [],
+        verification_status: freelancer.verification_status,
+        services_offered: services.map(s => s.service_name),
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching freelancer KYC details for admin:", error);
+    return next(new AppError("Failed to fetch freelancer KYC details", 500));
+  }
+}
+
+const getFreeLancerByUserId = async (req, res, next) => {
   try {
     logger.info("Admin fetching freelancer KYC details by ID");
 
@@ -3211,6 +3431,8 @@ const sendContactEmailToAdmin = async (req, res, next) => {
 };
 
 module.exports = {
+  getCreatorByUserId,
+  getFreeLancerByUserId,
   getFreelancerForAdmin,
   getFreelancerByIdForCreator,
   getAllfreelancersForcreator,
