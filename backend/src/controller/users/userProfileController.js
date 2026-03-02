@@ -96,7 +96,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Freelancer Basic Info");
         const { rows } = await query(
-          "SELECT freelancer_full_name, user_ name,first_name, last_name, date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email,created_at FROM freelancer WHERE user_id = $1",
+          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email,created_at FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
