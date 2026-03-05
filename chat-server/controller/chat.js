@@ -42,7 +42,7 @@ const chatController = (io) => {
         socket.emit("chat-joined", {
           chatRoomId,
           recipientId,
-          chatHistory,
+          chatHistory: chatHistory && chatHistory.length > 0 ? chatHistory : [],
         });
 
         // Update unread count
@@ -56,78 +56,86 @@ const chatController = (io) => {
 
     // Leave a chat room
     socket.on("leave-chat", async ({ recipientId }) => {
-      const [smallerId, largerId] = [userId, recipientId].sort();
-      const chatRoomId = `${smallerId}-${largerId}`;
+      try {
+        const [smallerId, largerId] = [userId, recipientId].sort();
+        const chatRoomId = `${smallerId}-${largerId}`;
 
-      socket.leave(chatRoomId);
+        socket.leave(chatRoomId);
 
-      // Remove active room from Redis
-      await redis.del(`user:${userId}:activeRoom`);
+        // Remove active room from Redis
+        await redis.del(`user:${userId}:activeRoom`);
 
-      console.log(`${username} left chat room: ${chatRoomId}`);
+        console.log(`${username} left chat room: ${chatRoomId}`);
+      } catch (error) {
+        console.error("Error leaving chat:", error);
+      }
     });
 
     socket.on("custom-package", async (packageData, recipientId) => {
+      try {
+        const [smallerId, largerId] = [userId, recipientId].sort();
+        const chatRoomId = `${smallerId}-${largerId}`;
 
-      const [smallerId, largerId] = [userId, recipientId].sort();
-      const chatRoomId = `${smallerId}-${largerId}`;
-
-      const customPackage = await chatModel.saveCustomPackage(
-        chatRoomId,
-        userId,
-        recipientId,
-        packageData
-      );
-
-      const savedMessage = await chatModel.saveMessage(
-        chatRoomId,
-        userId,
-        recipientId,
-        "Package sent",
-        "package",
-        customPackage.id
-      );
-
-      const messageData = {
-        id: savedMessage.id,
-        senderId: userId,
-        senderUsername: username,
-        recipientId,
-        message: "Package sent",
-        timestamp: savedMessage.created_at,
-        chatRoomId,
-        isRead: false,
-        customPackage,
-      };
-
-      io.to(chatRoomId).emit("receive-custom-package", messageData);
-
-      const recipientOnline = await redis.get(`user:${recipientId}:online`);
-
-      if (recipientOnline) {
-        const recipientSocketId = await redis.get(
-          `user:${recipientId}:socketId`
+        const customPackage = await chatModel.saveCustomPackage(
+          chatRoomId,
+          userId,
+          recipientId,
+          packageData
         );
 
-        if (recipientSocketId) {
-          // Check if recipient is in the same chat room
-          const recipientActiveRoom = await redis.get(
-            `user:${recipientId}:activeRoom`
+        const savedMessage = await chatModel.saveMessage(
+          chatRoomId,
+          userId,
+          recipientId,
+          "Package sent",
+          "package",
+          customPackage.id
+        );
+
+        const messageData = {
+          id: savedMessage.id,
+          senderId: userId,
+          senderUsername: username,
+          recipientId,
+          message: "Package sent",
+          timestamp: savedMessage.created_at,
+          chatRoomId,
+          isRead: false,
+          customPackage,
+        };
+
+        io.to(chatRoomId).emit("receive-custom-package", messageData);
+
+        const recipientOnline = await redis.get(`user:${recipientId}:online`);
+
+        if (recipientOnline) {
+          const recipientSocketId = await redis.get(
+            `user:${recipientId}:socketId`
           );
 
-          if (recipientActiveRoom !== chatRoomId) {
-            // Only send notification if recipient is not in the same chat room
-            io.to(recipientSocketId).emit("new-message-notification", {
-              senderId: userId,
-              senderUsername: username,
-              message: "Package sent",
-              chatRoomId,
-            });
+          if (recipientSocketId) {
+            // Check if recipient is in the same chat room
+            const recipientActiveRoom = await redis.get(
+              `user:${recipientId}:activeRoom`
+            );
+
+            if (recipientActiveRoom !== chatRoomId) {
+              // Only send notification if recipient is not in the same chat room
+              io.to(recipientSocketId).emit("new-message-notification", {
+                senderId: userId,
+                senderUsername: username,
+                message: "Package sent",
+                chatRoomId,
+              });
+            }
           }
         }
-      }
 
-      console.log(`Message saved: ${username} to ${recipientId}`);
+        console.log(`Message saved: ${username} to ${recipientId}`);
+      } catch (error) {
+        console.error("custom-package error:", error);
+        socket.emit("error", { message: "Failed to send package" });
+      }
     });
 
     socket.on("accept-package", async (packageId, recipientId) => {

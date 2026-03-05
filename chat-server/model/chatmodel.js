@@ -113,6 +113,7 @@ const chatModel = {
     m.is_read,
     m.created_at,
     m.deadline_extension_id,
+    m.custom_package_id,
     COALESCE(f.user_name, c.user_name) as sender_username,
     CASE
         WHEN f.freelancer_id IS NOT NULL THEN 'freelancer'
@@ -127,11 +128,28 @@ const chatModel = {
     der.status as der_status,
     der.requested_at as der_requested_at,
     der.approved_at as der_approved_at,
-    der.expires_at as der_expires_at
+    der.expires_at as der_expires_at,
+    cp.id as cp_id,
+    cp.room_id as cp_room_id,
+    cp.freelancer_id as cp_freelancer_id,
+    cp.creator_id as cp_creator_id,
+    cp.plan_type as cp_plan_type,
+    cp.price as cp_price,
+    cp.units as cp_units,
+    cp.package_type as cp_package_type,
+    cp.status as cp_status,
+    cp.delivery_date as cp_delivery_date,
+    cp.delivery_time as cp_delivery_time,
+    cp.service_id as cp_service_id,
+    cp.service_type as cp_service_type,
+    cp.initiator_role as cp_initiator_role,
+    cp.expires_at as cp_expires_at,
+    cp.created_at as cp_created_at
 FROM messages m
 LEFT JOIN freelancer f ON m.sender_id = f.user_id
 LEFT JOIN creators c ON m.sender_id = c.user_id
 LEFT JOIN deadline_extension_requested der ON m.deadline_extension_id = der.id
+LEFT JOIN custom_packages cp ON m.custom_package_id = cp.id
 WHERE m.room_id = $1
 ORDER BY m.created_at DESC
 LIMIT $2 OFFSET $3;
@@ -167,6 +185,26 @@ LIMIT $2 OFFSET $3;
               requested_at: row.der_requested_at,
               approved_at: row.der_approved_at,
               expires_at: row.der_expires_at,
+            }
+          : null,
+        customPackage: row.custom_package_id
+          ? {
+              id: row.cp_id,
+              room_id: row.cp_room_id,
+              freelancer_id: row.cp_freelancer_id,
+              creator_id: row.cp_creator_id,
+              plan_type: row.cp_plan_type,
+              price: row.cp_price,
+              units: row.cp_units,
+              package_type: row.cp_package_type,
+              status: row.cp_status,
+              delivery_date: row.cp_delivery_date,
+              delivery_time: row.cp_delivery_time,
+              service_id: row.cp_service_id,
+              service_type: row.cp_service_type,
+              initiator_role: row.cp_initiator_role,
+              expires_at: row.cp_expires_at,
+              created_at: row.cp_created_at,
             }
           : null,
       }));
@@ -296,29 +334,44 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       package_type,
       delivery_date,
       delivery_time,
-      service_id,
+      service,
       service_type,
       status,
     } = packageData;
 
     // Determine which participant is the freelancer and which is the creator
+    // Also fetch service_id by joining with services table using service name
     const roleCheck = await pool.query(
-      `SELECT freelancer_id FROM freelancer WHERE user_id = $1 OR user_id = $2`,
-      [userId, recipientId]
+      `SELECT f.freelancer_id, f.user_id, s.id AS service_id
+       FROM freelancer f
+       LEFT JOIN services s ON s.freelancer_id = f.freelancer_id
+         AND s.service_name = $3
+       WHERE (f.user_id = $1 OR f.user_id = $2)`,
+      [userId, recipientId, service]
     );
 
-    const freelancerIds = roleCheck.rows.map((r) => r.freelancer_id);
-    let freelancerId, creatorId, initiator_role;
+    const freelancerRow = roleCheck.rows[0];
+    const service_id = freelancerRow?.service_id || null;
+    let freelancerId, creatorUserId, initiator_role;
 
-    if (freelancerIds.includes(userId)) {
-      freelancerId = userId;
-      creatorId = recipientId;
+    // freelancerRow.freelancer_id is the PK in the freelancer table (not user_id)
+    // Use == to handle number/string type mismatch from socket vs DB
+    if (freelancerRow?.user_id == userId) {
+      freelancerId = freelancerRow.freelancer_id;
+      creatorUserId = recipientId;
       initiator_role = "freelancer";
     } else {
-      freelancerId = recipientId;
-      creatorId = userId;
+      freelancerId = freelancerRow.freelancer_id;
+      creatorUserId = userId;
       initiator_role = "creator";
     }
+
+    // creator_id FK references the creators table PK, not user_id
+    const creatorRow = await pool.query(
+      `SELECT creator_id FROM creators WHERE user_id = $1`,
+      [creatorUserId]
+    );
+    const creatorId = creatorRow.rows[0]?.creator_id;
 
     const query = `
       INSERT INTO custom_packages (
@@ -340,7 +393,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         units,
         package_type,
         status || "pending",
-        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        new Date(Date.now() + 24*7 * 60 * 60 * 1000).toISOString(),
         new Date().toISOString(),
         delivery_date || null,
         toUTCTime(delivery_time) || null,
@@ -359,10 +412,10 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   async acceptPackage(packageId, recipientId) {
     const query = `
       UPDATE custom_packages
-      SET status = 'accepted'
-      and expires_at = null
-      and responded_at = NOW()
-      WHERE id = $1 
+      SET status = 'accepted',
+          expires_at = null,
+          responded_at = NOW()
+      WHERE id = $1
       RETURNING *
     `;
 
@@ -379,9 +432,9 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   async rejectPackage(packageId, recipientId) {
     const query = `
       UPDATE custom_packages
-      SET status = 'rejected'
-      and responded_at = NOW()
-      WHERE id = $1 
+      SET status = 'rejected',
+      responded_at = NOW()
+      WHERE id = $1
       RETURNING *
     `;
 

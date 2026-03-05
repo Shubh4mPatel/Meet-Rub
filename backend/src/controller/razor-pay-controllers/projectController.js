@@ -60,8 +60,8 @@ const getProject = async (req, res, next) => {
 
     const { rows: projects } = await db.query(
       `SELECT p.*,
-        c.user_name as creator_name, c.email as creator_email,
-        f.user_name as freelancer_name, f.email as freelancer_email
+        c.full_name as creator_name, c.email as creator_email,
+        f.freelancer_full_name as freelancer_name, f.freelancer_email as freelancer_email
        FROM projects p
        JOIN creators c ON p.creator_id = c.creator_id
        JOIN freelancer f ON p.freelancer_id = f.freelancer_id
@@ -82,51 +82,10 @@ const getProject = async (req, res, next) => {
       return next(new AppError('Access denied', 403));
     }
 
-    // Fetch deliverables linked to this project
-    const { rows: deliverables } = await db.query(
-      `SELECT id, deliverable_url, created_at, project_description, service_id, creator_id, freelancer_id
-       FROM deliverables
-       WHERE creator_id = $1 AND freelancer_id = $2 AND service_id = $3`,
-      [project.creator_id, project.freelancer_id, project.service_id]
-    );
-
-    // Generate presigned URLs for deliverable files
-    const expirySeconds = 4 * 60 * 60; // 4 hours
-    const deliverablesWithUrls = await Promise.all(
-      deliverables.map(async (deliverable) => {
-        if (!deliverable.deliverable_url) return deliverable;
-
-        const urls = Array.isArray(deliverable.deliverable_url)
-          ? deliverable.deliverable_url
-          : [deliverable.deliverable_url];
-
-        const signedUrls = await Promise.all(
-          urls.map(async (urlPath) => {
-            if (typeof urlPath !== 'string') return urlPath;
-            const firstSlashIndex = urlPath.indexOf('/');
-            if (firstSlashIndex === -1) return urlPath;
-            try {
-              const bucketName = urlPath.substring(0, firstSlashIndex);
-              const objectName = urlPath.substring(firstSlashIndex + 1);
-              return await createPresignedUrl(bucketName, objectName, expirySeconds);
-            } catch {
-              return urlPath;
-            }
-          })
-        );
-
-        return {
-          ...deliverable,
-          deliverable_url: Array.isArray(deliverable.deliverable_url) ? signedUrls : signedUrls[0],
-        };
-      })
-    );
-
     res.status(200).json({
       status: 'success',
       message: 'Project fetched successfully',
-      project,
-      deliverables: deliverablesWithUrls
+      project
     });
   } catch (error) {
     console.error('Get project error:', error);
