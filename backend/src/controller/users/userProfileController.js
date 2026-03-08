@@ -2254,6 +2254,7 @@ const getCreatorByUserId = async (req, res, next) => {
       try {
         const profileImagePath = creator.profile_image_url;
 
+        
         // Extract bucket name and object key
         // Assuming format: "bucket-name/path/to/object"
         const firstSlashIndex = profileImagePath.indexOf("/");
