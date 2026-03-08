@@ -320,8 +320,118 @@ const deleteBeforeAfter = async (req, res, next) => {
 };
 
 
+const uploadFileToMinio = async (file, userId, type) => {
+  const fileExt    = path.extname(file.originalname);
+  const objectName = `freelancer/Impact/${userId}/${type}/${crypto.randomUUID()}${fileExt}`;
+  await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, {
+    "Content-Type": file.mimetype,
+  });
+  return { objectName, fileUrl: `${BUCKET_NAME}/${objectName}` };
+};
+
+const removeOldFile = async (fileUrl) => {
+  try {
+    const objKey = fileUrl.split("/").slice(1).join("/");
+    await minioClient.removeObject(BUCKET_NAME, objKey);
+  } catch (e) {
+    logger.warn(`Could not remove old file: ${e.message}`);
+  }
+};
+
+const updateBeforeAfter = async (req, res, next) => {
+  logger.info("Update before/after started");
+
+  let client;
+  const uploadedObjectNames = [];
+
+  try {
+    const { id } = req.params;
+    const { serviceType } = req.body;
+    const user = req.user;
+    const freelancerId = user?.roleWiseId;
+
+    client = await pool.connect();
+
+    const { rows } = await client.query(
+      `SELECT * FROM impact WHERE impact_id = $1 AND freelancer_id = $2`,
+      [id, freelancerId]
+    );
+
+    if (!rows.length) {
+      return next(new AppError("Record not found or unauthorized", 404));
+    }
+
+    const existing = rows[0];
+    await client.query("BEGIN");
+
+    let beforeFileUrl = existing.before_service_url;
+    let afterFileUrl  = existing.after_service_url;
+
+    // Handle before file
+    if (req.files?.before?.[0]) {
+      await removeOldFile(existing.before_service_url);
+      const { objectName, fileUrl } = await uploadFileToMinio(req.files.before[0], user.user_id, "before");
+      uploadedObjectNames.push(objectName);
+      beforeFileUrl = fileUrl;
+      logger.info(`New before file uploaded: ${objectName}`);
+    }
+
+    // Handle after file
+    if (req.files?.after?.[0]) {
+      await removeOldFile(existing.after_service_url);
+      const { objectName, fileUrl } = await uploadFileToMinio(req.files.after[0], user.user_id, "after");
+      uploadedObjectNames.push(objectName);
+      afterFileUrl = fileUrl;
+      logger.info(`New after file uploaded: ${objectName}`);
+    }
+
+    const { rows: updated } = await client.query(
+      `UPDATE impact
+       SET service_type       = $1,
+           before_service_url = $2,
+           after_service_url  = $3,
+           updated_at         = NOW()
+       WHERE impact_id = $4
+       RETURNING *`,
+      [serviceType || existing.service_type, beforeFileUrl, afterFileUrl, id]
+    );
+
+    await client.query("COMMIT");
+    logger.info("Impact updated ✅");
+
+    const [beforeUrl, afterUrl] = await Promise.allSettled([
+      createPresignedUrl(BUCKET_NAME, beforeFileUrl.split("/").slice(1).join("/"), expirySeconds),
+      createPresignedUrl(BUCKET_NAME, afterFileUrl.split("/").slice(1).join("/"), expirySeconds),
+    ]);
+
+    return res.status(200).json({
+      status: "success",
+      message: "Before/After updated successfully",
+      data: {
+        impact_id:                updated[0].impact_id,
+        freelancer_id:            updated[0].freelancer_id,
+        service_type:             updated[0].service_type,
+        before_service_public_url: beforeUrl.status === "fulfilled" ? beforeUrl.value : null,
+        after_service_public_url:  afterUrl.status  === "fulfilled" ? afterUrl.value  : null,
+        updated_at:               updated[0].updated_at,
+      },
+    });
+
+  } catch (error) {
+    logger.error("Update before/after error:", error);
+    if (client) await client.query("ROLLBACK");
+    for (const objName of uploadedObjectNames) {
+      await minioClient.removeObject(BUCKET_NAME, objName).catch(() => {});
+    }
+    return next(new AppError("Failed to update before/after", 500));
+  } finally {
+    if (client) client.release();
+  }
+};
+
 module.exports = {
   uploadBeforeAfter,
   getBeforeAfter,
   deleteBeforeAfter,
+  updateBeforeAfter,
 };

@@ -265,6 +265,7 @@ const freelancerBasicInfoSchema = Joi.object({
   email: Joi.string().email().required(),
   freelancerFullName: Joi.string().required(),
   dateOfBirth: Joi.string().required(),
+  about_me: Joi.string().optional().allow(""),
   phoneNumber: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .required(),
@@ -716,6 +717,7 @@ const editProfile = async (req, res, next) => {
           phoneNumber,
           profileTitle,
           thumbnailImageUrl,
+          about_me
         } = req.body;
 
         // Start transaction
@@ -884,8 +886,8 @@ const editProfile = async (req, res, next) => {
           // Update database with or without new thumbnail URL
           let updateQuery, updateParams;
           if (newThumbnailUrl) {
-            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, freelancer_thumbnail_image=$5,first_name=$6, last_name=$7, freelancer_email=$8 WHERE user_id=$9
-             RETURNING freelancer_full_name,first_name,last_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image,created_at`;
+            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, freelancer_thumbnail_image=$5,first_name=$6, last_name=$7, freelancer_email=$8, about_me=$9 WHERE user_id=$10
+             RETURNING freelancer_full_name,first_name,last_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image,about_me,created_at`;
             updateParams = [
               freelancerFullName,
               dateOfBirth,
@@ -895,11 +897,12 @@ const editProfile = async (req, res, next) => {
               first_name,
               last_name,
               email,
+              about_me,
               user.user_id,
             ];
           } else {
-            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4 , first_name =$5 , last_name =$6 , freelancer_email=$7 WHERE user_id=$8
-             RETURNING freelancer_full_name, first_name, last_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image,created_at`;
+            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4 , first_name =$5 , last_name =$6 , freelancer_email=$7, about_me=$8 WHERE user_id=$9
+             RETURNING freelancer_full_name, first_name, last_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image,about_me,created_at`;
             updateParams = [
               freelancerFullName,
               dateOfBirth,
@@ -908,6 +911,7 @@ const editProfile = async (req, res, next) => {
               first_name,
               last_name,
               email,
+              about_me,
               user.user_id,
             ];
           }

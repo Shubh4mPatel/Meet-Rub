@@ -3,7 +3,7 @@ const upload = require('../../config/multer');
 const {getMyPayouts,getEarningsSummary } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
-const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
+const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
 const { getUserProfileProgress, getCreatorByUserId } = require('../controller/users/userProfileController');
 const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/portfolioController");
@@ -27,6 +27,12 @@ router.get('/portfolio/get-after-before',authenticateUser,  getBeforeAfter)
 
 
 router.delete('/portfolio/delete-after-before',authenticateUser, requireRole(['freelancer']), deleteBeforeAfter)
+
+
+router.put('/portfolio/update-after-before/:id', authenticateUser, requireRole(['freelancer']), upload.fields([
+    { name: 'before', maxCount: 1 },
+    { name: 'after',  maxCount: 1 },
+]), updateBeforeAfter)
 
 
 router.post('/add-service',authenticateUser, requireRole(['freelancer']),upload.single('file'), addServicesByFreelancer)

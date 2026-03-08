@@ -2,7 +2,7 @@ const { loginUser } = require('./auth/login/login');
 const { otpSendApi } = require('./auth/send-otp/sendOtp');
 const { verifyOtpAndProcess } = require('./auth/verify-otp/verifyOtp');
 const { getUserProfile, editProfile,getAllFreelancers,getFreelancerById,getFreelancerPortfolio,getFreelancerImpact,addFreelancerToWishlist } = require('./users/userProfileController');
-const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter } = require('./before-after/BeforeAfter');
+const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter } = require('./before-after/BeforeAfter');
 const { approveProfile } = require('./admin/adminContoller');
 const { addServices, getServices, addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer ,createSreviceRequest, getUserServiceRequests, getUserServiceRequestsSuggestion,getUserServiceRequestsToAdmin } = require('./services/serviceController');
 const { deleteFreelancerPortfolio, updateFreelancerPortfolio, addFreelancerPortfolio, getPortfolioByFreelancerId } = require('./portfoilio/portfolioController');
@@ -16,6 +16,7 @@ module.exports = {
     uploadBeforeAfter,
     getBeforeAfter,
     deleteBeforeAfter,
+    updateBeforeAfter,
     approveProfile,
     getServices,
     addServices,
