@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { loginUser, otpSendApi, verifyOtpAndProcess } = require('../controller');
 const { authenticateUser, refreshAccessToken, logout } = require('../middleware/authMiddleware');
+const { changePassword } = require('../controller/auth/change-password/changePassword');
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
 const upload = require('../../config/multer');
 
@@ -40,6 +41,9 @@ router.post('/refresh', refreshAccessToken, (req, res) => {
 
 
 router.get('/logout', authenticateUser, logout);
+
+
+router.put('/change-password', authenticateUser, changePassword);
 
 
 module.exports = router;

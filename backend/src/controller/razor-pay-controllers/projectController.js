@@ -56,7 +56,8 @@ const createProject = async (req, res, next) => {
 const getProject = async (req, res, next) => {
   try {
     const projectId = req.params.id;
-    const { roleWiseId, role } = req.user;
+    const { role } = req.user;
+    const roleWiseId = parseInt(req.user.roleWiseId);
 
     const { rows: projects } = await db.query(
       `SELECT
@@ -136,51 +137,81 @@ const getMyProjects = async (req, res, next) => {
     const userId = req.user.roleWiseId;
     const userType = req.user.role;
     const status = req.query.status;
+    const service = req.query.service;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
     logger.info('Get my projects called by user %s of type %s with status %s', userId, userType, status);
-    
-    let query = `
-     SELECT 
-    p.*,
-    c.full_name AS client_name,
-    f.freelancer_full_name AS freelancer_name,
-    s.service_name
-FROM projects p
-JOIN creators c 
-    ON p.creator_id = c.creator_id
-JOIN freelancer f 
-    ON p.freelancer_id = f.freelancer_id
-JOIN services s 
-    ON p.service_id = s.id
-WHERE
-    `;
 
-    const params = [];
+    const filterParams = [];
     let paramIndex = 1;
+    const whereClauses = [];
 
     if (userType === 'creator') {
-      query += `p.creator_id = $${paramIndex++}`;
-      params.push(userId);
+      whereClauses.push(`p.creator_id = $${paramIndex++}`);
+      filterParams.push(userId);
     } else if (userType === 'freelancer') {
-      query += `p.freelancer_id = $${paramIndex++}`;
-      params.push(userId);
+      whereClauses.push(`p.freelancer_id = $${paramIndex++}`);
+      filterParams.push(userId);
     } else {
       return next(new AppError('Invalid user type', 400));
     }
 
     if (status) {
-      query += ` AND p.status = $${paramIndex++}`;
-      params.push(status);
+      whereClauses.push(`p.status = $${paramIndex++}`);
+      filterParams.push(status);
     }
 
-    query += ' ORDER BY p.created_at DESC';
-    logger.info('Executing query: %s with params: %o', query, params);
-    const { rows: projects } = await db.query(query, params);
+    if (service) {
+      whereClauses.push(`s.service_name ILIKE $${paramIndex++}`);
+      filterParams.push(`%${service}%`);
+    }
 
-    res.status(201).json({
+    const joins = `
+FROM projects p
+JOIN creators c   ON p.creator_id   = c.creator_id
+JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+JOIN services s   ON p.service_id   = s.id`;
+
+    const whereClause = `WHERE ${whereClauses.join(' AND ')}`;
+
+    const countQuery = `SELECT COUNT(*) AS total ${joins} ${whereClause}`;
+
+    const dataQuery = `
+SELECT
+  p.*,
+  c.full_name               AS client_name,
+  f.freelancer_full_name    AS freelancer_name,
+  s.service_name
+${joins}
+${whereClause}
+ORDER BY p.created_at DESC
+LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+
+    const paginatedParams = [...filterParams, limit, offset];
+
+    logger.info('Executing query: %s with params: %o', dataQuery, paginatedParams);
+
+    const [{ rows: projects }, { rows: countResult }] = await Promise.all([
+      db.query(dataQuery, paginatedParams),
+      db.query(countQuery, filterParams),
+    ]);
+
+    const totalCount = parseInt(countResult[0].total);
+    const totalPages = Math.ceil(totalCount / limit);
+
+    res.status(200).json({
       status: 'success',
       message: 'Projects fetched successfully',
-      count: projects.length,
-      projects
+      data: {
+        projects,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalCount,
+          itemsPerPage: limit,
+        },
+      },
     });
   } catch (error) {
     console.error('Get my projects error:', error);

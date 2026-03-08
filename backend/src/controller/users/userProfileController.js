@@ -557,6 +557,11 @@ const editProfile = async (req, res, next) => {
       if (type === "govtId") {
         logger.info("Updating Freelancer Govt ID");
 
+        if (freelancerExistsResult[0]?.verification_status === 'PENDING') {
+          logger.warn("Gov ID update blocked — verification is pending");
+          return next(new AppError("Your government ID is currently under review and cannot be changed", 403));
+        }
+
         const { gov_id_type, gov_id_number } = req.body;
 
         // Validate only single file upload
@@ -2129,6 +2134,7 @@ const getCreatorById = async (req, res, next) => {
         social_platform_type,
         social_links,
         niche,
+        about_me,
         created_at
       FROM creators
       WHERE creator_id = $1`,
@@ -2186,6 +2192,7 @@ const getCreatorById = async (req, res, next) => {
       social_platform_type: creator.social_platform_type,
       social_links: creator.social_links,
       niches: creator.niche || [],
+      about_me: creator.about_me,
       date_of_joining: creator.created_at,
     };
 
@@ -2225,6 +2232,7 @@ const getCreatorByUserId = async (req, res, next) => {
         social_platform_type,
         social_links,
         niche,
+        about_me,
         created_at
       FROM creators
       WHERE user_id = $1`,
@@ -2282,6 +2290,7 @@ const getCreatorByUserId = async (req, res, next) => {
       social_platform_type: creator.social_platform_type,
       social_links: creator.social_links,
       niches: creator.niche || [],
+      about_me: creator.about_me,
       date_of_joining: creator.created_at,
     };
 
@@ -2566,6 +2575,7 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         gov_id_url,
         profile_image_url,
         niche,
+        about_me,
         verification_status
       FROM freelancer
       WHERE freelancer_id = $1`,
@@ -2656,6 +2666,7 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         gov_id_url: freelancer.gov_id_url,
         profile_image_url: freelancer.profile_image_url,
         niches: freelancer.niche || [],
+        about_me: freelancer.about_me,
         verification_status: freelancer.verification_status,
         services_offered: services.map(s => s.service_name),
       },
@@ -2690,6 +2701,7 @@ const getFreeLancerByUserId = async (req, res, next) => {
         gov_id_url,
         profile_image_url,
         niche,
+        about_me,
         verification_status
       FROM freelancer
       WHERE freelancer_id = $1`,
@@ -2780,6 +2792,7 @@ const getFreeLancerByUserId = async (req, res, next) => {
         gov_id_url: freelancer.gov_id_url,
         profile_image_url: freelancer.profile_image_url,
         niches: freelancer.niche || [],
+        about_me: freelancer.about_me,
         verification_status: freelancer.verification_status,
         services_offered: services.map(s => s.service_name),
       },
@@ -3049,6 +3062,7 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
         f.profile_title, 
         f.freelancer_thumbnail_image, 
         f.profile_image_url, 
+        f.about_me,
         f.rating,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
       FROM freelancer f
