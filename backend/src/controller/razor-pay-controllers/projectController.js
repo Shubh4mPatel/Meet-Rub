@@ -58,6 +58,8 @@ const getProject = async (req, res, next) => {
     const projectId = req.params.id;
     const { role } = req.user;
     const roleWiseId = parseInt(req.user.roleWiseId);
+    logger.info('[getProject] raw roleWiseId=%s (type=%s) parsed=%s role=%s projectId=%s',
+      req.user.roleWiseId, typeof req.user.roleWiseId, roleWiseId, role, projectId);
 
     const { rows: projects } = await db.query(
       `SELECT
@@ -81,6 +83,12 @@ const getProject = async (req, res, next) => {
     }
 
     const project = projects[0];
+    logger.info('[getProject] DB project.creator_id=%s (type=%s) project.freelancer_id=%s (type=%s)',
+      project.creator_id, typeof project.creator_id, project.freelancer_id, typeof project.freelancer_id);
+    logger.info('[getProject] access check: role=%s roleWiseId=%s (type=%s) creator_match=%s freelancer_match=%s',
+      role, roleWiseId, typeof roleWiseId,
+      project.creator_id === roleWiseId,
+      project.freelancer_id === roleWiseId);
 
     // Check access
     if (role !== 'admin' && project.creator_id !== roleWiseId && project.freelancer_id !== roleWiseId) {
