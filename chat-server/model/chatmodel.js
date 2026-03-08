@@ -1,4 +1,5 @@
 const pool = require("../config/dbConfig");
+const {logger} = require("../utils/logger");
 
 // Converts a time string to UTC.
 // If the value already carries a UTC indicator (Z or +00:00) it is returned unchanged.
@@ -347,13 +348,14 @@ ORDER BY m.created_at DESC NULLS LAST; `;
        LEFT JOIN services s ON s.freelancer_id = f.freelancer_id
          AND s.service_name = $3
        WHERE (f.user_id = $1 OR f.user_id = $2)`,
-      [userId, recipientId, service]
+      [userId, recipientId, service_type]
     );
 
     const freelancerRow = roleCheck.rows[0];
     const service_id = freelancerRow?.service_id || null;
     let freelancerId, creatorUserId, initiator_role;
 
+    logger.info(`Role check result for userId ${userId} and recipientId ${recipientId}:`, service_id);
     // freelancerRow.freelancer_id is the PK in the freelancer table (not user_id)
     // Use == to handle number/string type mismatch from socket vs DB
     if (freelancerRow?.user_id == userId) {
@@ -401,6 +403,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         service_type,
         initiator_role,
       ]);
+      logger.info("Custom package saved:", result.rows[0]);
       return result.rows[0];
     } catch (error) {
       console.error("Error saving custom package:", error);
