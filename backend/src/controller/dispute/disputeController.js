@@ -89,7 +89,7 @@ const getDisputes = async (req, res, next) => {
   try {
     const { role, roleWiseId } = req.user;
     // type: 'by_me' | 'against_me'  (default: against_me to match the UI)
-    const { type = 'against_me', search = '', page = 1, limit = 10 } = req.query;
+    const { type = 'against_me', search = '', status = '', page = 1, limit = 10 } = req.query;
 
     const pageNum  = Math.max(1, parseInt(page));
     const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
@@ -116,29 +116,40 @@ const getDisputes = async (req, res, next) => {
     const otherAlias   = raisedByFilter === 'creator' ? 'c2' : 'f2';
     const otherJoinId  = raisedByFilter === 'creator' ? 'd.creator_id'     : 'd.freelancer_id';
 
-    const searchFilter = search.trim()
-      ? `AND ${otherNameCol} ILIKE $3`
+    // Build dynamic filters and params
+    const params = [roleWiseId, raisedByFilter];
+    let nextParam = 3;
+
+    const statusFilter = status.trim()
+      ? `AND d.status = $${nextParam++}`
       : '';
+    if (status.trim()) params.push(status.trim());
+
+    const searchFilter = search.trim()
+      ? `AND ${otherNameCol} ILIKE $${nextParam++}`
+      : '';
+    if (search.trim()) params.push(`%${search.trim()}%`);
 
     const dataQuery = `
       SELECT
-        d.id              AS dispute_id,
+        d.id AS dispute_id,
         d.reason_of_dispute,
         d.description,
         d.admin_note,
         d.created_at,
+        d.status,
         d.raised_by,
         ${otherNameCol}   AS other_party_name,
         ${otherAvatarCol} AS other_party_avatar,
         s.service_name,
-        p.id              AS project_id,
-        CASE WHEN d.admin_note IS NOT NULL THEN 'Resolved' ELSE 'Under Review' END AS status
+        p.id              AS project_id
       FROM disputes d
       JOIN projects p ON d.project_id = p.id
       LEFT JOIN services s ON p.service_id = s.id
       JOIN ${otherTable} ${otherAlias} ON ${otherJoinId} = ${otherIdCol}
       WHERE ${myCol} = $1
         AND d.raised_by = $2
+        ${statusFilter}
         ${searchFilter}
       ORDER BY d.created_at DESC
       LIMIT ${limitNum} OFFSET ${offset}
@@ -150,12 +161,9 @@ const getDisputes = async (req, res, next) => {
       JOIN ${otherTable} ${otherAlias} ON ${otherJoinId} = ${otherIdCol}
       WHERE ${myCol} = $1
         AND d.raised_by = $2
+        ${statusFilter}
         ${searchFilter}
     `;
-
-    const params = search.trim()
-      ? [roleWiseId, raisedByFilter, `%${search.trim()}%`]
-      : [roleWiseId, raisedByFilter];
 
     const [dataResult, countResult] = await Promise.all([
       db.query(dataQuery, params),

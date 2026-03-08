@@ -56,15 +56,21 @@ const createProject = async (req, res, next) => {
 const getProject = async (req, res, next) => {
   try {
     const projectId = req.params.id;
-    const userId = req.user.id;
+    const { roleWiseId, role } = req.user;
 
     const { rows: projects } = await db.query(
-      `SELECT p.*,
-        c.full_name as creator_name, c.email as creator_email,
-        f.freelancer_full_name as freelancer_name, f.freelancer_email as freelancer_email
+      `SELECT
+        p.id, p.number_of_units, p.amount, p.status,
+        p.created_at, p.updated_at, p.completed_at, p.end_date,
+        p.creator_id, p.freelancer_id, p.service_id,
+        s.service_name,
+        c.full_name        AS creator_name,
+        c.profile_image_url AS creator_avatar,
+        f.freelancer_full_name AS freelancer_name
        FROM projects p
-       JOIN creators c ON p.creator_id = c.creator_id
+       JOIN creators c   ON p.creator_id   = c.creator_id
        JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+       LEFT JOIN services s ON p.service_id = s.id
        WHERE p.id = $1`,
       [projectId]
     );
@@ -76,16 +82,47 @@ const getProject = async (req, res, next) => {
     const project = projects[0];
 
     // Check access
-    if (project.creator_id !== userId &&
-        project.freelancer_id !== userId &&
-        req.user.user_type !== 'ADMIN') {
+    if (role !== 'admin' && project.creator_id !== roleWiseId && project.freelancer_id !== roleWiseId) {
       return next(new AppError('Access denied', 403));
+    }
+
+    // Fetch deliverables
+    const { rows: deliverables } = await db.query(
+      `SELECT id, deliverable_url, project_description
+       FROM deliverables
+       WHERE service_id = $1 AND creator_id = $2 AND freelancer_id = $3`,
+      [project.service_id, project.creator_id, project.freelancer_id]
+    );
+
+    // Generate presigned URLs for each deliverable file
+    const deliverablesWithUrls = await Promise.all(
+      deliverables.map(async (d) => {
+        const files = Array.isArray(d.deliverable_url) ? d.deliverable_url : [d.deliverable_url];
+        const signedFiles = await Promise.all(
+          files.filter(Boolean).map(async (file) => {
+            const key = typeof file === 'string' ? file : file.key || file.url;
+            const url = await createPresignedUrl(key).catch(() => key);
+            return { ...(typeof file === 'object' ? file : { key }), url };
+          })
+        );
+        return {
+          id: d.id,
+          project_description: d.project_description,
+          files: signedFiles,
+        };
+      })
+    );
+
+    // Generate presigned URL for creator avatar
+    if (project.creator_avatar) {
+      project.creator_avatar = await createPresignedUrl(project.creator_avatar).catch(() => project.creator_avatar);
     }
 
     res.status(200).json({
       status: 'success',
       message: 'Project fetched successfully',
-      project
+      project,
+      deliverables: deliverablesWithUrls,
     });
   } catch (error) {
     console.error('Get project error:', error);

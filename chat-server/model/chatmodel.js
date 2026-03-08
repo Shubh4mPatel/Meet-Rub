@@ -187,7 +187,7 @@ LIMIT $2 OFFSET $3;
               expires_at: row.der_expires_at,
             }
           : null,
-        customPackage: row.custom_package_id
+        customPackage: row.custom_package_id && row.cp_status === 'pending'
           ? {
               id: row.cp_id,
               room_id: row.cp_room_id,
