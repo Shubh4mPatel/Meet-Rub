@@ -31,7 +31,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Creator Basic Info");
         const { rows } = await query(
-          "SELECT full_name,user_name, first_name, last_name, phone_number, email, social_platform_type, social_links, niche,created_at FROM creators WHERE user_id = $1",
+          "SELECT full_name,user_name, first_name, last_name, phone_number, email, social_platform_type, social_links, niche, about_me, created_at FROM creators WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -43,7 +43,7 @@ const getUserProfile = async (req, res, next) => {
         return res.status(200).json({
           status: "success",
           message: "Creator basic info fetched successfully",
-          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_links: rows[0].social_links, niche: rows[0].niche, user_name: rows[0].user_name, joined_at: rows[0].created_at },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_links: rows[0].social_links, niche: rows[0].niche, user_name: rows[0].user_name, about_me:rows[0].about_me, joined_at: rows[0].created_at },
         });
       }
       if (type === "profileImage") {
@@ -96,7 +96,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Freelancer Basic Info");
         const { rows } = await query(
-          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email,created_at FROM freelancer WHERE user_id = $1",
+          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email,about_me,created_at FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -139,7 +139,7 @@ const getUserProfile = async (req, res, next) => {
         return res.status(200).json({
           status: "success",
           message: "Freelancer basic info fetched successfully",
-          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name,user_name: rows[0].user_name , date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, freelancer_thumbnail_image: rows[0].freelancer_thumbnail_image, email: rows[0].freelancer_email, joined_at: rows[0].created_at },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name,user_name: rows[0].user_name , date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, freelancer_thumbnail_image: rows[0].freelancer_thumbnail_image, email: rows[0].freelancer_email, about_me:rows[0].about_me,joined_at: rows[0].created_at },
         });
       }
 
@@ -282,6 +282,7 @@ const creatorBasicInfoSchema = Joi.object({
   first_name: Joi.string().required(),
   last_name: Joi.string().required(),
   full_name: Joi.string().optional(),
+  about_me: Joi.string().optional().allow(""),
   phone_number: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .required(),
@@ -372,6 +373,7 @@ const editProfile = async (req, res, next) => {
           phone_number,
           social_links,
           niche,
+          about_me,
           email,
         } = req.body;
         const nicheArray = Array.isArray(niche) ? niche : null;
@@ -381,8 +383,8 @@ const editProfile = async (req, res, next) => {
           const { rows } = await query(
             `UPDATE creators
              SET first_name=$1, last_name=$2, full_name=$3, phone_number=$4,
-             social_links=$5, niche=$6::text[] , email=$7, updated_at=CURRENT_TIMESTAMP
-             WHERE user_id=$8
+             social_links=$5, niche=$6::text[] , email=$7, about_me=$8, updated_at=CURRENT_TIMESTAMP
+             WHERE user_id=$9
              RETURNING first_name,email, last_name, full_name, phone_number, social_links, niche, created_at`,
             [
               first_name,
@@ -392,6 +394,7 @@ const editProfile = async (req, res, next) => {
               social_links || null,
               nicheArray,
               email,
+              about_me,
               user.user_id,
             ]
           );
@@ -408,7 +411,7 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Creator profile updated successfully",
-            data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche, email: rows[0].email, joined_at: rows[0].created_at },
+            data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche, email: rows[0].email,about_me:rows[0].about_me, joined_at: rows[0].created_at },
           });
         } catch (error) {
           await query("ROLLBACK");
