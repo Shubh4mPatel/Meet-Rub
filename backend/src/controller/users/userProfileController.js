@@ -987,6 +987,7 @@ const getAllFreelancers = async (req, res, next) => {
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
+        f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price
       FROM freelancer f
@@ -1028,7 +1029,7 @@ const getAllFreelancers = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with`;
 
     // Add sorting based on sortBy parameter
     let orderByClause = "";
@@ -1176,7 +1177,7 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerData } = await query(
-      "SELECT user_id, freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, rating FROM freelancer WHERE freelancer_id = $1",
+      "SELECT user_id, freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, rating, worked_with FROM freelancer WHERE freelancer_id = $1",
       [freelancerId]
     );
     logger.debug("Freelancer data query executed for ID:", freelancerData[0]);
@@ -1696,6 +1697,7 @@ const getWishlistFreelancers = async (req, res, next) => {
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
+        f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         w.created_at as wishlist_added_at
@@ -1738,7 +1740,7 @@ const getWishlistFreelancers = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, w.created_at`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, w.created_at`;
 
     // Add sorting based on sortBy parameter
     let orderByClause = "";
@@ -2482,7 +2484,9 @@ const getFreelancerForAdmin = async (req, res, next) => {
         freelancer_email,
         created_at as joining_date,
         gov_id_number,
-        verification_status
+        verification_status,
+        rating,
+        worked_with
       FROM freelancer
       WHERE verification_status = 'VERIFIED'
       ${whereClause}
@@ -2577,7 +2581,9 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         profile_image_url,
         niche,
         about_me,
-        verification_status
+        verification_status,
+        rating,
+        worked_with
       FROM freelancer
       WHERE freelancer_id = $1`,
       [freelancer_id]
@@ -2669,6 +2675,8 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         niches: freelancer.niche || [],
         about_me: freelancer.about_me,
         verification_status: freelancer.verification_status,
+        rating: freelancer.rating,
+        worked_with: freelancer.worked_with,
         services_offered: services.map(s => s.service_name),
       },
     });
@@ -2703,7 +2711,9 @@ const getFreeLancerByUserId = async (req, res, next) => {
         profile_image_url,
         niche,
         about_me,
-        verification_status
+        verification_status,
+        rating,
+        worked_with
       FROM freelancer
       WHERE freelancer_id = $1`,
       [freelancer_id]
@@ -2795,6 +2805,8 @@ const getFreeLancerByUserId = async (req, res, next) => {
         niches: freelancer.niche || [],
         about_me: freelancer.about_me,
         verification_status: freelancer.verification_status,
+        rating: freelancer.rating,
+        worked_with: freelancer.worked_with,
         services_offered: services.map(s => s.service_name),
       },
     });
@@ -2856,6 +2868,7 @@ const getFreelancerForSuggestion = async (req, res, next) => {
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
+        f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price
       FROM freelancer f
@@ -2897,7 +2910,7 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with`;
 
     // Add sorting based on sortBy parameter
     let orderByClause = "";
@@ -3057,14 +3070,15 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
     }
 
     const { rows: freelancerData } = await query(
-      `SELECT 
+      `SELECT
         f.user_id,
-        f.freelancer_full_name, 
-        f.profile_title, 
-        f.freelancer_thumbnail_image, 
-        f.profile_image_url, 
+        f.freelancer_full_name,
+        f.profile_title,
+        f.freelancer_thumbnail_image,
+        f.profile_image_url,
         f.about_me,
         f.rating,
+        f.worked_with,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
       FROM freelancer f
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $2
@@ -3228,6 +3242,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
+        f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
@@ -3271,7 +3286,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, w.freelancer_id`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, w.freelancer_id`;
 
     // Add sorting based on sortBy parameter
     let orderByClause = "";
