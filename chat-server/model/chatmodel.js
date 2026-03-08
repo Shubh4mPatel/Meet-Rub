@@ -606,6 +606,44 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     }
   },
 
+  // Get all services for a freelancer
+  async getFreelancerServices(freelancerId) {
+    const query = `
+      SELECT
+        s.id,
+        s.service_name,
+        s.plan_type,
+        s.service_price,
+        s.delivery_time
+      FROM services s
+      JOIN freelancer f ON s.freelancer_id = f.freelancer_id
+      WHERE f.user_id = $1
+      ORDER BY s.service_name ASC
+    `;
+
+    try {
+      const result = await pool.query(query, [freelancerId]);
+
+      // Group plans under each service name
+      const grouped = {};
+      for (const row of result.rows) {
+        if (!grouped[row.service_name]) {
+          grouped[row.service_name] = { service_name: row.service_name, plans: [] };
+        }
+        grouped[row.service_name].plans.push({
+          id: row.id,
+          plan_type: row.plan_type,
+          service_price: row.service_price,
+          delivery_time: row.delivery_time,
+        });
+      }
+      return Object.values(grouped);
+    } catch (error) {
+      console.error("Error getting freelancer services:", error);
+      throw error;
+    }
+  },
+
   // Search messages
   async searchMessages(userId, searchTerm) {
     const query = `

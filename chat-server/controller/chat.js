@@ -48,12 +48,26 @@ const chatController = (io) => {
         // Update unread count
         const unreadCount = await chatModel.getUnreadCount(userId);
         socket.emit("unread-count", { count: unreadCount });
+
+        // Load freelancer services when chat opens
+        const freelancerUserId = userRole === 'freelancer' ? userId : recipientId;
+        const services = await chatModel.getFreelancerServices(freelancerUserId);
+        socket.emit('services-list', { freelancerId: freelancerUserId, services });
       } catch (error) {
         console.error("Error joining chat:", error);
         socket.emit("error", { message: "Failed to join chat" });
       }
     });
 
+    // socket.on('get-services', async ({ freelancerId }) => {
+    //   try {
+    //     const services = await chatModel.getFreelancerServices(freelancerId);
+    //     socket.emit('services-list', { freelancerId, services });
+    //   } catch (error) {
+    //     console.error('Error getting services:', error);
+    //     socket.emit('error', { message: 'Failed to get services' });
+    //   }
+    // });
     // Leave a chat room
     socket.on("leave-chat", async ({ recipientId }) => {
       try {
