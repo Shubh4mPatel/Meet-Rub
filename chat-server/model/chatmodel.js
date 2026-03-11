@@ -47,7 +47,7 @@ const chatModel = {
   // Get or create chat room
   async getOrCreateChatRoom(user1Id, user2Id) {
     // Ensure user1Id is always less than user2Id for consistency
-    const [smallerId, largerId] = [user1Id, user2Id].sort();
+    const [smallerId, largerId] = [user1Id, user2Id].sort((a, b) => a - b);
     const roomId = `${smallerId}-${largerId}`;
 
     const query = `
