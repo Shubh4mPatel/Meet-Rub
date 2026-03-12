@@ -149,7 +149,6 @@ const getMyProjects = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
-    logger.info('Get my projects called by user %s of type %s with status %s', userId, userType, status);
 
     const filterParams = [];
     let paramIndex = 1;
@@ -177,9 +176,9 @@ const getMyProjects = async (req, res, next) => {
 
     const joins = `
 FROM projects p
-JOIN creators c   ON p.creator_id   = c.creator_id
-JOIN freelancer f ON p.freelancer_id = f.freelancer_id
-JOIN services s   ON p.service_id   = s.id`;
+JOIN creators c        ON p.creator_id   = c.creator_id
+JOIN freelancer f      ON p.freelancer_id = f.freelancer_id
+LEFT JOIN services s   ON p.service_id   = s.id`;
 
     const whereClause = `WHERE ${whereClauses.join(' AND ')}`;
 
@@ -197,8 +196,6 @@ ORDER BY p.created_at DESC
 LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
 
     const paginatedParams = [...filterParams, limit, offset];
-
-    logger.info('Executing query: %s with params: %o', dataQuery, paginatedParams);
 
     const [{ rows: projects }, { rows: countResult }] = await Promise.all([
       db.query(dataQuery, paginatedParams),

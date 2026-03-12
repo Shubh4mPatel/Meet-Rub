@@ -80,11 +80,28 @@ const getUserProfile = async (req, res, next) => {
         });
       }
 
-      // Creators don't have profile images, govt ID, or bank details in the creators table
-      // Return appropriate error messages for unsupported types
-      if (type === "govtId" || type === "bankDetails") {
-        logger.warn(`Type ${type} not supported for creator role`);
-        return next(new AppError(`${type} is not available for creators`, 400));
+      if (type === "bankDetails") {
+        logger.info("Fetching: Creator Bank Details");
+        const { rows } = await query(
+          "SELECT bank_account_no, bank_account_holder_name, bank_name, bank_ifsc_code, bank_branch_name FROM creators WHERE user_id=$1",
+          [user.user_id]
+        );
+
+        if (!rows[0]) {
+          logger.warn("No creator bank details found");
+          return next(new AppError("Creator profile not found", 404));
+        }
+
+        return res.status(200).json({
+          status: "success",
+          message: "Bank details fetched successfully",
+          data: rows[0],
+        });
+      }
+
+      if (type === "govtId") {
+        logger.warn(`Type govtId not supported for creator role`);
+        return next(new AppError(`govtId is not available for creators`, 400));
       }
 
       logger.warn("Invalid type parameter for creator:", type);
@@ -290,6 +307,15 @@ const creatorBasicInfoSchema = Joi.object({
   niche: Joi.array().items(Joi.string()).optional()
 });
 
+const creatorBankDetailsSchema = Joi.object({
+  type: Joi.string().valid("bankDetails").required(),
+  bank_account_no: Joi.string().required(),
+  bank_name: Joi.string().required(),
+  bank_ifsc_code: Joi.string().required(),
+  bank_branch_name: Joi.string().required(),
+  bank_account_holder_name: Joi.string().required(),
+});
+
 // ✅ EDIT USER PROFILE
 const editProfile = async (req, res, next) => {
   logger.info("Updating user profile");
@@ -321,8 +347,12 @@ const editProfile = async (req, res, next) => {
           abortEarly: false,
         });
         validationError = error;
-      }
-      if (type === "profileImage") {
+      } else if (type === "bankDetails") {
+        const { error } = creatorBankDetailsSchema.validate(req.body, {
+          abortEarly: false,
+        });
+        validationError = error;
+      } else if (type === "profileImage") {
         const { error } = ProfileImageSchema.validate(req.body, {
           abortEarly: false,
         });
@@ -495,11 +525,48 @@ const editProfile = async (req, res, next) => {
           throw error;
         }
       }
+      if (type === "bankDetails") {
+        logger.info("Updating Creator Bank Details");
+        const {
+          bank_account_no,
+          bank_name,
+          bank_ifsc_code,
+          bank_branch_name,
+          bank_account_holder_name,
+        } = req.body;
+
+        await query("BEGIN");
+        try {
+          const { rows } = await query(
+            `UPDATE creators SET bank_account_no=$1, bank_name=$2, bank_ifsc_code=$3, bank_branch_name=$4, bank_account_holder_name=$5, updated_at=CURRENT_TIMESTAMP
+             WHERE user_id=$6
+             RETURNING bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, bank_account_holder_name`,
+            [bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, bank_account_holder_name, user.user_id]
+          );
+
+          if (!rows[0]) {
+            await query("ROLLBACK");
+            return next(new AppError("Creator profile not found", 404));
+          }
+
+          await query("COMMIT");
+          logger.info("Creator bank details updated successfully");
+          return res.status(200).json({
+            status: "success",
+            message: "Bank details updated successfully",
+            data: rows[0],
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
+        }
+      }
+
       // Creators don't support other types
       logger.warn(`Type ${type} not supported for creator role`);
       return next(
         new AppError(
-          `${type} is not available for creators. Only 'basicInfo' is supported.`,
+          `${type} is not available for creators. Only 'basicInfo', 'profileImage', and 'bankDetails' are supported.`,
           400
         )
       );
