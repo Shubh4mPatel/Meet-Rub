@@ -193,4 +193,89 @@ const getDisputes = async (req, res, next) => {
   }
 };
 
-module.exports = { raiseDispute, getDisputes };
+const getAllDisputes = async (req, res, next) => {
+  try {
+    const { status = '', page = 1, limit = 10 } = req.query;
+
+    const pageNum  = Math.max(1, parseInt(page));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
+    const offset   = (pageNum - 1) * limitNum;
+
+    const params = [];
+    let nextParam = 1;
+
+    const statusFilter = status.trim()
+      ? `WHERE d.status = $${nextParam++}`
+      : '';
+    if (status.trim()) params.push(status.trim());
+
+    const dataQuery = `
+      SELECT
+        d.id              AS dispute_id,
+        d.project_id,
+        d.creator_id,
+        d.freelancer_id,
+        d.reason_of_dispute,
+        d.description,
+        d.admin_note,
+        d.status,
+        d.raised_by,
+        d.created_at,
+        d.updated_at,
+        c.full_name       AS creator_name,
+        c.email           AS creator_email,
+        c.profile_image_url AS creator_avatar,
+        f.freelancer_full_name AS freelancer_name,
+        f.freelancer_email     AS freelancer_email,
+        f.profile_image_url    AS freelancer_avatar,
+        p.amount,
+        p.status          AS project_status,
+        p.end_date,
+        s.service_name
+      FROM disputes d
+      JOIN projects p   ON d.project_id   = p.id
+      JOIN creators c   ON d.creator_id   = c.creator_id
+      JOIN freelancer f ON d.freelancer_id = f.freelancer_id
+      LEFT JOIN services s ON p.service_id = s.id
+      ${statusFilter}
+      ORDER BY d.created_at DESC
+      LIMIT $${nextParam++} OFFSET $${nextParam++}
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM disputes d
+      ${statusFilter}
+    `;
+
+    const paginatedParams = [...params, limitNum, offset];
+
+    const [dataResult, countResult] = await Promise.all([
+      db.query(dataQuery, paginatedParams),
+      db.query(countQuery, params),
+    ]);
+
+    const total      = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / limitNum);
+
+    logger.info(`getAllDisputes: total=${total} status=${status || 'all'} page=${pageNum}`);
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        disputes: dataResult.rows,
+        pagination: {
+          total,
+          totalPages,
+          currentPage: pageNum,
+          limit: limitNum,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('getAllDisputes error:', error);
+    return next(new AppError('Failed to fetch disputes', 500));
+  }
+};
+
+module.exports = { raiseDispute, getDisputes, getAllDisputes };
