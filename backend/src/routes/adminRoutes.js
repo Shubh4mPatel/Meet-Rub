@@ -63,7 +63,7 @@ router.post('/suspend-freelancer', requireRole(['admin']), adminController.suspe
 
 router.get('/disputes', requireRole(['admin']), getAllDisputes);
 
-router.post('/resolve-dispute', requireRole(['admin']), resolveDispute)
+router.patch('/disputes/resolve/:id', requireRole(['admin']), resolveDispute)
 
 
 module.exports = router

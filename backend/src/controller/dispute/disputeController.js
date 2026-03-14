@@ -221,16 +221,16 @@ const resolveDispute = async (req, res, next) => {
     const { id } = req.params;
     const { resolution } = req.body;
 
-    if (!resolution) {
-      return next(new AppError('resolution is required', 400));
+    if (!resolution || typeof resolution !== 'object') {
+      return next(new AppError('resolution is required and must be a JSON object', 400));
     }
 
     const result = await db.query(
       `UPDATE disputes
-       SET status = 'resolved', admin_note = $1, admin_id = $2, updated_at = NOW()
+       SET status = 'resolved', admin_note = $1::jsonb, admin_id = $2, updated_at = NOW()
        WHERE id = $3
        RETURNING id, status, admin_note, admin_id, updated_at`,
-      [resolution, adminId, id]
+      [JSON.stringify(resolution), adminId, id]
     );
 
     if (result.rows.length === 0) {
