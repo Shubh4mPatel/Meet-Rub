@@ -6,6 +6,7 @@ const chatController = (io) => {
     const userId = socket.user.user_id;
     const username = socket.user.name;
     const userRole = socket.user.role;
+    const roleWiseId = socket.user.roleWiseId;
 
     console.log(`User connected: ${username} (${userId})`);
 
@@ -53,6 +54,18 @@ const chatController = (io) => {
         const freelancerUserId = userRole === 'freelancer' ? userId : recipientId;
         const services = await chatModel.getFreelancerServices(freelancerUserId);
         socket.emit('services-list', { freelancerId: freelancerUserId, services });
+
+        // Send projects list to the freelancer
+        if (userRole === 'freelancer') {
+          const projects = await chatModel.getFreelancerProjects(userId, recipientId);
+          socket.emit('projects-list', { projects });
+        }
+
+        // Refresh pending payments for creator — filtered to this freelancer
+        if (userRole === 'creator' && roleWiseId) {
+          const pendingPayments = await chatModel.getPendingPaymentPackages(roleWiseId, recipientId);
+          socket.emit("pending-payments", { payments: pendingPayments });
+        }
       } catch (error) {
         console.error("Error joining chat:", error);
         socket.emit("error", { message: "Failed to join chat" });
@@ -181,6 +194,21 @@ const chatController = (io) => {
           project,
         });
 
+        // Notify the creator to pay — resolve creator's user_id from creator_id
+        const creatorUserId = await chatModel.getCreatorUserIdByCreatorId(project.creator_id);
+        if (creatorUserId) {
+          const creatorSocketId = await redis.get(`user:${creatorUserId}:socketId`);
+          if (creatorSocketId) {
+            io.to(creatorSocketId).emit("payment-required", {
+              project_id: project.id,
+              amount: project.amount,
+              chatRoomId,
+              message: "Package accepted — please complete payment to start the project.",
+              customPackage: updatedPackage,
+            });
+          }
+        }
+
         const recipientOnline = await redis.get(`user:${recipientId}:online`);
 
         if (recipientOnline) {
@@ -189,13 +217,11 @@ const chatController = (io) => {
           );
 
           if (recipientSocketId) {
-            // Check if recipient is in the same chat room
             const recipientActiveRoom = await redis.get(
               `user:${recipientId}:activeRoom`
             );
 
             if (recipientActiveRoom !== chatRoomId) {
-              // Only send notification if recipient is not in the same chat room
               io.to(recipientSocketId).emit("new-message-notification", {
                 senderId: userId,
                 senderUsername: username,
@@ -680,6 +706,7 @@ const chatController = (io) => {
         // Get unread count for this user
         const unreadCount = await chatModel.getUnreadCount(userId);
         socket.emit("unread-count", { count: unreadCount });
+
       } catch (error) {
         console.error("Error on connection setup:", error);
       }

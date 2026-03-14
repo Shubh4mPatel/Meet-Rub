@@ -675,6 +675,91 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       throw error;
     }
   },
+
+  async getPendingPaymentPackages(creatorId, freelancerUserId = null) {
+    const params = [creatorId];
+    const freelancerFilter = freelancerUserId
+      ? `AND f.user_id = $${params.push(freelancerUserId)}`
+      : '';
+
+    const query = `
+      SELECT
+        cp.id              AS package_id,
+        cp.price           AS amount,
+        cp.units,
+        cp.plan_type,
+        cp.package_type,
+        cp.service_type,
+        cp.delivery_date,
+        cp.created_at,
+        cp.room_id         AS chat_room_id,
+        cp.freelancer_id,
+        f.freelancer_full_name AS freelancer_name,
+        f.profile_image_url    AS freelancer_avatar,
+        s.service_name,
+        p.id               AS project_id,
+        p.status           AS project_status
+      FROM custom_packages cp
+      JOIN freelancer f ON cp.freelancer_id = f.freelancer_id
+      LEFT JOIN services s ON cp.service_id = s.id
+      LEFT JOIN LATERAL (
+        SELECT id, status
+        FROM projects
+        WHERE creator_id = cp.creator_id
+          AND freelancer_id = cp.freelancer_id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) p ON true
+      WHERE cp.creator_id = $1
+        AND cp.status = 'accepted'
+        AND cp.created_at >= NOW() - INTERVAL '7 days'
+        ${freelancerFilter}
+      ORDER BY cp.created_at DESC
+    `;
+    const result = await pool.query(query, params);
+    return result.rows;
+  },
+
+  async getCreatorUserIdByCreatorId(creatorId) {
+    const result = await pool.query(
+      `SELECT user_id FROM creators WHERE creator_id = $1`,
+      [creatorId]
+    );
+    return result.rows[0]?.user_id ?? null;
+  },
+
+  // Get projects between a freelancer and creator
+  async getFreelancerProjects(freelancerUserId, creatorUserId) {
+    const query = `
+      SELECT
+        p.id,
+        p.status,
+        p.amount,
+        p.number_of_units,
+        p.end_date,
+        p.created_at,
+        p.updated_at,
+        p.service_id,
+        s.service_name,
+        c.user_name AS creator_name,
+        cr.profile_image_url AS creator_avatar
+      FROM projects p
+      JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+      JOIN creators cr ON p.creator_id = cr.creator_id
+      JOIN users c ON cr.user_id = c.id
+      LEFT JOIN services s ON p.service_id = s.id
+      WHERE f.user_id = $1
+        AND cr.user_id = $2
+      ORDER BY p.created_at DESC
+    `;
+    try {
+      const result = await pool.query(query, [freelancerUserId, creatorUserId]);
+      return result.rows;
+    } catch (error) {
+      console.error("Error getting freelancer projects:", error);
+      throw error;
+    }
+  },
 };
 
 /// we are storing date time in the custome package and in the project we have only end date col so add date and time and fill that col and also add no of units per service and also we have to ask question about the hire feature will freelancer have to accept that what will happen when i heir a freelancer
