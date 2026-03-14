@@ -170,10 +170,15 @@ const getAllDisputes = async (req, res, next) => {
         c.profile_image_url        AS creator_avatar,
         f.freelancer_full_name     AS freelancer_name,
         f.freelancer_email         AS freelancer_email,
-        f.profile_image_url        AS freelancer_avatar
+        f.profile_image_url        AS freelancer_avatar,
+        cr.room_id                 AS chat_room_id
       FROM disputes d
       JOIN creators c   ON d.creator_id   = c.creator_id
       JOIN freelancer f ON d.freelancer_id = f.freelancer_id
+      LEFT JOIN chat_rooms cr ON (
+        (cr.user1_id = c.user_id AND cr.user2_id = f.user_id) OR
+        (cr.user1_id = f.user_id AND cr.user2_id = c.user_id)
+      )
       ${statusFilter}
       ORDER BY d.created_at DESC
       LIMIT $${nextParam++} OFFSET $${nextParam++}
