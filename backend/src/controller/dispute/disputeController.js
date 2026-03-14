@@ -64,13 +64,8 @@ const getDisputes = async (req, res, next) => {
       ? (role === 'freelancer' ? 'creator' : 'freelancer')
       : role;
 
-    const myCol          = role === 'freelancer' ? 'd.freelancer_id' : 'd.creator_id';
-    const otherTable     = raisedByFilter === 'creator' ? 'creators' : 'freelancer';
-    const otherIdCol     = raisedByFilter === 'creator' ? 'c2.creator_id'         : 'f2.freelancer_id';
-    const otherNameCol   = raisedByFilter === 'creator' ? 'c2.full_name'          : 'f2.freelancer_full_name';
-    const otherAvatarCol = raisedByFilter === 'creator' ? 'c2.profile_image_url'  : 'f2.profile_image_url';
-    const otherAlias     = raisedByFilter === 'creator' ? 'c2' : 'f2';
-    const otherJoinId    = raisedByFilter === 'creator' ? 'd.creator_id'          : 'd.freelancer_id';
+    const myCol        = role === 'freelancer' ? 'd.freelancer_id' : 'd.creator_id';
+    const searchNameCol = raisedByFilter === 'creator' ? 'c.full_name' : 'f.freelancer_full_name';
 
     const params = [roleWiseId, raisedByFilter];
     let nextParam = 3;
@@ -78,22 +73,25 @@ const getDisputes = async (req, res, next) => {
     const statusFilter = status.trim() ? `AND d.status = $${nextParam++}` : '';
     if (status.trim()) params.push(status.trim());
 
-    const searchFilter = search.trim() ? `AND ${otherNameCol} ILIKE $${nextParam++}` : '';
+    const searchFilter = search.trim() ? `AND ${searchNameCol} ILIKE $${nextParam++}` : '';
     if (search.trim()) params.push(`%${search.trim()}%`);
 
     const dataQuery = `
       SELECT
-        d.id              AS dispute_id,
+        d.id                       AS dispute_id,
         d.reason_of_dispute,
         d.description,
         d.admin_note,
         d.created_at,
         d.status,
         d.raised_by,
-        ${otherNameCol}   AS other_party_name,
-        ${otherAvatarCol} AS other_party_avatar
+        c.full_name                AS creator_name,
+        c.profile_image_url        AS creator_avatar,
+        f.freelancer_full_name     AS freelancer_name,
+        f.profile_image_url        AS freelancer_avatar
       FROM disputes d
-      JOIN ${otherTable} ${otherAlias} ON ${otherJoinId} = ${otherIdCol}
+      JOIN creators c   ON d.creator_id   = c.creator_id
+      JOIN freelancer f ON d.freelancer_id = f.freelancer_id
       WHERE ${myCol} = $1
         AND d.raised_by = $2
         ${statusFilter}
@@ -105,7 +103,8 @@ const getDisputes = async (req, res, next) => {
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM disputes d
-      JOIN ${otherTable} ${otherAlias} ON ${otherJoinId} = ${otherIdCol}
+      JOIN creators c   ON d.creator_id   = c.creator_id
+      JOIN freelancer f ON d.freelancer_id = f.freelancer_id
       WHERE ${myCol} = $1
         AND d.raised_by = $2
         ${statusFilter}
