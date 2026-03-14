@@ -217,7 +217,7 @@ const getAllDisputes = async (req, res, next) => {
 
 const resolveDispute = async (req, res, next) => {
   try {
-    const adminId = req.user.user_id;
+    const adminId = req.user.roleWiseId;
     const { id } = req.params;
     const { resolution } = req.body;
 
