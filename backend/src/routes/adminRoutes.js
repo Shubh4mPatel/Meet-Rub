@@ -3,7 +3,7 @@ const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin 
 const adminController = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches, AssignFreelancerToRequest } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
-const { getAllDisputes } = require('../controller/dispute/disputeController')
+const { getAllDisputes, resolveDispute } = require('../controller/dispute/disputeController')
 const { getAllCreatorProfiles, getCreatorById, getFreelancerForAdmin, getFreeLancerByIdForAdmin, getFreelancerForSuggestion, getFreelancerForKYCApproval } = require('../controller/users/userProfileController')
 const router = expess.Router()
 
@@ -62,6 +62,8 @@ router.post('/reject-kyc/', requireRole(['admin']), adminController.rejectKYCByA
 router.post('/suspend-freelancer', requireRole(['admin']), adminController.suspendFreelancerByAdmin)
 
 router.get('/disputes', requireRole(['admin']), getAllDisputes);
+
+router.post('/resolve-dispute', requireRole(['admin']), resolveDispute)
 
 
 module.exports = router

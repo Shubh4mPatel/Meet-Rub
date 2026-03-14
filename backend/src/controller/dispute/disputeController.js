@@ -216,6 +216,38 @@ const getAllDisputes = async (req, res, next) => {
 };
 
 const resolveDispute = async (req, res, next) => {
+  try {
+    const adminId = req.user.user_id;
+    const { id } = req.params;
+    const { resolution } = req.body;
 
-}
-module.exports = { raiseDispute, getDisputes, getAllDisputes };
+    if (!resolution) {
+      return next(new AppError('resolution is required', 400));
+    }
+
+    const result = await db.query(
+      `UPDATE disputes
+       SET status = 'resolved', admin_note = $1, admin_id = $2, updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, status, admin_note, admin_id, updated_at`,
+      [resolution, adminId, id]
+    );
+
+    if (result.rows.length === 0) {
+      return next(new AppError('Dispute not found', 404));
+    }
+
+    logger.info(`Dispute ${id} resolved by admin ${adminId}`);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Dispute resolved successfully',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    logger.error('resolveDispute error:', error);
+    return next(new AppError('Failed to resolve dispute', 500));
+  }
+};
+
+module.exports = { raiseDispute, getDisputes, getAllDisputes, resolveDispute };
