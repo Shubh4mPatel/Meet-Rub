@@ -995,7 +995,7 @@ const getServicesForAdmin = async (req, res, next) => {
         params
       ),
     ]);
-
+    logger.debug(`Admin service options query executed. Rows returned: ${dataResult.rows.length}`,dataResult.rows);
     const total      = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
 
@@ -1006,14 +1006,8 @@ const getServicesForAdmin = async (req, res, next) => {
           service.images = await Promise.all(
             service.images.map(async (imgPath) => {
               if (!imgPath) return null;
-              const idx = imgPath.indexOf('/');
-              if (idx === -1) return null;
               try {
-                return await createPresignedUrl(
-                  imgPath.substring(0, idx),
-                  imgPath.substring(idx + 1),
-                  expirySeconds
-                );
+                return await createPresignedUrl('meet-rub-assets', imgPath, expirySeconds);
               } catch {
                 return null;
               }
@@ -1023,8 +1017,8 @@ const getServicesForAdmin = async (req, res, next) => {
         return service;
       })
     );
-
-    logger.info(`getServicesForAdmin: total=${total} page=${page}`);
+    
+    logger.info(`getServicesForAdmin: total=${total} page=${page}`,services);
     return res.status(200).json({
       status: 'success',
       data: {
@@ -1054,6 +1048,11 @@ const editServiceForAdmin = async (req, res, next) => {
     const existing = await query(`SELECT id FROM service_options WHERE id = $1`, [id]);
     if (existing.rows.length === 0) return next(new AppError("Service not found", 404));
 
+    // If every image sent back is already a presigned URL (unchanged), don't overwrite DB images
+    const PRESIGNED_PREFIX = 'https://staging.meetrub.com/meet-rub-assets';
+    const isPresignedUrl = (val) => typeof val === 'string' && val.startsWith(PRESIGNED_PREFIX);
+    const imagesValue = Array.isArray(images) && !images.every(isPresignedUrl) ? images : null;
+
     const { rows } = await query(
       `UPDATE service_options
        SET service_name        = COALESCE($1, service_name),
@@ -1069,7 +1068,7 @@ const editServiceForAdmin = async (req, res, next) => {
         serviceTitle          || null,
         serviceDescription    || null,
         showOnHomePage != null ? (showOnHomePage === true || showOnHomePage === 'true') : null,
-        Array.isArray(images) ? images : null,
+        imagesValue,
         id,
       ]
     );
@@ -1080,10 +1079,8 @@ const editServiceForAdmin = async (req, res, next) => {
       service.images = await Promise.all(
         service.images.map(async (imgPath) => {
           if (!imgPath) return null;
-          const idx = imgPath.indexOf('/');
-          if (idx === -1) return null;
           try {
-            return await createPresignedUrl(imgPath.substring(0, idx), imgPath.substring(idx + 1), expirySeconds);
+            return await createPresignedUrl('meet-rub-assets', imgPath, expirySeconds);
           } catch { return null; }
         })
       );

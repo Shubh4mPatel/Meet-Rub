@@ -2,6 +2,9 @@
 const { createPresignedPost } = require('@aws-sdk/s3-presigned-post');
 const { S3Client } = require('@aws-sdk/client-s3');
 const { UPLOAD_CONFIGS } = require('../../../config/uploadConfig');
+const { createPresignedUrl } = require('../../../utils/helper');
+
+const expirySeconds = 4 * 60 * 60; // 4 hours
 
 // ─── MinIO S3 Client ─────────────────────────────────────────────────────────
 const s3Client = new S3Client({
@@ -31,17 +34,19 @@ const generatePresignedPost = async (slot, uploadType) => {
     Key: blobKey,
     Conditions: [
       ['content-length-range', 0, slot.maxSizeBytes],
-      ['in', '$Content-Type', slot.allowedTypes],
+      ['starts-with', '$Content-Type', ''],
       ['starts-with', '$key', slot.keyPrefix],
     ],
     Fields: {},
     Expires: 600,
   });
 
+  const fileUrl = await createPresignedUrl(BUCKET, blobKey, expirySeconds);
+
   return {
     uploadUrl: url,
     fields,
-    // fileUrl: `${PUBLIC_BASE_URL}/${blobKey}`,
+    fileUrl,
     blobKey,
     allowedTypes: slot.allowedTypes,
     maxSizeBytes: slot.maxSizeBytes,
