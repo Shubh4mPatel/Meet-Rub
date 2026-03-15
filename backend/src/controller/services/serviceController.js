@@ -907,6 +907,7 @@ const AssignFreelancerToRequest = async (req, res, next) => {
   logger.info("Admin assigning freelancers to service request");
   try {
     const { requestId, freelancerIds, adminNotes } = req.body;
+    adminId = req.user?.roleWiseId;
 
     // Validation
     if (!requestId) {
@@ -944,15 +945,15 @@ const AssignFreelancerToRequest = async (req, res, next) => {
     // Insert or update suggestions using UPSERT
     const { rows } = await query(
       `INSERT INTO service_request_suggestions
-       (request_id, freelancer_id, admin_notes, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5)
+       (request_id, freelancer_id, admin_notes,admin_id ,created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5,$6)
        ON CONFLICT (request_id)
        DO UPDATE SET
          freelancer_id = $2,
          admin_notes = $3,
-         updated_at = $5
+         updated_at = $6
        RETURNING *`,
-      [requestId, freelancerIds, adminNotes || null, new Date().toISOString(), new Date().toISOString()]
+      [requestId, freelancerIds, adminNotes || null, adminId ,new Date().toISOString(), new Date().toISOString()]
     );
 
     logger.info(`Freelancers assigned to request ${requestId} successfully`);
