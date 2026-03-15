@@ -230,6 +230,23 @@ const resolveDispute = async (req, res, next) => {
       return next(new AppError('resolution is required and must be a JSON object', 400));
     }
 
+    const existing = await db.query(
+      `SELECT id, status FROM disputes WHERE id = $1`,
+      [id]
+    );
+
+    if (existing.rows.length === 0) {
+      return next(new AppError('Dispute not found', 404));
+    }
+
+    if (existing.rows[0].status === 'resolved') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Dispute is already resolved',
+        data: existing.rows[0],
+      });
+    }
+
     const result = await db.query(
       `UPDATE disputes
        SET status = 'resolved', admin_note = $1::jsonb, admin_id = $2, updated_at = NOW()
