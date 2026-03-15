@@ -3,6 +3,7 @@ const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin 
 const adminController = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches, AssignFreelancerToRequest, getServicesForAdmin, editServiceForAdmin, deleteServiceForAdmin } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
+const upload = require('../../config/multer')
 const { getAllDisputes, resolveDispute } = require('../controller/dispute/disputeController')
 const { getAllCreatorProfiles, getCreatorById, getFreelancerForAdmin, getFreeLancerByIdForAdmin, getFreelancerForSuggestion, getFreelancerForKYCApproval } = require('../controller/users/userProfileController')
 const router = expess.Router()
@@ -14,7 +15,11 @@ router.post('/userApproval', approveProfile)
 router.get('/getServices', getServices)
 
 
-router.post('/addServices', addServices)
+router.post('/addServices', upload.fields([
+  { name: 'gallery_1', maxCount: 1 },
+  { name: 'gallery_2', maxCount: 1 },
+  { name: 'gallery_3', maxCount: 1 },
+]), addServices)
 
 
 router.get('/service-requests', getUserServiceRequestsToAdmin)
@@ -66,7 +71,13 @@ router.get('/disputes', requireRole(['admin']), getAllDisputes);
 router.patch('/disputes/resolve/:id', requireRole(['admin']), resolveDispute)
 
 router.get('/services-list', requireRole(['admin']), getServicesForAdmin);
-router.patch('/services/:id', requireRole(['admin']), editServiceForAdmin);
+
+router.patch('/services/:id', requireRole(['admin']), upload.fields([
+  { name: 'gallery_1', maxCount: 1 },
+  { name: 'gallery_2', maxCount: 1 },
+  { name: 'gallery_3', maxCount: 1 },
+]), editServiceForAdmin);
+
 router.delete('/services/:id', requireRole(['admin']), deleteServiceForAdmin);
 
 module.exports = router

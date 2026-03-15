@@ -116,12 +116,32 @@ const addNiches = async (req, res, next) => {
 // ✅ Add available services by Admin
 const addServices = async (req, res, next) => {
   logger.info("Adding services by admin");
+  const BUCKET_NAME = "meet-rub-assets";
+  const uploadedObjects = [];
+
   try {
-    const { serviceName, serviceTitle, serviceDescription, showOnHomePage, images } = req.body;
+    const { serviceName, serviceTitle, serviceDescription, showOnHomePage } = req.body;
     const admin = req.user?.roleWiseId;
 
     if (!serviceName || typeof serviceName !== 'string' || !serviceName.trim()) {
       return next(new AppError("serviceName is required", 400));
+    }
+
+    // Validate all 3 gallery images are provided
+    const imageSlots = ['gallery_1', 'gallery_2', 'gallery_3'];
+    const missingSlots = imageSlots.filter(slot => !req.files?.[slot]?.[0]);
+    if (missingSlots.length > 0) {
+      return next(new AppError(`All 3 gallery images are required (missing: ${missingSlots.join(', ')})`, 400));
+    }
+
+    // Upload gallery images to MinIO
+    const imagePaths = [];
+    for (const slot of imageSlots) {
+      const file = req.files[slot][0];
+      const objectName = `services/gallery/service_images/${Date.now()}-${slot}-${Math.random().toString(36).slice(2, 8)}`;
+      await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, { 'Content-Type': file.mimetype });
+      uploadedObjects.push(objectName);
+      imagePaths.push(objectName);
     }
 
     const { rows } = await query(
@@ -134,7 +154,7 @@ const addServices = async (req, res, next) => {
         serviceTitle || null,
         serviceDescription || null,
         showOnHomePage === true || showOnHomePage === 'true',
-        Array.isArray(images) ? images : [],
+        imagePaths,
         admin,
       ]
     );
@@ -146,6 +166,10 @@ const addServices = async (req, res, next) => {
       data: rows[0],
     });
   } catch (error) {
+    // Clean up any uploaded files on failure
+    for (const obj of uploadedObjects) {
+      await minioClient.removeObject(BUCKET_NAME, obj).catch(() => {});
+    }
     logger.error("Failed to add services:", error);
     return next(new AppError("Failed to add services", 500));
   }
@@ -1039,19 +1063,39 @@ const getServicesForAdmin = async (req, res, next) => {
 
 const editServiceForAdmin = async (req, res, next) => {
   logger.info("Admin editing service option");
+  const BUCKET_NAME = "meet-rub-assets";
+  const uploadedObjects = [];
+
   try {
     const { id } = req.params;
-    const { serviceName, serviceTitle, serviceDescription, showOnHomePage, images } = req.body;
+    const { serviceName, serviceTitle, serviceDescription, showOnHomePage } = req.body;
 
     if (!id) return next(new AppError("Service ID is required", 400));
 
-    const existing = await query(`SELECT id FROM service_options WHERE id = $1`, [id]);
+    const existing = await query(`SELECT * FROM service_options WHERE id = $1`, [id]);
     if (existing.rows.length === 0) return next(new AppError("Service not found", 404));
 
-    // If every image sent back is already a presigned URL (unchanged), don't overwrite DB images
-    const PRESIGNED_PREFIX = 'https://staging.meetrub.com/meet-rub-assets';
-    const isPresignedUrl = (val) => typeof val === 'string' && val.startsWith(PRESIGNED_PREFIX);
-    const imagesValue = Array.isArray(images) && !images.every(isPresignedUrl) ? images : null;
+    const existingImages = existing.rows[0].images || [];
+
+    // For each slot: upload new file if provided, otherwise keep existing DB path
+    const imageSlots = ['gallery_1', 'gallery_2', 'gallery_3'];
+    const finalImages = [];
+    const objectsToDelete = [];
+
+    for (let i = 0; i < imageSlots.length; i++) {
+      const slot = imageSlots[i];
+      const file = req.files?.[slot]?.[0];
+      if (file) {
+        const objectName = `services/gallery/service_images/${Date.now()}-${slot}-${Math.random().toString(36).slice(2, 8)}`;
+        await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, { 'Content-Type': file.mimetype });
+        uploadedObjects.push(objectName);
+        finalImages.push(objectName);
+        // Queue old image for deletion
+        if (existingImages[i]) objectsToDelete.push(existingImages[i]);
+      } else {
+        finalImages.push(existingImages[i] || null);
+      }
+    }
 
     const { rows } = await query(
       `UPDATE service_options
@@ -1059,29 +1103,33 @@ const editServiceForAdmin = async (req, res, next) => {
            service_title       = COALESCE($2, service_title),
            service_description = COALESCE($3, service_description),
            show_on_home_page   = COALESCE($4, show_on_home_page),
-           images              = COALESCE($5, images),
+           images              = $5,
            updated_at          = NOW()
        WHERE id = $6
        RETURNING *`,
       [
-        serviceName?.trim()   || null,
-        serviceTitle          || null,
-        serviceDescription    || null,
+        serviceName?.trim() || null,
+        serviceTitle        || null,
+        serviceDescription  || null,
         showOnHomePage != null ? (showOnHomePage === true || showOnHomePage === 'true') : null,
-        imagesValue,
+        finalImages.filter(Boolean),
         id,
       ]
     );
 
-    // Generate presigned URLs for images
+    // Delete old MinIO objects after successful DB update
+    for (const obj of objectsToDelete) {
+      await minioClient.removeObject(BUCKET_NAME, obj).catch(() => {});
+    }
+
+    // Generate presigned URLs for response
     const service = rows[0];
     if (Array.isArray(service.images) && service.images.length > 0) {
       service.images = await Promise.all(
         service.images.map(async (imgPath) => {
           if (!imgPath) return null;
-          try {
-            return await createPresignedUrl('meet-rub-assets', imgPath, expirySeconds);
-          } catch { return null; }
+          try { return await createPresignedUrl(BUCKET_NAME, imgPath, expirySeconds); }
+          catch { return null; }
         })
       );
     }
@@ -1089,6 +1137,10 @@ const editServiceForAdmin = async (req, res, next) => {
     logger.info(`Service ${id} updated by admin`);
     return res.status(200).json({ status: 'success', message: 'Service updated successfully', data: service });
   } catch (error) {
+    // Clean up any newly uploaded files on failure
+    for (const obj of uploadedObjects) {
+      await minioClient.removeObject(BUCKET_NAME, obj).catch(() => {});
+    }
     logger.error('editServiceForAdmin error:', error);
     return next(new AppError('Failed to update service', 500));
   }
