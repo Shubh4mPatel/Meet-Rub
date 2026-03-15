@@ -3,6 +3,7 @@ const AppError = require("../../../utils/appError");
 const { logger } = require("../../../utils/logger");
 const { minioClient } = require("../../../config/minio");
 const { createPresignedUrl } = require("../../../utils/helper");
+const { log } = require("node:console");
 
 const expirySeconds = 4 * 60 * 60; // 4 hours
 
@@ -643,6 +644,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
   try {
     const user = req.user;
     const requestId = req.params.requestId;
+    logger.info(`Request ID: ${requestId}`);  
     const creator_id = user?.roleWiseId;
 
     // Get the service request details including desired_service
@@ -697,26 +699,23 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     const suggestedFreelancerIds = suggestionRows[0].freelancer_id;
     logger.debug(`Total suggested freelancer IDs: ${suggestedFreelancerIds.length}`);
 
-    // Build the query with search filter and service match
+    // Build the query — return all suggested freelancers by ID only
     let queryText = `
-      SELECT 
-        f.freelancer_id, 
-        f.freelancer_full_name, 
-        f.profile_image_url, 
+      SELECT
+        f.freelancer_id,
+        f.freelancer_full_name,
+        f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
         f.profile_title,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
       FROM freelancer f
-      INNER JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       WHERE f.freelancer_id = ANY($2::int[])
-        AND s.service_name = $3
-        AND s.is_active = true
     `;
 
-    const queryParams = [creator_id, suggestedFreelancerIds, desiredService];
-    let paramCount = 4;
+    const queryParams = [creator_id, suggestedFreelancerIds];
+    let paramCount = 3;
 
     // Add search condition
     if (searchTerm) {
