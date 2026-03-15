@@ -1061,6 +1061,39 @@ const getServicesForAdmin = async (req, res, next) => {
   }
 };
 
+// ✅ Public - Get services shown on home page
+const getHomePageServices = async (req, res, next) => {
+  logger.info("Fetching home page services");
+  try {
+    const { rows } = await query(
+      `SELECT id, service_name, service_title, service_description, images
+       FROM service_options
+       WHERE show_on_home_page = true
+       ORDER BY updated_at DESC`
+    );
+
+    const services = await Promise.all(
+      rows.map(async (service) => {
+        if (Array.isArray(service.images) && service.images.length > 0) {
+          service.images = await Promise.all(
+            service.images.map(async (imgPath) => {
+              if (!imgPath) return null;
+              try { return await createPresignedUrl('meet-rub-assets', imgPath, expirySeconds); }
+              catch { return null; }
+            })
+          );
+        }
+        return service;
+      })
+    );
+
+    return res.status(200).json({ status: 'success', data: services });
+  } catch (error) {
+    logger.error('getHomePageServices error:', error);
+    return next(new AppError('Failed to fetch home page services', 500));
+  }
+};
+
 const editServiceForAdmin = async (req, res, next) => {
   logger.info("Admin editing service option");
   const BUCKET_NAME = "meet-rub-assets";
@@ -1069,7 +1102,7 @@ const editServiceForAdmin = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { serviceName, serviceTitle, serviceDescription, showOnHomePage } = req.body;
-
+    
     if (!id) return next(new AppError("Service ID is required", 400));
 
     const existing = await query(`SELECT * FROM service_options WHERE id = $1`, [id]);
@@ -1172,6 +1205,7 @@ module.exports = {
   getServices,
   addServices,
   getServicesForAdmin,
+  getHomePageServices,
   editServiceForAdmin,
   deleteServiceForAdmin,
   deleteServiceByFreelancer,

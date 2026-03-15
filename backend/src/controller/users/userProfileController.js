@@ -2515,58 +2515,79 @@ const getFreelancerForAdmin = async (req, res, next) => {
     const startDate = req.query.startDate || null;
     const endDate = req.query.endDate || null;
 
-    // Build WHERE clause dynamically
-    const conditions = [];
+    // Service type filter
+    const serviceTypes = req.query.serviceType
+      ? Array.isArray(req.query.serviceType)
+        ? req.query.serviceType
+        : [req.query.serviceType]
+      : [];
+
     const queryParams = [];
     let paramIndex = 1;
 
+    const conditions = [`f.verification_status = 'VERIFIED'`];
+
     if (search) {
-      conditions.push(`freelancer_full_name ILIKE $${paramIndex}`);
+      conditions.push(`f.freelancer_full_name ILIKE $${paramIndex}`);
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
 
     if (startDate) {
-      conditions.push(`created_at >= $${paramIndex}`);
+      conditions.push(`f.created_at >= $${paramIndex}`);
       queryParams.push(startDate);
       paramIndex++;
     }
 
     if (endDate) {
-      conditions.push(`created_at <= $${paramIndex}`);
+      conditions.push(`f.created_at <= $${paramIndex}`);
       queryParams.push(endDate);
       paramIndex++;
     }
 
-    const whereClause = conditions.length > 0 ? ` AND ${conditions.join(' AND ')}` : '';
+    if (serviceTypes.length > 0) {
+      const placeholders = serviceTypes.map((_, i) => `$${paramIndex + i}`).join(', ');
+      conditions.push(`s.service_name IN (${placeholders})`);
+      queryParams.push(...serviceTypes);
+      paramIndex += serviceTypes.length;
+    }
 
-    // Query to get freelancers with only required fields
+    const whereClause = conditions.join(' AND ');
+
     const queryText = `
       SELECT
-        freelancer_id,
-        user_id,
-        profile_image_url,
-        freelancer_full_name,
-        phone_number,
-        freelancer_email,
-        created_at as joining_date,
-        gov_id_number,
-        verification_status,
-        rating,
-        worked_with
-      FROM freelancer
-      WHERE verification_status = 'VERIFIED'
-      ${whereClause}
-      ORDER BY created_at DESC
+        f.freelancer_id,
+        f.user_id,
+        f.profile_image_url,
+        f.freelancer_full_name,
+        f.phone_number,
+        f.freelancer_email,
+        f.created_at as joining_date,
+        f.gov_id_number,
+        f.verification_status,
+        f.rating,
+        f.worked_with
+        ${serviceTypes.length > 0 ? ', MIN(s.service_name) as matched_service_title, MIN(s.thumbnail_file) as service_banner' : ''}
+      FROM freelancer f
+      ${serviceTypes.length > 0 ? 'LEFT JOIN services s ON f.freelancer_id = s.freelancer_id' : ''}
+      WHERE ${whereClause}
+      ${serviceTypes.length > 0 ? 'GROUP BY f.freelancer_id, f.user_id, f.profile_image_url, f.freelancer_full_name, f.phone_number, f.freelancer_email, f.created_at, f.gov_id_number, f.verification_status, f.rating, f.worked_with' : ''}
+      ORDER BY f.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
-    const { rows: freelancers } = await query(queryText, [...queryParams, limit, offset]);
-    logger.info("Freelancers Query Text:", queryText);
-    logger.info("Freelancers Query Params:", [...queryParams, limit, offset]);
-    // Get total count for pagination 
-    const countQueryText = `SELECT COUNT(*) as total FROM freelancer  WHERE verification_status = 'VERIFIED' ${whereClause}`;
-    const { rows: countResult } = await query(countQueryText, queryParams);
+    const countQueryText = `
+      SELECT COUNT(DISTINCT f.freelancer_id) as total
+      FROM freelancer f
+      ${serviceTypes.length > 0 ? 'LEFT JOIN services s ON f.freelancer_id = s.freelancer_id' : ''}
+      WHERE ${whereClause}
+    `;
+
+    const [{ rows: freelancers }, { rows: countResult }] = await Promise.all([
+      query(queryText, [...queryParams, limit, offset]),
+      query(countQueryText, queryParams),
+    ]);
+
     const totalCount = parseInt(countResult[0].total);
     const totalPages = Math.ceil(totalCount / limit);
 
@@ -2574,22 +2595,14 @@ const getFreelancerForAdmin = async (req, res, next) => {
 
     const freelancersWithSignedUrls = await Promise.all(
       freelancers.map(async (freelancer) => {
-        // Generate presigned URL for profile image if it exists
         if (freelancer.profile_image_url) {
           try {
-            const profileImagePath = freelancer.profile_image_url;
-            const firstSlashIndex = profileImagePath.indexOf("/");
+            const firstSlashIndex = freelancer.profile_image_url.indexOf("/");
             if (firstSlashIndex !== -1) {
-              const bucketName = profileImagePath.substring(0, firstSlashIndex);
-              const objectName = profileImagePath.substring(firstSlashIndex + 1);
-              const signedUrl = await createPresignedUrl(
-                bucketName,
-                objectName,
-                expirySeconds
-              );
-              freelancer.profile_image_url = signedUrl;
+              const bucketName = freelancer.profile_image_url.substring(0, firstSlashIndex);
+              const objectName = freelancer.profile_image_url.substring(firstSlashIndex + 1);
+              freelancer.profile_image_url = await createPresignedUrl(bucketName, objectName, expirySeconds);
             } else {
-              logger.warn(`Invalid profile image URL format: ${profileImagePath}`);
               freelancer.profile_image_url = null;
             }
           } catch (error) {
@@ -2597,6 +2610,18 @@ const getFreelancerForAdmin = async (req, res, next) => {
             freelancer.profile_image_url = null;
           }
         }
+
+        if (serviceTypes.length > 0 && freelancer.service_banner) {
+          const parts = freelancer.service_banner.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
+          try {
+            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
+          } catch {
+            freelancer.service_banner = null;
+          }
+        }
+
         return freelancer;
       })
     );
@@ -2937,7 +2962,9 @@ const getFreelancerForSuggestion = async (req, res, next) => {
         f.rating,
         f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
-        MIN(s.service_price) as lowest_price
+        MIN(s.service_price) as lowest_price,
+        MIN(s.service_name) as matched_service_title,
+        MIN(s.thumbnail_file) as service_banner
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
@@ -3090,6 +3117,23 @@ const getFreelancerForSuggestion = async (req, res, next) => {
             );
             freelancer.freelancer_thumbnail_image = null;
           }
+        }
+
+        // When service filter is active, include matched service title and banner
+        if (serviceTypes.length > 0) {
+          if (freelancer.service_banner) {
+            const parts = freelancer.service_banner.split("/");
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join("/");
+            try {
+              freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
+            } catch {
+              freelancer.service_banner = null;
+            }
+          }
+        } else {
+          delete freelancer.matched_service_title;
+          delete freelancer.service_banner;
         }
 
         return freelancer;
@@ -3312,7 +3356,9 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
-        CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
+        CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist,
+        MIN(s.service_name) as matched_service_title,
+        MIN(s.thumbnail_file) as service_banner
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
@@ -3462,6 +3508,23 @@ const getAllfreelancersForcreator = async (req, res, next) => {
             );
             freelancer.freelancer_thumbnail_image = null;
           }
+        }
+
+        // When service filter is active, include matched service title and banner
+        if (serviceTypes.length > 0) {
+          if (freelancer.service_banner) {
+            const parts = freelancer.service_banner.split("/");
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join("/");
+            try {
+              freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
+            } catch {
+              freelancer.service_banner = null;
+            }
+          }
+        } else {
+          delete freelancer.matched_service_title;
+          delete freelancer.service_banner;
         }
 
         return freelancer;
