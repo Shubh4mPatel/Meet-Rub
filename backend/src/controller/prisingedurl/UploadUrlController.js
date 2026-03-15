@@ -40,7 +40,7 @@ const generatePresignedPost = async (slot, uploadType) => {
   return {
     uploadUrl: url,
     fields,
-    fileUrl: `${PUBLIC_BASE_URL}/${blobKey}`,
+    // fileUrl: `${PUBLIC_BASE_URL}/${blobKey}`,
     blobKey,
     allowedTypes: slot.allowedTypes,
     maxSizeBytes: slot.maxSizeBytes,
