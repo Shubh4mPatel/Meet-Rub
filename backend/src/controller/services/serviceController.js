@@ -3,7 +3,7 @@ const AppError = require("../../../utils/appError");
 const { logger } = require("../../../utils/logger");
 const { minioClient } = require("../../../config/minio");
 const { createPresignedUrl } = require("../../../utils/helper");
-const { log } = require("node:console");
+// const { log } = require("node:console");
 
 const expirySeconds = 4 * 60 * 60; // 4 hours
 
@@ -968,11 +968,85 @@ const AssignFreelancerToRequest = async (req, res, next) => {
   }
 };
 
+const getServicesForAdmin = async (req, res, next) => {
+  logger.info("Admin fetching service options");
+  try {
+    const page   = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+    const offset = (page - 1) * limit;
+    const search = req.query.search?.trim() || '';
 
+    const params = [];
+    let nextParam = 1;
+    const searchFilter = search ? `WHERE service_name ILIKE $${nextParam++}` : '';
+    if (search) params.push(`%${search}%`);
+
+    const [dataResult, countResult] = await Promise.all([
+      query(
+        `SELECT id, service_name, service_title, service_description, show_on_home_page, images, created_at, updated_at
+         FROM service_options
+         ${searchFilter}
+         ORDER BY service_name ASC
+         LIMIT $${nextParam} OFFSET $${nextParam + 1}`,
+        [...params, limit, offset]
+      ),
+      query(
+        `SELECT COUNT(*) AS total FROM service_options ${searchFilter}`,
+        params
+      ),
+    ]);
+
+    const total      = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / limit);
+
+    // Generate presigned URLs for each image in the images array
+    const services = await Promise.all(
+      dataResult.rows.map(async (service) => {
+        if (Array.isArray(service.images) && service.images.length > 0) {
+          service.images = await Promise.all(
+            service.images.map(async (imgPath) => {
+              if (!imgPath) return null;
+              const idx = imgPath.indexOf('/');
+              if (idx === -1) return null;
+              try {
+                return await createPresignedUrl(
+                  imgPath.substring(0, idx),
+                  imgPath.substring(idx + 1),
+                  expirySeconds
+                );
+              } catch {
+                return null;
+              }
+            })
+          );
+        }
+        return service;
+      })
+    );
+
+    logger.info(`getServicesForAdmin: total=${total} page=${page}`);
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        services,
+        pagination: {
+          total,
+          totalPages,
+          currentPage: page,
+          limit,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('getServicesForAdmin error:', error);
+    return next(new AppError('Failed to fetch services', 500));
+  }
+};
 
 module.exports = {
   getServices,
   addServices,
+  getServicesForAdmin,
   deleteServiceByFreelancer,
   updateServiceByFreelancer,
   addServicesByFreelancer,
