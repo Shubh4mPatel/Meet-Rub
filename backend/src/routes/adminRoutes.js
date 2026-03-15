@@ -1,7 +1,7 @@
 const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
 const adminController = require('../controller/razor-pay-controllers/adminController')
-const { addNiches, getNiches, AssignFreelancerToRequest } = require('../controller/services/serviceController')
+const { addNiches, getNiches, AssignFreelancerToRequest, getServicesForAdmin, editServiceForAdmin, deleteServiceForAdmin } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
 const { getAllDisputes, resolveDispute } = require('../controller/dispute/disputeController')
 const { getAllCreatorProfiles, getCreatorById, getFreelancerForAdmin, getFreeLancerByIdForAdmin, getFreelancerForSuggestion, getFreelancerForKYCApproval } = require('../controller/users/userProfileController')
@@ -65,5 +65,8 @@ router.get('/disputes', requireRole(['admin']), getAllDisputes);
 
 router.patch('/disputes/resolve/:id', requireRole(['admin']), resolveDispute)
 
+router.get('/services-list', requireRole(['admin']), getServicesForAdmin);
+router.patch('/services/:id', requireRole(['admin']), editServiceForAdmin);
+router.delete('/services/:id', requireRole(['admin']), deleteServiceForAdmin);
 
 module.exports = router

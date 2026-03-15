@@ -1043,10 +1043,88 @@ const getServicesForAdmin = async (req, res, next) => {
   }
 };
 
+const editServiceForAdmin = async (req, res, next) => {
+  logger.info("Admin editing service option");
+  try {
+    const { id } = req.params;
+    const { serviceName, serviceTitle, serviceDescription, showOnHomePage, images } = req.body;
+
+    if (!id) return next(new AppError("Service ID is required", 400));
+
+    const existing = await query(`SELECT id FROM service_options WHERE id = $1`, [id]);
+    if (existing.rows.length === 0) return next(new AppError("Service not found", 404));
+
+    const { rows } = await query(
+      `UPDATE service_options
+       SET service_name        = COALESCE($1, service_name),
+           service_title       = COALESCE($2, service_title),
+           service_description = COALESCE($3, service_description),
+           show_on_home_page   = COALESCE($4, show_on_home_page),
+           images              = COALESCE($5, images),
+           updated_at          = NOW()
+       WHERE id = $6
+       RETURNING *`,
+      [
+        serviceName?.trim()   || null,
+        serviceTitle          || null,
+        serviceDescription    || null,
+        showOnHomePage != null ? (showOnHomePage === true || showOnHomePage === 'true') : null,
+        Array.isArray(images) ? images : null,
+        id,
+      ]
+    );
+
+    // Generate presigned URLs for images
+    const service = rows[0];
+    if (Array.isArray(service.images) && service.images.length > 0) {
+      service.images = await Promise.all(
+        service.images.map(async (imgPath) => {
+          if (!imgPath) return null;
+          const idx = imgPath.indexOf('/');
+          if (idx === -1) return null;
+          try {
+            return await createPresignedUrl(imgPath.substring(0, idx), imgPath.substring(idx + 1), expirySeconds);
+          } catch { return null; }
+        })
+      );
+    }
+
+    logger.info(`Service ${id} updated by admin`);
+    return res.status(200).json({ status: 'success', message: 'Service updated successfully', data: service });
+  } catch (error) {
+    logger.error('editServiceForAdmin error:', error);
+    return next(new AppError('Failed to update service', 500));
+  }
+};
+
+const deleteServiceForAdmin = async (req, res, next) => {
+  logger.info("Admin deleting service option");
+  try {
+    const { id } = req.params;
+
+    if (!id) return next(new AppError("Service ID is required", 400));
+
+    const { rows } = await query(
+      `DELETE FROM service_options WHERE id = $1 RETURNING id, service_name`,
+      [id]
+    );
+
+    if (rows.length === 0) return next(new AppError("Service not found", 404));
+
+    logger.info(`Service ${id} deleted by admin`);
+    return res.status(200).json({ status: 'success', message: 'Service deleted successfully', data: rows[0] });
+  } catch (error) {
+    logger.error('deleteServiceForAdmin error:', error);
+    return next(new AppError('Failed to delete service', 500));
+  }
+};
+
 module.exports = {
   getServices,
   addServices,
   getServicesForAdmin,
+  editServiceForAdmin,
+  deleteServiceForAdmin,
   deleteServiceByFreelancer,
   updateServiceByFreelancer,
   addServicesByFreelancer,
