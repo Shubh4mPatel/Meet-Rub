@@ -1,35 +1,86 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+// uploadController.js
 const { createPresignedPost } = require('@aws-sdk/s3-presigned-post');
+const { S3Client } = require('@aws-sdk/client-s3');
+const { UPLOAD_CONFIGS } = require('../../../config/uploadConfig');
 
-app.post('/api/get-upload-url', async (req, res) => {
-  const { filename, fileType, fileSize } = req.body;
+// ─── MinIO S3 Client ─────────────────────────────────────────────────────────
+const s3Client = new S3Client({
+  region: 'us-east-1',
+  endpoint: `${process.env.MINIO_USE_SSL === 'true' ? 'https' : 'http'}://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT || 9000}`,
+  credentials: {
+    accessKeyId: process.env.MINIO_ACCESS_KEY,
+    secretAccessKey: process.env.MINIO_SECRET_KEY,
+  },
+  forcePathStyle: true,
+});
 
-  // Server-side validation first
-  if (!ALLOWED_TYPES.includes(fileType)) {
-    return res.status(400).json({ error: 'File type not allowed' });
-  }
-  if (fileSize > MAX_SIZE_BYTES) {
-    return res.status(400).json({ error: 'File too large. Max 50MB' });
-  }
+const BUCKET = process.env.MINIO_BUCKET_NAME;
+const PUBLIC_BASE_URL = process.env.MINIO_PUBLIC_URL;
 
-  const blobName = `uploads/${Date.now()}-${filename}`;
+// ─── helpers ─────────────────────────────────────────────────────────────────
 
-  // Presigned POST with conditions R2 will enforce
-  const { url, fields } = await createPresignedPost(r2Client, {
-    Bucket: bucketName,
-    Key: blobName,
+const buildKey = (keyPrefix, uploadType, slotName) =>
+  `${keyPrefix}/${uploadType}/${Date.now()}-${slotName}-${Math.random().toString(36).slice(2, 8)}`;
+
+const generatePresignedPost = async (slot, uploadType) => {
+  const blobKey = buildKey(slot.keyPrefix, uploadType, slot.name);
+
+  const { url, fields } = await createPresignedPost(s3Client, {
+    Bucket: BUCKET,
+    Key: blobKey,
     Conditions: [
-      ['content-length-range', 0, MAX_SIZE_BYTES],       // R2 rejects if file > 50MB
-      ['eq', '$Content-Type', fileType],                  // R2 rejects if type mismatch
-      ['starts-with', '$key', 'uploads/'],                // key must start with uploads/
+      ['content-length-range', 0, slot.maxSizeBytes],
+      ['in', '$Content-Type', slot.allowedTypes],
+      ['starts-with', '$key', slot.keyPrefix],
     ],
-    Fields: {
-      'Content-Type': fileType,
-    },
-    Expires: 300, // 5 mins
+    Fields: {},
+    Expires: 600,
   });
 
-  const fileUrl = `${process.env.x}/${blobName}`;
+  return {
+    uploadUrl: url,
+    fields,
+    fileUrl: `${PUBLIC_BASE_URL}/${blobKey}`,
+    blobKey,
+    allowedTypes: slot.allowedTypes,
+    maxSizeBytes: slot.maxSizeBytes,
+    required: slot.required,
+  };
+};
 
-  res.json({ url, fields, fileUrl, blobName });
-});
+// ─── controller ──────────────────────────────────────────────────────────────
+
+const getUploadUrls = async (req, res) => {
+  try {
+    const { uploadType } = req.body;
+
+    if (!uploadType) {
+      return res.status(400).json({ error: 'uploadType is required' });
+    }
+
+    const config = UPLOAD_CONFIGS[uploadType];
+    if (!config) {
+      return res.status(400).json({
+        error: `Unknown uploadType "${uploadType}"`,
+        validTypes: Object.keys(UPLOAD_CONFIGS),
+      });
+    }
+
+    const slotEntries = await Promise.all(
+      config.slots.map(async (slot) => {
+        const presigned = await generatePresignedPost(slot, uploadType);
+        return [slot.name, presigned];
+      })
+    );
+
+    const slots = Object.fromEntries(slotEntries);
+
+    return res.status(200).json({ uploadType, slots });
+
+  } catch (err) {
+    console.error('[getUploadUrls] error:', err);
+    return res.status(500).json({ error: 'Failed to generate upload URLs' });
+  }
+};
+
+module.exports = { getUploadUrls };

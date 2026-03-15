@@ -117,32 +117,33 @@ const addNiches = async (req, res, next) => {
 const addServices = async (req, res, next) => {
   logger.info("Adding services by admin");
   try {
-    const { serviceType } = req.body;
-    const user = req.user;
-    const admin = user?.roleWiseId;
-    logger.info("Admin user info:", user);
-    logger.info("Extracted admin ID:", admin);
+    const { serviceName, serviceTitle, serviceDescription, showOnHomePage, images } = req.body;
+    const admin = req.user?.roleWiseId;
 
-    if (!Array.isArray(serviceType) || serviceType.length === 0) {
-      logger.warn("Invalid service list received", serviceType);
-      return next(new AppError("Please provide valid services", 400));
+    if (!serviceName || typeof serviceName !== 'string' || !serviceName.trim()) {
+      return next(new AppError("serviceName is required", 400));
     }
 
-    const results = await Promise.all(
-      serviceType.map((service) =>
-        query(
-          `INSERT INTO service_options(service_name, created_by, created_at)
-           VALUES ($1,$2,$3) RETURNING *`,
-          [service, admin, new Date()]
-        )
-      )
+    const { rows } = await query(
+      `INSERT INTO service_options
+         (service_name, service_title, service_description, show_on_home_page, images, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+       RETURNING *`,
+      [
+        serviceName.trim(),
+        serviceTitle || null,
+        serviceDescription || null,
+        showOnHomePage === true || showOnHomePage === 'true',
+        Array.isArray(images) ? images : [],
+        admin,
+      ]
     );
 
-    logger.info(`Added ${results.length} services successfully`);
+    logger.info(`Service '${serviceName}' added by admin ${admin}`);
     return res.status(201).json({
       status: "success",
-      message: "Services added successfully",
-      data: results.map((r) => r.rows[0]),
+      message: "Service added successfully",
+      data: rows[0],
     });
   } catch (error) {
     logger.error("Failed to add services:", error);
@@ -966,6 +967,8 @@ const AssignFreelancerToRequest = async (req, res, next) => {
     return next(new AppError("Failed to assign freelancers", 500));
   }
 };
+
+
 
 module.exports = {
   getServices,
