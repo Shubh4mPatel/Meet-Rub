@@ -1,11 +1,25 @@
 const { pool: db } = require('../../../config/dbConfig');
 const AppError = require('../../../utils/appError');
 const { logger } = require('../../../utils/logger');
+const { createPresignedUrl } = require('../../../utils/helper');
+
+const EXPIRY_SECONDS = 4 * 60 * 60; // 4 hours
+
+async function signAvatarUrl(url) {
+  if (!url) return null;
+  const idx = url.indexOf('/');
+  if (idx === -1) return null;
+  try {
+    return await createPresignedUrl(url.substring(0, idx), url.substring(idx + 1), EXPIRY_SECONDS);
+  } catch {
+    return null;
+  }
+}
 
 const raiseDispute = async (req, res, next) => {
   try {
     const { role, roleWiseId } = req.user;
-    const { other_party_id, reason_of_dispute, description } = req.body;
+    const { other_party_id, reason_of_dispute, description, project_id } = req.body;
 
     if (!other_party_id || !reason_of_dispute) {
       return next(new AppError('other_party_id and reason_of_dispute are required', 400));
@@ -23,11 +37,21 @@ const raiseDispute = async (req, res, next) => {
       return next(new AppError('Only creators and freelancers can raise a dispute', 403));
     }
 
+    if (project_id) {
+      const projectCheck = await db.query(
+        `SELECT id FROM projects WHERE id = $1`,
+        [project_id]
+      );
+      if (projectCheck.rows.length === 0) {
+        return next(new AppError('Project not found', 404));
+      }
+    }
+
     const disputeResult = await db.query(
-      `INSERT INTO disputes (creator_id, freelancer_id, reason_of_dispute, description, raised_by)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO disputes (creator_id, freelancer_id, reason_of_dispute, description, raised_by, project_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [creator_id, freelancer_id, reason_of_dispute, description || null, role]
+      [creator_id, freelancer_id, reason_of_dispute, description || null, role, project_id || null]
     );
 
     logger.info(`Dispute raised by ${role} (id: ${roleWiseId})`);
@@ -39,6 +63,7 @@ const raiseDispute = async (req, res, next) => {
         dispute_id: disputeResult.rows[0].id,
         creator_id,
         freelancer_id,
+        project_id: project_id || null,
       },
     });
   } catch (error) {
@@ -79,6 +104,7 @@ const getDisputes = async (req, res, next) => {
     const dataQuery = `
       SELECT
         d.id                       AS dispute_id,
+        d.project_id,
         d.reason_of_dispute,
         d.description,
         d.admin_note,
@@ -88,10 +114,20 @@ const getDisputes = async (req, res, next) => {
         c.full_name                AS creator_name,
         c.profile_image_url        AS creator_avatar,
         f.freelancer_full_name     AS freelancer_name,
-        f.profile_image_url        AS freelancer_avatar
+        f.profile_image_url        AS freelancer_avatar,
+        p.status                   AS project_status,
+        p.amount                   AS project_amount,
+        p.end_date                 AS project_end_date,
+        s.id                       AS service_id,
+        s.service_name,
+        s.service_price,
+        s.plan_type,
+        s.delivery_time
       FROM disputes d
       JOIN creators c   ON d.creator_id   = c.creator_id
       JOIN freelancer f ON d.freelancer_id = f.freelancer_id
+      LEFT JOIN projects p  ON d.project_id = p.id
+      LEFT JOIN services s  ON p.service_id = s.id
       WHERE ${myCol} = $1
         AND d.raised_by = $2
         ${statusFilter}
@@ -121,10 +157,18 @@ const getDisputes = async (req, res, next) => {
 
     logger.info(`getDisputes [${type}] for ${role} id=${roleWiseId}, total=${total}`);
 
+    const disputes = await Promise.all(
+      dataResult.rows.map(async (d) => ({
+        ...d,
+        creator_avatar: await signAvatarUrl(d.creator_avatar),
+        freelancer_avatar: await signAvatarUrl(d.freelancer_avatar),
+      }))
+    );
+
     return res.status(200).json({
       status: 'success',
       data: {
-        disputes: dataResult.rows,
+        disputes,
         pagination: {
           total,
           totalPages,
@@ -202,10 +246,18 @@ const getAllDisputes = async (req, res, next) => {
 
     logger.info(`getAllDisputes: total=${total} status=${status || 'all'} page=${pageNum}`);
 
+    const disputes = await Promise.all(
+      dataResult.rows.map(async (d) => ({
+        ...d,
+        creator_avatar: await signAvatarUrl(d.creator_avatar),
+        freelancer_avatar: await signAvatarUrl(d.freelancer_avatar),
+      }))
+    );
+
     return res.status(200).json({
       status: 'success',
       data: {
-        disputes: dataResult.rows,
+        disputes,
         pagination: {
           total,
           totalPages,

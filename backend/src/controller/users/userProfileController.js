@@ -2544,6 +2544,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
     const queryText = `
       SELECT
         freelancer_id,
+        user_id,
         profile_image_url,
         freelancer_full_name,
         phone_number,
