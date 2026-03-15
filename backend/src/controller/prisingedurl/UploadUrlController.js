@@ -9,7 +9,7 @@ const expirySeconds = 4 * 60 * 60; // 4 hours
 // ─── MinIO S3 Client ─────────────────────────────────────────────────────────
 const s3Client = new S3Client({
   region: 'us-east-1',
-  endpoint:"https://staging.meetrub.com",
+  endpoint:"http://147.93.108.64:9000",
   // endpoint: `${process.env.MINIO_USE_SSL === 'true' ? 'https' : 'http'}://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT || 9000}`,
   credentials: {
     accessKeyId: process.env.MINIO_ACCESS_KEY,
