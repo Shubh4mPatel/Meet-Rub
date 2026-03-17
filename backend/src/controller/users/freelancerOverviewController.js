@@ -143,21 +143,23 @@ const getFreelancerOverview = async (req, res, next) => {
       })
     );
 
-    // ── 4. Reviews — count per star rating ───────────────────────────────────
-    // Requires table: reviews(freelancer_id INT, rating SMALLINT 1-5)
+    // ── 4. Reviews — count per star rating from ratings table ────────────────
+    // freelancer_rating is numeric(2,1), e.g. 4.5 — floor it to get star bucket
     const { rows: reviewRows } = await query(
       `SELECT
-         rating,
-         COUNT(*)::INT AS count
-       FROM reviews
+         FLOOR(freelancer_rating)::INT AS star,
+         COUNT(*)::INT                 AS count
+       FROM ratings
        WHERE freelancer_id = $1
-       GROUP BY rating`,
+         AND freelancer_rating IS NOT NULL
+       GROUP BY FLOOR(freelancer_rating)`,
       [freelancerId]
     );
 
     const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     for (const row of reviewRows) {
-      breakdown[row.rating] = row.count;
+      const star = Math.min(5, Math.max(1, row.star));
+      breakdown[star] = (breakdown[star] || 0) + row.count;
     }
 
     const totalReviews = Object.values(breakdown).reduce((sum, n) => sum + n, 0);
