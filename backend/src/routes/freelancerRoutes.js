@@ -7,6 +7,7 @@ const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter,
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
 const { getUserProfileProgress, getCreatorByUserId } = require('../controller/users/userProfileController');
 const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/portfolioController");
+const { getFreelancerOverview } = require("../controller/users/freelancerOverviewController");
 const { getNiches } = require('../controller/services/serviceController');
 const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
 
@@ -71,6 +72,9 @@ router.get('/freelancers/:id/portfolio', getFreelancerPortfolio);
 
 
 router.get('/freelancers/:id/impact', getFreelancerImpact);
+
+
+router.get('/freelancers/:id/overview', getFreelancerOverview);
 
 
 router.get('/payouts',authenticateUser,requireRole(['freelancer']), getMyPayouts);

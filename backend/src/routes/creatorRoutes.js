@@ -4,7 +4,8 @@ const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { getNiches } = require('../controller/services/serviceController');
 const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
-const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersForcreator, getFreelancerByIdForCreator, getFreeLancerByUserId } = require('../controller/users/userProfileController');
+const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersForcreator, getFreelancerByIdForCreator, getFreeLancerByUserId, getFreelancerImpact, getFreelancerPortfolio } = require('../controller/users/userProfileController');
+const { getFreelancerOverview } = require('../controller/users/freelancerOverviewController');
 
 router.post('/service-request',authenticateUser, requireRole(['creator']), createSreviceRequest);
 
@@ -32,5 +33,11 @@ router.get('/get-freelancer-by-user-id/:freelancer_id', authenticateUser, requir
 router.post('/dispute-raise', authenticateUser, requireRole(['creator']), raiseDispute);
 
 router.get('/disputes', authenticateUser, requireRole(['creator']), getDisputes);
+
+router.get('/freelancers/:id/overview', authenticateUser, requireRole(['creator']), getFreelancerOverview); 
+
+router.get('/freelancers/:id/impact', authenticateUser, requireRole(['creator']), getFreelancerImpact);
+
+router.get('/freelancers/:id/portfolio', authenticateUser, requireRole(['creator']), getFreelancerPortfolio);
 
 module.exports = router;
