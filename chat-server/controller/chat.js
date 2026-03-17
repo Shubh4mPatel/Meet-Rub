@@ -85,7 +85,7 @@ const chatController = (io) => {
     // Leave a chat room
     socket.on("leave-chat", async ({ recipientId }) => {
       try {
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         socket.leave(chatRoomId);
@@ -101,7 +101,7 @@ const chatController = (io) => {
 
     socket.on("custom-package", async (packageData, recipientId) => {
       try {
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         const customPackage = await chatModel.saveCustomPackage(
@@ -173,7 +173,7 @@ const chatController = (io) => {
         //   return;
         // }
 
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         const updatedPackage = await chatModel.acceptPackage(packageId, userId);
@@ -242,7 +242,7 @@ const chatController = (io) => {
 
     socket.on("reject-package", async (packageId, recipientId) => {
       try {
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         const updatedPackage = await chatModel.rejectPackage(packageId, userId);
@@ -300,7 +300,7 @@ const chatController = (io) => {
           return;
         }
 
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         const extensionRequest = await chatModel.saveDeadlineExtensionRequest(
@@ -367,7 +367,7 @@ const chatController = (io) => {
           return;
         }
 
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         const updatedRequest = await chatModel.acceptDeadlineExtension(requestId, userId);
@@ -413,7 +413,7 @@ const chatController = (io) => {
 
     socket.on("reject-deadline-extension", async (requestId, recipientId) => {
       try {
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         const updatedRequest = await chatModel.rejectDeadlineExtension(requestId, userId);
@@ -459,7 +459,7 @@ const chatController = (io) => {
     // Send a message
     socket.on("send-message", async ({ recipientId, message }) => {
       try {
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
         const messageType = "text";
 
@@ -522,7 +522,7 @@ const chatController = (io) => {
     // Typing indicator
     socket.on("typing", async ({ recipientId, isTyping }) => {
       try {
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         // Store typing status in Redis with short expiry
@@ -571,7 +571,7 @@ const chatController = (io) => {
 
     socket.on("mark-as-read", async ({ recipientId }) => {
       try {
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         await chatModel.markMessagesAsRead(chatRoomId, userId);
@@ -619,7 +619,7 @@ const chatController = (io) => {
     // Load older messages (pagination)
     socket.on("load-more-messages", async ({ recipientId, offset = 0, limit = 50 }) => {
       try {
-        const [smallerId, largerId] = [userId, recipientId].sort();
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         const messages = await chatModel.getChatHistory(chatRoomId, limit, offset);
