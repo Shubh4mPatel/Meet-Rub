@@ -20,6 +20,7 @@ const chatController = (io) => {
         console.log(`${username} is joining chat with user ID: ${recipientId}`);
         // Create a unique room ID (sorted to ensure same room for both users)
         const [smallerId, largerId] = [userId, recipientId].sort();
+        logger.info(`Sorted user IDs for chat room: ${smallerId}, ${largerId}`);
         const chatRoomId = `${smallerId}-${largerId}`;
         console.log(`Generated chat room ID: ${chatRoomId}`);
         // Create or get chat room from database
