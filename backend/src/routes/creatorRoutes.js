@@ -6,6 +6,7 @@ const { getNiches } = require('../controller/services/serviceController');
 const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
 const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersForcreator, getFreelancerByIdForCreator, getFreeLancerByUserId, getFreelancerImpact, getFreelancerPortfolio } = require('../controller/users/userProfileController');
 const { getFreelancerOverview } = require('../controller/users/freelancerOverviewController');
+const { getFreelancerReviews } = require('../controller/users/freelancerReviewsController');
 
 router.post('/service-request',authenticateUser, requireRole(['creator']), createSreviceRequest);
 
@@ -39,5 +40,7 @@ router.get('/freelancers/:id/overview', authenticateUser, requireRole(['creator'
 router.get('/freelancers/:id/impact', authenticateUser, requireRole(['creator']), getFreelancerImpact);
 
 router.get('/freelancers/:id/portfolio', authenticateUser, requireRole(['creator']), getFreelancerPortfolio);
+
+router.get('/freelancers/:id/reviews', authenticateUser, requireRole(['creator']), getFreelancerReviews);
 
 module.exports = router;
