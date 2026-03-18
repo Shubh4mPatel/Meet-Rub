@@ -134,6 +134,17 @@ const addServices = async (req, res, next) => {
       return next(new AppError(`All 3 gallery images are required (missing: ${missingSlots.join(', ')})`, 400));
     }
 
+    // Check for duplicate service name (case-insensitive)
+    const { rows: existing } = await query(
+      `SELECT service_name FROM service_options WHERE LOWER(service_name) = LOWER($1)`,
+      [serviceName.trim()]
+    );
+
+    if (existing.length > 0) {
+      logger.warn(`Duplicate service rejected: '${serviceName}'`);
+      return next(new AppError(`Service '${serviceName}' already exists. Please use a different name.`, 409));
+    }
+
     // Upload gallery images to MinIO
     const imagePaths = [];
     for (const slot of imageSlots) {
