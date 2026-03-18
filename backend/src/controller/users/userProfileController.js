@@ -3268,8 +3268,11 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
     }
 
     const { rows: serviceRows } = await query(
-      `SELECT id, service_name, service_description, service_price, delivery_time, plan_type, thumbnail_file, is_active, created_at, updated_at
-       FROM services WHERE freelancer_id = $1 ORDER BY service_name, created_at DESC`,
+      `SELECT id, service_name, service_description, service_price, delivery_time,
+              plan_type, thumbnail_file, is_active, created_at, updated_at
+       FROM services
+       WHERE freelancer_id = $1
+       ORDER BY service_name, created_at DESC`,
       [freelancerId]
     );
 

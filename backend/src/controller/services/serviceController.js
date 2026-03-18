@@ -211,30 +211,39 @@ const addServicesByFreelancer = async (req, res, next) => {
     }
 
     // Validate planType if provided
-    if (planType && !['basic', 'pro', 'premium'].includes(planType.toLowerCase())) {
+    const normalizedPlanType = planType ? planType.toLowerCase() : 'basic';
+    if (!['basic', 'pro', 'premium'].includes(normalizedPlanType)) {
       logger.warn("Invalid plan type provided");
       return next(new AppError("Plan type must be 'basic', 'pro', or 'premium'", 400));
     }
 
+    // Check duplicate for this specific plan type
     const { rows: existingService } = await query(
-      `SELECT * FROM services WHERE freelancer_id=$1 AND service_name=$2`,
-      [freelancer_id, service]
+      `SELECT * FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type=$3`,
+      [freelancer_id, service, normalizedPlanType]
     );
 
     if (existingService.length > 0) {
-      logger.warn("Service already exists for this freelancer");
-      return next(new AppError("You have already added this service", 400));
+      logger.warn("Service with this plan type already exists for this freelancer");
+      return next(new AppError(`You have already added a ${normalizedPlanType} plan for this service`, 400));
     }
 
-    // Handle file upload if provided
+    // Only basic plan accepts a file upload
+    if (req.file && normalizedPlanType !== 'basic') {
+      logger.warn(`File upload rejected for plan type: ${normalizedPlanType}`);
+      return next(new AppError("Image can only be uploaded when creating the basic plan", 400));
+    }
+
+    // Thumbnail is required for basic plan
+    if (normalizedPlanType === 'basic' && !req.file) {
+      logger.warn("Thumbnail image is required for basic plan");
+      return next(new AppError("Please add a thumbnail image for the basic plan", 400));
+    }
+
+    // Handle file upload — basic plan only
     let thumbnailFileUrl = null;
-    if (req.file) {
+    if (normalizedPlanType === 'basic' && req.file) {
       logger.info(`Uploading thumbnail file: ${req.file.originalname}`);
-      const fileName = `${Date.now()}_${req.file.originalname}`;
-      const folder = `freelancer/services/${user.user_id}`;
-      const objectName = `${folder}/${fileName}`;
-      thumbnailFileUrl = `${BUCKET_NAME}/${objectName}`;
-      uploadedObjectName = objectName;
 
       // Validate file type (images and videos only)
       const allowedMimeTypes = [
@@ -247,6 +256,11 @@ const addServicesByFreelancer = async (req, res, next) => {
         return next(new AppError("Only image (JPEG, PNG, GIF, WEBP) and video (MP4, MPEG, MOV, WEBM) files are allowed", 400));
       }
 
+      const fileName = `${Date.now()}_${req.file.originalname}`;
+      const objectName = `freelancer/services/${user.user_id}/${fileName}`;
+      thumbnailFileUrl = `${BUCKET_NAME}/${objectName}`;
+      uploadedObjectName = objectName;
+
       await minioClient.putObject(
         BUCKET_NAME,
         objectName,
@@ -256,13 +270,21 @@ const addServicesByFreelancer = async (req, res, next) => {
       );
 
       logger.info(`Thumbnail file uploaded successfully: ${fileName}`);
+    } else if (normalizedPlanType !== 'basic') {
+      // Reuse the thumbnail from the basic plan for the same service
+      const { rows: basicPlan } = await query(
+        `SELECT thumbnail_file FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type='basic'`,
+        [freelancer_id, service]
+      );
+      thumbnailFileUrl = basicPlan[0]?.thumbnail_file || null;
+      logger.info(`Reusing basic plan thumbnail for ${normalizedPlanType} plan: ${thumbnailFileUrl}`);
     }
 
     const { rows } = await query(
       `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at, delivery_time, plan_type, thumbnail_file)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [freelancer_id, service, description, price, new Date(), new Date(), deliveryDuration, planType || null, thumbnailFileUrl]
+      [freelancer_id, service, description, price, new Date(), new Date(), deliveryDuration, normalizedPlanType, thumbnailFileUrl]
     );
 
     logger.info("Service added successfully");
