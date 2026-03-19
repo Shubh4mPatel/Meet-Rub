@@ -1045,6 +1045,7 @@ const getAllFreelancers = async (req, res, next) => {
     // const type = req.query.type || "all"; // e.g., "all", "featured", etc.
 
     // Build the query based on filters
+    const serviceSubquery = serviceTypes.length > 0 ? `AND s2.service_name = ANY($1::text[])` : ``;
     let queryText = `
       SELECT
         f.freelancer_id,
@@ -1055,14 +1056,16 @@ const getAllFreelancers = async (req, res, next) => {
         f.rating,
         f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
-        MIN(s.service_price) as lowest_price
+        MIN(s.service_price) as lowest_price,
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
     `;
 
-    const queryParams = [];
-    let paramCount = 1;
+    const queryParams = serviceTypes.length > 0 ? [serviceTypes] : [];
+    let paramCount = serviceTypes.length > 0 ? 2 : 1;
 
     // Add search condition
     if (search) {
@@ -1071,14 +1074,9 @@ const getAllFreelancers = async (req, res, next) => {
       paramCount++;
     }
 
-    // Add service type filter (using IN clause for array)
+    // Add service type filter
     if (serviceTypes.length > 0) {
-      const serviceTypeParams = serviceTypes
-        .map((_, index) => `$${paramCount + index}`)
-        .join(",");
-      queryText += ` AND s.service_name IN (${serviceTypeParams})`;
-      queryParams.push(...serviceTypes);
-      paramCount += serviceTypes.length;
+      queryText += ` AND s.service_name = ANY($1::text[])`;
     }
 
     // Add price range filter
@@ -1123,8 +1121,8 @@ const getAllFreelancers = async (req, res, next) => {
       WHERE 1=1
     `;
 
-    const countParams = [];
-    let countParamIndex = 1;
+    const countParams = serviceTypes.length > 0 ? [serviceTypes] : [];
+    let countParamIndex = serviceTypes.length > 0 ? 2 : 1;
 
     if (search) {
       countQuery += ` AND f.freelancer_full_name ILIKE $${countParamIndex}`;
@@ -1133,12 +1131,7 @@ const getAllFreelancers = async (req, res, next) => {
     }
 
     if (serviceTypes.length > 0) {
-      const serviceTypeParams = serviceTypes
-        .map((_, index) => `$${countParamIndex + index}`)
-        .join(",");
-      countQuery += ` AND s.service_name IN (${serviceTypeParams})`;
-      countParams.push(...serviceTypes);
-      countParamIndex += serviceTypes.length;
+      countQuery += ` AND s.service_name = ANY($1::text[])`;
     }
 
     countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${countParamIndex + 1
@@ -1203,6 +1196,17 @@ const getAllFreelancers = async (req, res, next) => {
               error
             );
             freelancer.freelancer_thumbnail_image = null;
+          }
+        }
+
+        if (freelancer.service_banner) {
+          const parts = freelancer.service_banner.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
+          try {
+            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
+          } catch {
+            freelancer.service_banner = null;
           }
         }
 
@@ -2540,9 +2544,10 @@ const getFreelancerForAdmin = async (req, res, next) => {
         : [req.query.serviceType]
       : [];
 
-    const queryParams = [];
-    let paramIndex = 1;
+    const queryParams = serviceTypes.length > 0 ? [serviceTypes] : [];
+    let paramIndex = serviceTypes.length > 0 ? 2 : 1;
 
+    const serviceSubquery = serviceTypes.length > 0 ? `AND s2.service_name = ANY($1::text[])` : ``;
     const conditions = [`f.verification_status = 'VERIFIED'`];
 
     if (search) {
@@ -2564,10 +2569,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
     }
 
     if (serviceTypes.length > 0) {
-      const placeholders = serviceTypes.map((_, i) => `$${paramIndex + i}`).join(', ');
-      conditions.push(`s.service_name IN (${placeholders})`);
-      queryParams.push(...serviceTypes);
-      paramIndex += serviceTypes.length;
+      conditions.push(`s.service_name = ANY($1::text[])`);
     }
 
     const whereClause = conditions.join(' AND ');
@@ -2584,12 +2586,12 @@ const getFreelancerForAdmin = async (req, res, next) => {
         f.gov_id_number,
         f.verification_status,
         f.rating,
-        f.worked_with
-        ${serviceTypes.length > 0 ? ', MIN(s.service_name) as matched_service_title, MIN(s.thumbnail_file) as service_banner' : ''}
+        f.worked_with,
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
       FROM freelancer f
       ${serviceTypes.length > 0 ? 'LEFT JOIN services s ON f.freelancer_id = s.freelancer_id' : ''}
       WHERE ${whereClause}
-      ${serviceTypes.length > 0 ? 'GROUP BY f.freelancer_id, f.user_id, f.profile_image_url, f.freelancer_full_name, f.phone_number, f.freelancer_email, f.created_at, f.gov_id_number, f.verification_status, f.rating, f.worked_with' : ''}
       ORDER BY f.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
@@ -2629,7 +2631,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
           }
         }
 
-        if (serviceTypes.length > 0 && freelancer.service_banner) {
+        if (freelancer.service_banner) {
           const parts = freelancer.service_banner.split("/");
           const bucketName = parts[0];
           const objectName = parts.slice(1).join("/");
@@ -2970,6 +2972,7 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     }
 
     // Build the query based on filters
+    const serviceSubquery = serviceTypes.length > 0 ? `AND s2.service_name = ANY($1::text[])` : ``;
     let queryText = `
       SELECT
         f.freelancer_id,
@@ -2981,15 +2984,15 @@ const getFreelancerForSuggestion = async (req, res, next) => {
         f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
-        MIN(s.service_name) as matched_service_title,
-        MIN(s.thumbnail_file) as service_banner
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
     `;
 
-    const queryParams = [];
-    let paramCount = 1;
+    const queryParams = serviceTypes.length > 0 ? [serviceTypes] : [];
+    let paramCount = serviceTypes.length > 0 ? 2 : 1;
 
     // Add search condition
     if (search) {
@@ -2998,14 +3001,9 @@ const getFreelancerForSuggestion = async (req, res, next) => {
       paramCount++;
     }
 
-    // Add service type filter (using IN clause for array)
+    // Add service type filter
     if (serviceTypes.length > 0) {
-      const serviceTypeParams = serviceTypes
-        .map((_, index) => `$${paramCount + index}`)
-        .join(",");
-      queryText += ` AND s.service_name IN (${serviceTypeParams})`;
-      queryParams.push(...serviceTypes);
-      paramCount += serviceTypes.length;
+      queryText += ` AND s.service_name = ANY($1::text[])`;
     }
 
     // Add price range filter
@@ -3050,8 +3048,8 @@ const getFreelancerForSuggestion = async (req, res, next) => {
       WHERE 1=1
     `;
 
-    const countParams = [];
-    let countParamIndex = 1;
+    const countParams = serviceTypes.length > 0 ? [serviceTypes] : [];
+    let countParamIndex = serviceTypes.length > 0 ? 2 : 1;
 
     if (search) {
       countQuery += ` AND f.freelancer_full_name ILIKE $${countParamIndex}`;
@@ -3060,12 +3058,7 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     }
 
     if (serviceTypes.length > 0) {
-      const serviceTypeParams = serviceTypes
-        .map((_, index) => `$${countParamIndex + index}`)
-        .join(",");
-      countQuery += ` AND s.service_name IN (${serviceTypeParams})`;
-      countParams.push(...serviceTypes);
-      countParamIndex += serviceTypes.length;
+      countQuery += ` AND s.service_name = ANY($1::text[])`;
     }
 
     countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${countParamIndex + 1
@@ -3137,21 +3130,15 @@ const getFreelancerForSuggestion = async (req, res, next) => {
           }
         }
 
-        // When service filter is active, include matched service title and banner
-        if (serviceTypes.length > 0) {
-          if (freelancer.service_banner) {
-            const parts = freelancer.service_banner.split("/");
-            const bucketName = parts[0];
-            const objectName = parts.slice(1).join("/");
-            try {
-              freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
-            } catch {
-              freelancer.service_banner = null;
-            }
+        if (freelancer.service_banner) {
+          const parts = freelancer.service_banner.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
+          try {
+            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
+          } catch {
+            freelancer.service_banner = null;
           }
-        } else {
-          delete freelancer.matched_service_title;
-          delete freelancer.service_banner;
         }
 
         return freelancer;
@@ -3366,6 +3353,9 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     // const type = req.query.type || "all"; // e.g., "all", "featured", etc.
 
     // Build the query based on filters
+    // $1 = creator_id, $2 = serviceTypes array (if provided)
+    const serviceTypesParamIdx = 2;
+    const serviceSubquery = serviceTypes.length > 0 ? `AND s2.service_name = ANY($${serviceTypesParamIdx}::text[])` : ``;
     let queryText = `
       SELECT
         f.freelancer_id,
@@ -3378,16 +3368,16 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist,
-        MIN(s.service_name) as matched_service_title,
-        MIN(s.thumbnail_file) as service_banner
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
     `;
 
-    const queryParams = [creator_id];
-    let paramCount = 2;
+    const queryParams = serviceTypes.length > 0 ? [creator_id, serviceTypes] : [creator_id];
+    let paramCount = serviceTypes.length > 0 ? 3 : 2;
 
     // Add search condition
     if (search) {
@@ -3396,14 +3386,9 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       paramCount++;
     }
 
-    // Add service type filter (using IN clause for array)
+    // Add service type filter
     if (serviceTypes.length > 0) {
-      const serviceTypeParams = serviceTypes
-        .map((_, index) => `$${paramCount + index}`)
-        .join(",");
-      queryText += ` AND s.service_name IN (${serviceTypeParams})`;
-      queryParams.push(...serviceTypes);
-      paramCount += serviceTypes.length;
+      queryText += ` AND s.service_name = ANY($${serviceTypesParamIdx}::text[])`;
     }
 
     // Add price range filter
@@ -3448,8 +3433,8 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       WHERE 1=1 AND f.verification_status = 'VERIFIED' AND f.is_active = true
     `;
 
-    const countParams = [];
-    let countParamIndex = 1;
+    const countParams = serviceTypes.length > 0 ? [serviceTypes] : [];
+    let countParamIndex = serviceTypes.length > 0 ? 2 : 1;
 
     if (search) {
       countQuery += ` AND f.freelancer_full_name ILIKE $${countParamIndex}`;
@@ -3458,12 +3443,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     }
 
     if (serviceTypes.length > 0) {
-      const serviceTypeParams = serviceTypes
-        .map((_, index) => `$${countParamIndex + index}`)
-        .join(",");
-      countQuery += ` AND s.service_name IN (${serviceTypeParams})`;
-      countParams.push(...serviceTypes);
-      countParamIndex += serviceTypes.length;
+      countQuery += ` AND s.service_name = ANY($1::text[])`;
     }
 
     countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${countParamIndex + 1
@@ -3531,21 +3511,15 @@ const getAllfreelancersForcreator = async (req, res, next) => {
           }
         }
 
-        // When service filter is active, include matched service title and banner
-        if (serviceTypes.length > 0) {
-          if (freelancer.service_banner) {
-            const parts = freelancer.service_banner.split("/");
-            const bucketName = parts[0];
-            const objectName = parts.slice(1).join("/");
-            try {
-              freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
-            } catch {
-              freelancer.service_banner = null;
-            }
+        if (freelancer.service_banner) {
+          const parts = freelancer.service_banner.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
+          try {
+            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
+          } catch {
+            freelancer.service_banner = null;
           }
-        } else {
-          delete freelancer.matched_service_title;
-          delete freelancer.service_banner;
         }
 
         return freelancer;
