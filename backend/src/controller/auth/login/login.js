@@ -14,13 +14,14 @@ const loginUser = async (req, res, next) => {
         email = email?.trim();
 
         if (!email || !password) {
-            logger.warn("Missing email or password");
-            return next(new AppError("Email and password are required", 400));
+            logger.warn("Missing email/username or password");
+            return next(new AppError("Email or username and password are required", 400));
         }
 
+        const identifier = email.toLowerCase();
         const user = (await query(
-            "SELECT * FROM users WHERE user_email = $1",
-            [email.toLowerCase()]
+            "SELECT * FROM users WHERE user_email = $1 OR LOWER(user_name) = $1",
+            [identifier]
         )).rows[0];
 
         if (!user) {

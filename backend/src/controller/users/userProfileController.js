@@ -1318,10 +1318,28 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerServices } = await query(
-      `SELECT id, service_name, service_description, service_price, delivery_time
+      `SELECT id, service_name, service_description, service_price, delivery_time, thumbnail_file
      FROM services WHERE freelancer_id = $1`,
       [freelancerId]
     );
+
+    for (const service of freelancerServices) {
+      if (service.thumbnail_file) {
+        try {
+          const firstSlash = service.thumbnail_file.indexOf("/");
+          if (firstSlash !== -1) {
+            const bucketName = service.thumbnail_file.substring(0, firstSlash);
+            const objectName = service.thumbnail_file.substring(firstSlash + 1);
+            service.thumbnail_file = await createPresignedUrl(bucketName, objectName, expirySeconds);
+          } else {
+            service.thumbnail_file = null;
+          }
+        } catch (error) {
+          logger.error(`Error generating signed URL for service thumbnail: ${error}`);
+          service.thumbnail_file = null;
+        }
+      }
+    }
 
     logger.info(`Successfully fetched freelancer data for ID: ${freelancerId}`);
 
