@@ -19,19 +19,27 @@ const loginUser = async (req, res, next) => {
         }
 
         const identifier = email.toLowerCase();
-        const user = (await query(
+        const { rows: candidates } = await query(
             "SELECT * FROM users WHERE user_email = $1 OR LOWER(user_name) = $1",
             [identifier]
-        )).rows[0];
+        );
 
-        if (!user) {
-            logger.warn("Login failed: Invalid email or password");
+        if (!candidates.length) {
+            logger.warn("Login failed: No user found for identifier");
             return next(new AppError("Invalid email or password", 401));
         }
 
-        const passwordValid = await bcrypt.compare(password.trim(), user.user_password);
-        if (!passwordValid) {
-            logger.warn("Login failed: Invalid email or password");
+        let user = null;
+        for (const candidate of candidates) {
+            const passwordValid = await bcrypt.compare(password.trim(), candidate.user_password);
+            if (passwordValid) {
+                user = candidate;
+                break;
+            }
+        }
+
+        if (!user) {
+            logger.warn("Login failed: Invalid password");
             return next(new AppError("Invalid email or password", 401));
         }
 
