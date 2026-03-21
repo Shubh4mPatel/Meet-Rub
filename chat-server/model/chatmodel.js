@@ -729,6 +729,39 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   },
 
   // Get projects between a freelancer and creator
+  async getFreelancerInProgressProjects(freelancerUserId) {
+    const query = `
+      SELECT
+        p.id,
+        p.status,
+        p.amount,
+        p.number_of_units,
+        p.end_date,
+        p.created_at,
+        p.updated_at,
+        p.service_id,
+        s.service_name,
+        c.user_name AS creator_name,
+        cr.profile_image_url AS creator_avatar,
+        cr.user_id AS creator_user_id
+      FROM projects p
+      JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+      JOIN creators cr ON p.creator_id = cr.creator_id
+      JOIN users c ON cr.user_id = c.id
+      LEFT JOIN services s ON p.service_id = s.id
+      WHERE f.user_id = $1
+        AND p.status = 'IN_PROGRESS'
+      ORDER BY p.created_at DESC
+    `;
+    try {
+      const result = await pool.query(query, [freelancerUserId]);
+      return result.rows;
+    } catch (error) {
+      console.error("Error getting freelancer in-progress projects:", error);
+      throw error;
+    }
+  },
+
   async getFreelancerProjects(freelancerUserId, creatorUserId) {
     const query = `
       SELECT

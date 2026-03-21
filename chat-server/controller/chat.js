@@ -60,6 +60,10 @@ const chatController = (io) => {
         if (userRole === 'freelancer') {
           const projects = await chatModel.getFreelancerProjects(userId, recipientId);
           socket.emit('projects-list', { projects });
+
+          // Send all in-progress projects across all creators
+          const inProgressProjects = await chatModel.getFreelancerInProgressProjects(userId);
+          socket.emit('inprogress-projects', { projects: inProgressProjects });
         }
 
         // Refresh pending payments for creator — filtered to this freelancer
