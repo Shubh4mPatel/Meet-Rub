@@ -77,10 +77,14 @@ const getDisputes = async (req, res, next) => {
     const { role, roleWiseId } = req.user;
     const { type = 'against_me', search = '', status = '', page = 1, limit = 10 } = req.query;
 
-    const pageNum  = Math.max(1, parseInt(page));
+    const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
-    const offset   = (pageNum - 1) * limitNum;
+    const offset = (pageNum - 1) * limitNum;
 
+    if (type !== 'against_me' && type !== 'by_me' || status.trim() && !['pending', 'resolved'].includes(status.trim())) {
+      return next(new AppError('Invalid type parameter. Must be either "against_me" or "by_me".', 400));
+    }
+    
     if (role !== 'creator' && role !== 'freelancer') {
       return next(new AppError('Only creators and freelancers can view disputes', 403));
     }
@@ -89,7 +93,7 @@ const getDisputes = async (req, res, next) => {
       ? (role === 'freelancer' ? 'creator' : 'freelancer')
       : role;
 
-    const myCol        = role === 'freelancer' ? 'd.freelancer_id' : 'd.creator_id';
+    const myCol = role === 'freelancer' ? 'd.freelancer_id' : 'd.creator_id';
     const searchNameCol = raisedByFilter === 'creator' ? 'c.full_name' : 'f.freelancer_full_name';
 
     const params = [roleWiseId, raisedByFilter];
@@ -106,10 +110,10 @@ const getDisputes = async (req, res, next) => {
         d.id                       AS dispute_id,
         d.project_id,
         d.reason_of_dispute,
-        d.description,
-        d.admin_note,
-        d.created_at,
-        d.status,
+        d.description              AS dispute_description,
+        d.admin_note ,
+        d.created_at               AS dispute_created_at,
+        d.status                   AS dispute_status,
         d.raised_by,
         c.full_name                AS creator_name,
         c.profile_image_url        AS creator_avatar,
@@ -152,7 +156,7 @@ const getDisputes = async (req, res, next) => {
       db.query(countQuery, params),
     ]);
 
-    const total      = parseInt(countResult.rows[0].total);
+    const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limitNum);
 
     logger.info(`getDisputes [${type}] for ${role} id=${roleWiseId}, total=${total}`);
@@ -187,9 +191,9 @@ const getAllDisputes = async (req, res, next) => {
   try {
     const { status = '', page = 1, limit = 10 } = req.query;
 
-    const pageNum  = Math.max(1, parseInt(page));
+    const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
-    const offset   = (pageNum - 1) * limitNum;
+    const offset = (pageNum - 1) * limitNum;
 
     const params = [];
     let nextParam = 1;
@@ -241,7 +245,7 @@ const getAllDisputes = async (req, res, next) => {
       db.query(countQuery, params),
     ]);
 
-    const total      = parseInt(countResult.rows[0].total);
+    const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limitNum);
 
     logger.info(`getAllDisputes: total=${total} status=${status || 'all'} page=${pageNum}`);
