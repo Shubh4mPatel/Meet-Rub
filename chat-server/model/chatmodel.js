@@ -130,6 +130,12 @@ const chatModel = {
     der.requested_at as der_requested_at,
     der.approved_at as der_approved_at,
     der.expires_at as der_expires_at,
+    dp.status as der_project_status,
+    dp.amount as der_project_amount,
+    dp.end_date as der_project_end_date,
+    ds.service_name as der_service_name,
+    ds.plan_type as der_plan_type,
+    ds.delivery_time as der_delivery_time,
     cp.id as cp_id,
     cp.room_id as cp_room_id,
     cp.freelancer_id as cp_freelancer_id,
@@ -150,6 +156,8 @@ FROM messages m
 LEFT JOIN freelancer f ON m.sender_id = f.user_id
 LEFT JOIN creators c ON m.sender_id = c.user_id
 LEFT JOIN deadline_extension_requested der ON m.deadline_extension_id = der.id
+LEFT JOIN projects dp ON der.project_id = dp.id
+LEFT JOIN services ds ON dp.service_id = ds.id
 LEFT JOIN custom_packages cp ON m.custom_package_id = cp.id
 WHERE m.room_id = $1
 ORDER BY m.created_at DESC
@@ -186,6 +194,17 @@ LIMIT $2 OFFSET $3;
               requested_at: row.der_requested_at,
               approved_at: row.der_approved_at,
               expires_at: row.der_expires_at,
+            }
+          : null,
+        project: row.deadline_extension_id
+          ? {
+              id: row.der_project_id,
+              status: row.der_project_status,
+              amount: row.der_project_amount,
+              end_date: row.der_project_end_date,
+              service_name: row.der_service_name,
+              plan_type: row.der_plan_type,
+              delivery_time: row.der_delivery_time,
             }
           : null,
         customPackage: row.custom_package_id
@@ -525,20 +544,24 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     const { project_id, new_delivery_date, new_delivery_time } = extensionData;
 
     const roleCheck = await pool.query(
-      `SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1 OR freelancer_id = $2`,
+      `SELECT freelancer_id, user_id FROM freelancer WHERE user_id = $1 OR user_id = $2`,
       [userId, recipientId]
     );
 
-    const freelancerIds = roleCheck.rows.map((r) => r.freelancer_id);
-    let freelancerId, creatorId;
+    const freelancerRow = roleCheck.rows[0];
+    if (!freelancerRow) throw new Error('No freelancer found for these users');
 
-    if (freelancerIds.includes(userId)) {
-      freelancerId = userId;
-      creatorId = recipientId;
-    } else {
-      freelancerId = recipientId;
-      creatorId = userId;
-    }
+    const freelancerUserId = freelancerRow.user_id;
+    const creatorUserId = freelancerUserId == userId ? recipientId : userId;
+
+    const freelancerId = freelancerRow.freelancer_id;
+
+    const creatorCheck = await pool.query(
+      `SELECT creator_id FROM creators WHERE user_id = $1`,
+      [creatorUserId]
+    );
+    if (!creatorCheck.rows[0]) throw new Error('No creator found for these users');
+    const creatorId = creatorCheck.rows[0].creator_id;
 
     const query = `
       INSERT INTO deadline_extension_requested (
@@ -567,7 +590,14 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   },
 
   // Accept deadline extension request and update the project's end_date
-  async acceptDeadlineExtension(requestId, creatorId) {
+  async acceptDeadlineExtension(requestId, creatorUserId) {
+    const creatorCheck = await pool.query(
+      `SELECT creator_id FROM creators WHERE user_id = $1`,
+      [creatorUserId]
+    );
+    if (!creatorCheck.rows[0]) return null;
+    const creatorId = creatorCheck.rows[0].creator_id;
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -610,7 +640,14 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   },
 
   // Reject deadline extension request
-  async rejectDeadlineExtension(requestId, creatorId) {
+  async rejectDeadlineExtension(requestId, creatorUserId) {
+    const creatorCheck = await pool.query(
+      `SELECT creator_id FROM creators WHERE user_id = $1`,
+      [creatorUserId]
+    );
+    if (!creatorCheck.rows[0]) return null;
+    const creatorId = creatorCheck.rows[0].creator_id;
+
     const query = `
       UPDATE deadline_extension_requested
       SET status = 'rejected'
@@ -844,6 +881,18 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       console.error("Error fetching recent notifications:", error);
       throw error;
     }
+  },
+
+  async getProjectInfo(projectId) {
+    const result = await pool.query(
+      `SELECT p.id, p.status, p.amount, p.end_date,
+              s.service_name, s.plan_type, s.delivery_time
+       FROM projects p
+       LEFT JOIN services s ON p.service_id = s.id
+       WHERE p.id = $1`,
+      [projectId]
+    );
+    return result.rows[0] || null;
   },
 };
 

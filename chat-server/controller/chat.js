@@ -336,6 +336,8 @@ const chatController = (io) => {
           extensionRequest.id
         );
 
+        const projectInfo = await chatModel.getProjectInfo(extensionRequest.project_id);
+
         const messageData = {
           id: savedMessage.id,
           senderId: userId,
@@ -346,6 +348,7 @@ const chatController = (io) => {
           chatRoomId,
           isRead: false,
           deadlineExtension: extensionRequest,
+          project: projectInfo,
         };
 
         io.to(chatRoomId).emit("receive-deadline-extension-request", messageData);
