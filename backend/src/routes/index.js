@@ -23,7 +23,7 @@ router.use('/wallet', authenticateUser, walletRoutes);
 router.use('/projects', authenticateUser, projectRoutes);
 router.use('/webhooks', webhookRoutes);
 router.use('/public', publicRoutes);
-router.use('/notifications', authenticateUser, notificationRoutes);
+// router.use('/notifications', authenticateUser, notificationRoutes);
 
 
 module.exports = router;

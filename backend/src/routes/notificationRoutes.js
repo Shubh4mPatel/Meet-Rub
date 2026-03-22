@@ -1,14 +1,14 @@
-const express = require('express');
-const router = express.Router();
-const { getNotifications, markAsRead, markAllAsRead } = require('../controller/notification/notifcationController');
+// const express = require('express');
+// const router = express.Router();
+// const { getNotifications, markAsRead, markAllAsRead } = require('../controller/notification/notifcationController');
 
-// GET /notifications?page=1&limit=20&unreadOnly=false
-router.get('/', getNotifications);
+// // GET /notifications?page=1&limit=20&unreadOnly=false
+// router.get('/', getNotifications);
 
-// POST /notifications/read-all
-router.post('/read-all', markAllAsRead);
+// // POST /notifications/read-all
+// router.post('/read-all', markAllAsRead);
 
-// POST /notifications/:id/read
-router.post('/:id/read', markAsRead);
+// // POST /notifications/:id/read
+// router.post('/:id/read', markAsRead);
 
-module.exports = router;
+// module.exports = router;
