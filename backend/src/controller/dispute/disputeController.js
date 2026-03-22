@@ -2,6 +2,7 @@ const { pool: db } = require('../../../config/dbConfig');
 const AppError = require('../../../utils/appError');
 const { logger } = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
+const { sendNotification } = require('../notification/notificationServicer');
 
 const EXPIRY_SECONDS = 4 * 60 * 60; // 4 hours
 
@@ -51,14 +52,19 @@ const raiseDispute = async (req, res, next) => {
       return next(new AppError('Only creators and freelancers can raise a dispute', 403));
     }
 
+    let serviceName = null;
     if (project_id) {
       const projectCheck = await db.query(
-        `SELECT id FROM projects WHERE id = $1`,
+        `SELECT p.id, s.service_name
+         FROM projects p
+         LEFT JOIN services s ON p.service_id = s.id
+         WHERE p.id = $1`,
         [project_id]
       );
       if (projectCheck.rows.length === 0) {
         return next(new AppError('Project not found', 404));
       }
+      serviceName = projectCheck.rows[0].service_name;
     }
 
     const disputeResult = await db.query(
@@ -69,6 +75,36 @@ const raiseDispute = async (req, res, next) => {
     );
 
     logger.info(`Dispute raised by ${role} (id: ${roleWiseId})`);
+
+    const raiserId = req.user.user_id;
+    const disputeRoute = disputeResult.rows[0].id;
+    const disputeReason = reason_of_dispute === 'other' ? description : reason_of_dispute;
+    const disputeBody = serviceName
+      ? `${req.user.user_name} has raised a dispute against you about ${disputeReason} on ${serviceName}.`
+      : `${req.user.user_name} has raised a dispute against you about ${disputeReason}.`;
+
+    await Promise.all([
+      // Notify the other party
+      sendNotification({
+        recipientId: other_party_id,
+        senderId: raiserId,
+        eventType: 'dispute_raised',
+        title: 'A dispute has been raised against you',
+        body: disputeBody,
+        actionType: 'link',
+        actionRoute: disputeRoute,
+      }),
+      // Confirm to the raiser
+      sendNotification({
+        recipientId: raiserId,
+        senderId: raiserId,
+        eventType: 'dispute_raised',
+        title: 'Dispute raised successfully',
+        body: `Your dispute has been successfully raised ${req.user.user_name}.Our team will review the details and keep you informed for of the next steps.`,
+        actionType: 'link',
+        actionRoute: disputeRoute,
+      }),
+    ]);
 
     return res.status(201).json({
       status: 'success',

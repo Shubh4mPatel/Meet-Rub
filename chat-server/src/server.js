@@ -8,6 +8,7 @@ const { logger } = require('../utils/logger');
 const { manageLogFiles } = require('../cron/logmanager');
 const { socketAuth } = require('../middleware/authentication');
 const { startMasterWorker } = require('../consumers/worker');
+const { startNotificationSubscriber, stopNotificationSubscriber } = require('../consumers/notificationSubscriber');
 const { chatController } = require('../controller/chat');
 const AppError = require('../utils/appError');
 const cors = require('cors');
@@ -122,12 +123,14 @@ if (process.env.NODE_ENV !== 'development') {
   serverWithSocket = server.listen(PORT, () => {
     manageLogFiles();
     // startMasterWorker();
+    startNotificationSubscriber(io);
     logger.info(`Server running in ${process.env.NODE_ENV} mode on :${PORT}`);
   });
 } else {
   serverWithSocket = server.listen(PORT, () => {
     // startMasterWorker();
     manageLogFiles();
+    startNotificationSubscriber(io);
     logger.info(`Server running in ${process.env.NODE_ENV} mode on :${PORT}`);
   });
 }
@@ -140,6 +143,8 @@ const gracefulShutdown = (signal) => {
   io.close(() => {
     logger.info('Socket.IO connections closed');
   });
+
+  stopNotificationSubscriber();
 
   serverWithSocket.close(() => {
     logger.info('HTTP server closed');
