@@ -489,6 +489,32 @@ ORDER BY m.created_at DESC NULLS LAST; `;
 
   // Create a project from an accepted custom package
   async createProjectFromPackage(pkg) {
+    let endDate = pkg.delivery_date || null;
+
+    // When the package was initiated by the creator, derive deadline from the
+    // service's delivery_time string (e.g. "6-7 days") — take the max value
+    // and add it to today's date.
+    if (pkg.initiator_role === 'creator' && pkg.service_id) {
+      try {
+        const svcResult = await pool.query(
+          `SELECT delivery_time FROM services WHERE id = $1`,
+          [pkg.service_id]
+        );
+        const deliveryTime = svcResult.rows[0]?.delivery_time;
+        if (deliveryTime) {
+          const numbers = deliveryTime.match(/\d+/g);
+          if (numbers && numbers.length > 0) {
+            const maxDays = Math.max(...numbers.map(Number));
+            const deadline = new Date();
+            deadline.setDate(deadline.getDate() + maxDays);
+            endDate = deadline.toISOString();
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching service delivery_time for deadline:", err);
+      }
+    }
+
     const query = `
       INSERT INTO projects (creator_id, freelancer_id, number_of_units, amount, status, end_date, service_id)
       VALUES ($1, $2, $3, $4, 'CREATED', $5, $6)
@@ -501,7 +527,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         pkg.freelancer_id,
         pkg.units || null,
         pkg.price,
-        pkg.delivery_date || null,
+        endDate,
         pkg.service_id || null,
       ]);
       return result.rows[0];
