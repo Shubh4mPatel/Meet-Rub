@@ -4,21 +4,15 @@ const admin = require('firebase-admin');
 const AppError = require('../../utils/appError');
 const { logger } = require('../../utils/logger');
 
-const { sendNotificationToUser, broadcastNotification } = require('./helper');
+const { sendNotificationToUser, broadcastNotification, getUserNotifications, markNotificationAsReadAndDelete } = require('./helper');
 const { sendMail, sendBatchMail } = require('../../config/email');
 
 const saveNotificationToken = async (req, res, next) => {
   try {
     const { token, deviceType, deviceId } = req.body;
     // const userId = req.user?.id; // Safe access
-    const authHeader = req.get('authorization');
 
-    const headerToken = authHeader && authHeader.split(' ')[1];
-
-    const secretKey = process.env.JWT_SECRET;
-    const decoded = jwt.verify(headerToken, secretKey);
-
-    const userId = decoded.sub;
+    const userId = req.user && req.user.id ? req.user.id : null;
 
     if (!userId) {
       return next(new AppError('User authentication required', 401));
@@ -299,4 +293,59 @@ const emailNotification = async (req, res, next) => {
   }
 };
 
-module.exports = { saveNotificationToken, testNotification, sendNotification, emailNotification };
+const getNotifications = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const unreadOnly = req.query.unreadOnly === 'true';
+    const offset = (page - 1) * limit;
+
+    const result = await getUserNotifications(userId, limit, offset, unreadOnly);
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        notifications: result.notifications,
+        total: result.total,
+        unreadCount: result.unreadCount,
+        page,
+        limit,
+        totalPages: Math.ceil(result.total / limit),
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching notifications:', error);
+    return next(new AppError('Failed to fetch notifications', 500));
+  }
+};
+
+const markAsRead = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const notification = await markNotificationAsReadAndDelete(id);
+    if (!notification) {
+      return next(new AppError('Notification not found', 404));
+    }
+    return res.status(200).json({ status: 'success', message: 'Notification marked as read' });
+  } catch (error) {
+    logger.error('Error marking notification as read:', error);
+    return next(new AppError('Failed to mark notification as read', 500));
+  }
+};
+
+const markAllAsRead = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    await query(
+      `UPDATE web_notifications SET is_read = true, read_at = NOW(), is_deleted = true WHERE user_id = $1 AND is_deleted = false`,
+      [userId]
+    );
+    return res.status(200).json({ status: 'success', message: 'All notifications marked as read' });
+  } catch (error) {
+    logger.error('Error marking all notifications as read:', error);
+    return next(new AppError('Failed to mark all notifications as read', 500));
+  }
+};
+
+module.exports = { saveNotificationToken, testNotification, sendNotification, emailNotification, getNotifications, markAsRead, markAllAsRead };

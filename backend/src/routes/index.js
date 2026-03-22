@@ -10,6 +10,7 @@ const walletRoutes = require('./walletRoutes');
 const projectRoutes = require('./projectRoutes');
 const webhookRoutes = require('./webhookRoutes');
 const publicRoutes = require('./publicRoutes')
+const notificationRoutes = require('./notificationRoutes');
 const { authenticateUser, requireRole } = require('../middleware/authMiddleware');
 
 router.use('/auth', authroutes);
@@ -22,6 +23,7 @@ router.use('/wallet', authenticateUser, walletRoutes);
 router.use('/projects', authenticateUser, projectRoutes);
 router.use('/webhooks', webhookRoutes);
 router.use('/public', publicRoutes);
+router.use('/notifications', authenticateUser, notificationRoutes);
 
 
 module.exports = router;

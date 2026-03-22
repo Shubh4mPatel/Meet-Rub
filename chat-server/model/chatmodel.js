@@ -777,6 +777,40 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       throw error;
     }
   },
+
+  // Save a notification to the web_notifications table
+  async saveNotification(userId, title, message, type = 'info', metadata = {}) {
+    const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const query = `
+      INSERT INTO web_notifications (notification_id, user_id, title, message, type, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
+    `;
+    try {
+      const result = await pool.query(query, [
+        notificationId, userId, title, message, type, JSON.stringify(metadata)
+      ]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error saving notification:", error);
+      throw error;
+    }
+  },
+
+  // Get recent notifications for a user (for bell icon on connect)
+  async getRecentNotifications(userId, limit = 5) {
+    const query = `
+      SELECT * FROM web_notifications
+      WHERE user_id = $1 AND is_deleted = false
+      ORDER BY created_at DESC LIMIT $2
+    `;
+    try {
+      const result = await pool.query(query, [userId, limit]);
+      return result.rows;
+    } catch (error) {
+      console.error("Error fetching recent notifications:", error);
+      throw error;
+    }
+  },
 };
 
 /// we are storing date time in the custome package and in the project we have only end date col so add date and time and fill that col and also add no of units per service and also we have to ask question about the hire feature will freelancer have to accept that what will happen when i heir a freelancer

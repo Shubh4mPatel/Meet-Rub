@@ -1,6 +1,27 @@
 const chatModel = require("../model/chatmodel");
 const redis = require("../config/reddis");
 
+// Save notification to DB and emit live to recipient if online
+async function emitNotification(io, recipientId, title, message, type = 'info', metadata = {}) {
+  try {
+    const savedNotif = await chatModel.saveNotification(recipientId, title, message, type, metadata);
+    const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('notification', {
+        id: savedNotif.notification_id,
+        title: savedNotif.title,
+        message: savedNotif.message,
+        type: savedNotif.type,
+        timestamp: savedNotif.created_at,
+        isRead: false,
+        metadata: savedNotif.metadata,
+      });
+    }
+  } catch (error) {
+    console.error("Error emitting notification:", error);
+  }
+}
+
 const chatController = (io) => {
   io.on("connection", (socket) => {
     const userId = socket.user.user_id;
@@ -159,6 +180,8 @@ const chatController = (io) => {
           }
         }
 
+        await emitNotification(io, recipientId, `New package from ${username}`, "You received a custom package", 'info', { chatRoomId, senderId: userId, packageId: customPackage.id });
+
         console.log(`Message saved: ${username} to ${recipientId}`);
       } catch (error) {
         console.error("custom-package error:", error);
@@ -233,6 +256,13 @@ const chatController = (io) => {
           }
         }
 
+        // Notify freelancer (recipientId) that package was accepted
+        await emitNotification(io, recipientId, `Package accepted by ${username}`, "Your custom package has been accepted", 'success', { chatRoomId, packageId });
+        // Notify creator about payment (creatorUserId already resolved above)
+        if (creatorUserId) {
+          await emitNotification(io, creatorUserId, "Payment required", "Package accepted — please complete payment to start the project.", 'warning', { chatRoomId, packageId, projectId: project.id });
+        }
+
         console.log(`Package ${packageId} accepted by ${username} (${userId})`);
       } catch (error) {
         console.error("Error accepting package:", error);
@@ -286,6 +316,8 @@ const chatController = (io) => {
           }
         }
 
+        await emitNotification(io, recipientId, `Package rejected by ${username}`, "Your custom package has been rejected", 'error', { chatRoomId, packageId });
+
         console.log(`Package ${packageId} rejected by ${username} (${userId})`);
       } catch (error) {
         console.error("Error rejecting package:", error);
@@ -313,6 +345,8 @@ const chatController = (io) => {
           revokedBy: userId,
           package: updatedPackage,
         });
+
+        await emitNotification(io, recipientId, `Package revoked by ${username}`, "A custom package sent to you has been revoked", 'info', { chatRoomId, packageId });
 
         console.log(`Package ${packageId} revoked by ${username} (${userId})`);
       } catch (error) {
@@ -381,6 +415,8 @@ const chatController = (io) => {
           }
         }
 
+        await emitNotification(io, recipientId, `Deadline extension requested by ${username}`, "A freelancer has requested a deadline extension", 'info', { chatRoomId, extensionId: extensionRequest.id });
+
         console.log(`Deadline extension request sent by ${username} (${userId})`);
       } catch (error) {
         console.error("Error sending deadline extension request:", error);
@@ -432,6 +468,8 @@ const chatController = (io) => {
           }
         }
 
+        await emitNotification(io, recipientId, `Deadline extension accepted by ${username}`, "Your deadline extension request has been accepted", 'success', { chatRoomId, extensionId: requestId });
+
         console.log(`Deadline extension ${requestId} accepted by ${username} (${userId})`);
       } catch (error) {
         console.error("Error accepting deadline extension:", error);
@@ -476,6 +514,8 @@ const chatController = (io) => {
             }
           }
         }
+
+        await emitNotification(io, recipientId, `Deadline extension rejected by ${username}`, "Your deadline extension request has been rejected", 'error', { chatRoomId, extensionId: requestId });
 
         console.log(`Deadline extension ${requestId} rejected by ${username} (${userId})`);
       } catch (error) {
@@ -538,6 +578,12 @@ const chatController = (io) => {
               });
             }
           }
+        }
+
+        // Save notification and emit to bell
+        const recipientActiveRoom2 = await redis.get(`user:${recipientId}:activeRoom`);
+        if (recipientActiveRoom2 !== chatRoomId) {
+          await emitNotification(io, recipientId, `New message from ${username}`, message, 'info', { chatRoomId, senderId: userId });
         }
 
         console.log(`Message saved: ${username} to ${recipientId}`);
@@ -735,6 +781,10 @@ const chatController = (io) => {
         // Get unread count for this user
         const unreadCount = await chatModel.getUnreadCount(userId);
         socket.emit("unread-count", { count: unreadCount });
+
+        // Send last 5 notifications to the user on connect
+        const recentNotifications = await chatModel.getRecentNotifications(userId, 5);
+        socket.emit("notifications-list", { notifications: recentNotifications });
 
       } catch (error) {
         console.error("Error on connection setup:", error);
