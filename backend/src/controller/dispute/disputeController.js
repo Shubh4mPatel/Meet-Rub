@@ -88,7 +88,7 @@ const raiseDispute = async (req, res, next) => {
       sendNotification({
         recipientId: other_party_id,
         senderId: raiserId,
-        eventType: 'dispute_raised',
+        eventType: 'dispute_raised_against_you',
         title: 'A dispute has been raised against you',
         body: disputeBody,
         actionType: 'link',
@@ -98,7 +98,7 @@ const raiseDispute = async (req, res, next) => {
       sendNotification({
         recipientId: raiserId,
         senderId: raiserId,
-        eventType: 'dispute_raised',
+        eventType: 'dispute_raised_by_you',
         title: 'Dispute raised successfully',
         body: `Your dispute has been successfully raised ${req.user.user_name}.Our team will review the details and keep you informed for of the next steps.`,
         actionType: 'link',
