@@ -1,24 +1,33 @@
 const chatModel = require("../model/chatmodel");
 const redis = require("../config/reddis");
 
-// Save notification to DB and emit live to recipient if online
-async function emitNotification(io, recipientId, title, message, type = 'info', metadata = {}) {
+// Save a web notification to DB and emit live to recipient if online.
+// For new_message: skips save and emit entirely if recipient is already in that chat room.
+async function emitWebNotification(io, recipientId, senderId, eventType, title, body, actionType = 'none', actionRoute = null) {
   try {
-    const savedNotif = await chatModel.saveNotification(recipientId, title, message, type, metadata);
+    if (eventType === 'new_message') {
+      const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
+      if (recipientActiveRoom === actionRoute) return;
+    }
+
+    const savedNotif = await chatModel.saveWebNotification(
+      recipientId, senderId, eventType, title, body, actionType, actionRoute
+    );
     const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('notification', {
-        id: savedNotif.notification_id,
+        id: savedNotif.id,
+        event_type: savedNotif.event_type,
         title: savedNotif.title,
-        message: savedNotif.message,
-        type: savedNotif.type,
-        timestamp: savedNotif.created_at,
-        isRead: false,
-        metadata: savedNotif.metadata,
+        body: savedNotif.body,
+        action_type: savedNotif.action_type,
+        action_route: savedNotif.action_route,
+        is_read: false,
+        created_at: savedNotif.created_at,
       });
     }
   } catch (error) {
-    console.error("Error emitting notification:", error);
+    console.error("Error emitting web notification:", error);
   }
 }
 
@@ -155,32 +164,19 @@ const chatController = (io) => {
 
         io.to(chatRoomId).emit("receive-custom-package", messageData);
 
-        const recipientOnline = await redis.get(`user:${recipientId}:online`);
-
-        if (recipientOnline) {
-          const recipientSocketId = await redis.get(
-            `user:${recipientId}:socketId`
+        if (userRole === 'creator') {
+          await emitWebNotification(io, recipientId, userId, 'hire_request',
+            'New Hire Request',
+            `${username} has sent you a hire request.`,
+            'link', chatRoomId
           );
-
-          if (recipientSocketId) {
-            // Check if recipient is in the same chat room
-            const recipientActiveRoom = await redis.get(
-              `user:${recipientId}:activeRoom`
-            );
-
-            if (recipientActiveRoom !== chatRoomId) {
-              // Only send notification if recipient is not in the same chat room
-              io.to(recipientSocketId).emit("new-message-notification", {
-                senderId: userId,
-                senderUsername: username,
-                message: "Package sent",
-                chatRoomId,
-              });
-            }
-          }
+        } else {
+          await emitWebNotification(io, recipientId, userId, 'package_sent',
+            'New Package Offer',
+            `${username} has sent you a custom package offer.`,
+            'link', chatRoomId
+          );
         }
-
-        await emitNotification(io, recipientId, `New package from ${username}`, "You received a custom package", 'info', { chatRoomId, senderId: userId, packageId: customPackage.id });
 
         console.log(`Message saved: ${username} to ${recipientId}`);
       } catch (error) {
@@ -233,35 +229,12 @@ const chatController = (io) => {
           }
         }
 
-        const recipientOnline = await redis.get(`user:${recipientId}:online`);
-
-        if (recipientOnline) {
-          const recipientSocketId = await redis.get(
-            `user:${recipientId}:socketId`
-          );
-
-          if (recipientSocketId) {
-            const recipientActiveRoom = await redis.get(
-              `user:${recipientId}:activeRoom`
-            );
-
-            if (recipientActiveRoom !== chatRoomId) {
-              io.to(recipientSocketId).emit("new-message-notification", {
-                senderId: userId,
-                senderUsername: username,
-                message: "Package accepted",
-                chatRoomId,
-              });
-            }
-          }
-        }
-
-        // Notify freelancer (recipientId) that package was accepted
-        await emitNotification(io, recipientId, `Package accepted by ${username}`, "Your custom package has been accepted", 'success', { chatRoomId, packageId });
-        // Notify creator about payment (creatorUserId already resolved above)
-        if (creatorUserId) {
-          await emitNotification(io, creatorUserId, "Payment required", "Package accepted — please complete payment to start the project.", 'warning', { chatRoomId, packageId, projectId: project.id });
-        }
+        // Notify freelancer that their package was accepted
+        await emitWebNotification(io, recipientId, userId, 'package_accepted',
+          'Package Accepted',
+          `${username} has accepted your package offer.`,
+          'link', chatRoomId
+        );
 
         console.log(`Package ${packageId} accepted by ${username} (${userId})`);
       } catch (error) {
@@ -290,33 +263,13 @@ const chatController = (io) => {
           rejectedBy: userId,
           package: updatedPackage,
         });
-        // Check if recipient is online using Redis
-        const recipientOnline = await redis.get(`user:${recipientId}:online`);
 
-        if (recipientOnline) {
-          const recipientSocketId = await redis.get(
-            `user:${recipientId}:socketId`
-          );
-
-          if (recipientSocketId) {
-            // Check if recipient is in the same chat room
-            const recipientActiveRoom = await redis.get(
-              `user:${recipientId}:activeRoom`
-            );
-
-            if (recipientActiveRoom !== chatRoomId) {
-              // Only send notification if recipient is not in the same chat room
-              io.to(recipientSocketId).emit("new-message-notification", {
-                senderId: userId,
-                senderUsername: username,
-                message: "Package rejected",
-                chatRoomId,
-              });
-            }
-          }
-        }
-
-        await emitNotification(io, recipientId, `Package rejected by ${username}`, "Your custom package has been rejected", 'error', { chatRoomId, packageId });
+        // Notify freelancer that their package was rejected
+        await emitWebNotification(io, recipientId, userId, 'package_rejected',
+          'Package Rejected',
+          `${username} has rejected your package offer.`,
+          'link', chatRoomId
+        );
 
         console.log(`Package ${packageId} rejected by ${username} (${userId})`);
       } catch (error) {
@@ -346,7 +299,8 @@ const chatController = (io) => {
           package: updatedPackage,
         });
 
-        await emitNotification(io, recipientId, `Package revoked by ${username}`, "A custom package sent to you has been revoked", 'info', { chatRoomId, packageId });
+        // // await sendMessageNotification(io, recipientId, userId, username, "Package rejected", chatRoomId);
+        // await emitNotification(io, recipientId, `Package revoked by ${username}`, "A custom package sent to you has been revoked", 'info', { chatRoomId, packageId });
 
         console.log(`Package ${packageId} revoked by ${username} (${userId})`);
       } catch (error) {
@@ -396,26 +350,11 @@ const chatController = (io) => {
 
         io.to(chatRoomId).emit("receive-deadline-extension-request", messageData);
 
-        const recipientOnline = await redis.get(`user:${recipientId}:online`);
-
-        if (recipientOnline) {
-          const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
-
-          if (recipientSocketId) {
-            const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
-
-            if (recipientActiveRoom !== chatRoomId) {
-              io.to(recipientSocketId).emit("new-message-notification", {
-                senderId: userId,
-                senderUsername: username,
-                message: "Deadline extension requested",
-                chatRoomId,
-              });
-            }
-          }
-        }
-
-        await emitNotification(io, recipientId, `Deadline extension requested by ${username}`, "A freelancer has requested a deadline extension", 'info', { chatRoomId, extensionId: extensionRequest.id });
+        await emitWebNotification(io, recipientId, userId, 'deadline_extension',
+          'Deadline Extension Request',
+          `${username} has requested a deadline extension on project #${extensionRequest.project_id}.`,
+          'link', chatRoomId
+        );
 
         console.log(`Deadline extension request sent by ${username} (${userId})`);
       } catch (error) {
@@ -449,26 +388,11 @@ const chatController = (io) => {
           project: updatedRequest.project,
         });
 
-        const recipientOnline = await redis.get(`user:${recipientId}:online`);
-
-        if (recipientOnline) {
-          const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
-
-          if (recipientSocketId) {
-            const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
-
-            if (recipientActiveRoom !== chatRoomId) {
-              io.to(recipientSocketId).emit("new-message-notification", {
-                senderId: userId,
-                senderUsername: username,
-                message: "Deadline extension accepted",
-                chatRoomId,
-              });
-            }
-          }
-        }
-
-        await emitNotification(io, recipientId, `Deadline extension accepted by ${username}`, "Your deadline extension request has been accepted", 'success', { chatRoomId, extensionId: requestId });
+        await emitWebNotification(io, recipientId, userId, 'deadline_extension_accepted',
+          'Deadline Extension Accepted',
+          `${username} has accepted your deadline extension request.`,
+          'link', chatRoomId
+        );
 
         console.log(`Deadline extension ${requestId} accepted by ${username} (${userId})`);
       } catch (error) {
@@ -496,26 +420,11 @@ const chatController = (io) => {
           deadlineExtension: updatedRequest,
         });
 
-        const recipientOnline = await redis.get(`user:${recipientId}:online`);
-
-        if (recipientOnline) {
-          const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
-
-          if (recipientSocketId) {
-            const recipientActiveRoom = await redis.get(`user:${recipientId}:activeRoom`);
-
-            if (recipientActiveRoom !== chatRoomId) {
-              io.to(recipientSocketId).emit("new-message-notification", {
-                senderId: userId,
-                senderUsername: username,
-                message: "Deadline extension rejected",
-                chatRoomId,
-              });
-            }
-          }
-        }
-
-        await emitNotification(io, recipientId, `Deadline extension rejected by ${username}`, "Your deadline extension request has been rejected", 'error', { chatRoomId, extensionId: requestId });
+        await emitWebNotification(io, recipientId, userId, 'deadline_extension_rejected',
+          'Deadline Extension Rejected',
+          `${username} has rejected your deadline extension request.`,
+          'link', chatRoomId
+        );
 
         console.log(`Deadline extension ${requestId} rejected by ${username} (${userId})`);
       } catch (error) {
@@ -554,37 +463,7 @@ const chatController = (io) => {
         // Send message to the chat room (both users)
         io.to(chatRoomId).emit("receive-message", messageData);
 
-        // Check if recipient is online using Redis
-        const recipientOnline = await redis.get(`user:${recipientId}:online`);
-
-        if (recipientOnline) {
-          const recipientSocketId = await redis.get(
-            `user:${recipientId}:socketId`
-          );
-
-          if (recipientSocketId) {
-            // Check if recipient is in the same chat room
-            const recipientActiveRoom = await redis.get(
-              `user:${recipientId}:activeRoom`
-            );
-
-            if (recipientActiveRoom !== chatRoomId) {
-              // Only send notification if recipient is not in the same chat room
-              io.to(recipientSocketId).emit("new-message-notification", {
-                senderId: userId,
-                senderUsername: username,
-                message,
-                chatRoomId,
-              });
-            }
-          }
-        }
-
-        // Save notification and emit to bell
-        const recipientActiveRoom2 = await redis.get(`user:${recipientId}:activeRoom`);
-        if (recipientActiveRoom2 !== chatRoomId) {
-          await emitNotification(io, recipientId, `New message from ${username}`, message, 'info', { chatRoomId, senderId: userId });
-        }
+        await emitWebNotification(io, recipientId, userId, 'new_message', username, message, 'link', chatRoomId);
 
         console.log(`Message saved: ${username} to ${recipientId}`);
       } catch (error) {
@@ -734,6 +613,31 @@ const chatController = (io) => {
       }
     });
 
+    // Mark a single notification as read
+    socket.on("read-notification", async ({ notificationId }) => {
+      try {
+        const updated = await chatModel.markNotificationAsRead(notificationId, userId);
+        if (updated) {
+          const unreadCount = await chatModel.getUnreadCount(userId);
+          socket.emit("unread-count", { count: unreadCount });
+        }
+      } catch (error) {
+        console.error("Error marking notification as read:", error);
+        socket.emit("error", { message: "Failed to mark notification as read" });
+      }
+    });
+
+    // Mark all notifications as read
+    socket.on("read-all-notifications", async () => {
+      try {
+        await chatModel.markAllNotificationsAsRead(userId);
+        socket.emit("unread-count", { count: 0 });
+      } catch (error) {
+        console.error("Error marking all notifications as read:", error);
+        socket.emit("error", { message: "Failed to mark all notifications as read" });
+      }
+    });
+
     // Handle disconnect
     socket.on("disconnect", async () => {
       console.log(`User disconnected: ${username} (${userId})`);
@@ -785,14 +689,15 @@ const chatController = (io) => {
         // Send top 5 unread notifications to the user on connect
         const recentNotifications = await chatModel.getRecentNotifications(userId, 5);
         for (const notif of recentNotifications) {
-          socket.emit("new-message-notification", {
-            notificationId: notif.notification_id,
-            senderId: notif.metadata?.senderId,
-            senderUsername: notif.title,
-            message: notif.message,
-            chatRoomId: notif.metadata?.chatRoomId,
-            type: notif.type,
-            timestamp: notif.created_at,
+          socket.emit("notification", {
+            id: notif.id,
+            event_type: notif.event_type,
+            title: notif.title,
+            body: notif.body,
+            action_type: notif.action_type,
+            action_route: notif.action_route,
+            is_read: notif.is_read,
+            created_at: notif.created_at,
           });
         }
 

@@ -778,29 +778,63 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     }
   },
 
-  // Save a notification to the web_notifications table
-  async saveNotification(userId, title, message, type = 'info', metadata = {}) {
-    const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  // Save a notification to web_notifications using the current schema
+  async saveWebNotification(recipientId, senderId, eventType, title, body, actionType = 'none', actionRoute = null) {
     const query = `
-      INSERT INTO web_notifications (notification_id, user_id, title, message, type, metadata)
-      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
+      INSERT INTO web_notifications (recipient_id, sender_id, event_type, title, body, action_type, action_route)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
     `;
     try {
       const result = await pool.query(query, [
-        notificationId, userId, title, message, type, JSON.stringify(metadata)
+        recipientId, senderId, eventType, title, body, actionType, actionRoute
       ]);
       return result.rows[0];
     } catch (error) {
-      console.error("Error saving notification:", error);
+      console.error("Error saving web notification:", error);
       throw error;
     }
   },
 
-  // Get recent unread notifications for a user (for bell icon on connect)
+  // Mark a single notification as read
+  async markNotificationAsRead(notificationId, userId) {
+    const query = `
+      UPDATE web_notifications
+      SET is_read = true
+      WHERE id = $1 AND recipient_id = $2
+      RETURNING *
+    `;
+    try {
+      const result = await pool.query(query, [notificationId, userId]);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      throw error;
+    }
+  },
+
+  // Mark all notifications as read for a user
+  async markAllNotificationsAsRead(userId) {
+    const query = `
+      UPDATE web_notifications
+      SET is_read = true
+      WHERE recipient_id = $1 AND is_read = false
+      RETURNING id
+    `;
+    try {
+      const result = await pool.query(query, [userId]);
+      return result.rowCount;
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      throw error;
+    }
+  },
+
+  // Get top 5 unread notifications for a user (sent on connect)
   async getRecentNotifications(userId, limit = 5) {
     const query = `
       SELECT * FROM web_notifications
-      WHERE user_id = $1 AND is_deleted = false AND is_read = false
+      WHERE recipient_id = $1 AND is_read = false
       ORDER BY created_at DESC LIMIT $2
     `;
     try {
