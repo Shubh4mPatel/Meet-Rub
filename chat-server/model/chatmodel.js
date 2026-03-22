@@ -292,11 +292,11 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     }
   },
 
-  // Get unread message count
+  // Get unread notification count
   async getUnreadCount(userId) {
     const query = `
       SELECT COUNT(*) as unread_count
-      FROM messages
+      FROM web_notifications
       WHERE recipient_id = $1 AND is_read = FALSE
     `;
 
@@ -796,11 +796,11 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     }
   },
 
-  // Get recent notifications for a user (for bell icon on connect)
+  // Get recent unread notifications for a user (for bell icon on connect)
   async getRecentNotifications(userId, limit = 5) {
     const query = `
       SELECT * FROM web_notifications
-      WHERE user_id = $1 AND is_deleted = false
+      WHERE user_id = $1 AND is_deleted = false AND is_read = false
       ORDER BY created_at DESC LIMIT $2
     `;
     try {

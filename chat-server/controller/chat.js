@@ -782,9 +782,19 @@ const chatController = (io) => {
         const unreadCount = await chatModel.getUnreadCount(userId);
         socket.emit("unread-count", { count: unreadCount });
 
-        // Send last 5 notifications to the user on connect
+        // Send top 5 unread notifications to the user on connect
         const recentNotifications = await chatModel.getRecentNotifications(userId, 5);
-        socket.emit("notifications-list", { notifications: recentNotifications });
+        for (const notif of recentNotifications) {
+          socket.emit("new-message-notification", {
+            notificationId: notif.notification_id,
+            senderId: notif.metadata?.senderId,
+            senderUsername: notif.title,
+            message: notif.message,
+            chatRoomId: notif.metadata?.chatRoomId,
+            type: notif.type,
+            timestamp: notif.created_at,
+          });
+        }
 
       } catch (error) {
         console.error("Error on connection setup:", error);
