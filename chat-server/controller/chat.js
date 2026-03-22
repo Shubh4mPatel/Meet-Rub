@@ -60,10 +60,6 @@ const chatController = (io) => {
         if (userRole === 'freelancer') {
           const projects = await chatModel.getFreelancerProjects(userId, recipientId);
           socket.emit('projects-list', { projects });
-
-          // Send all in-progress projects across all creators
-          const inProgressProjects = await chatModel.getFreelancerInProgressProjects(userId);
-          socket.emit('inprogress-projects', { projects: inProgressProjects });
         }
 
         // Refresh pending payments for creator — filtered to this freelancer
@@ -176,7 +172,7 @@ const chatController = (io) => {
         //   socket.emit("error", { message: "Only creators can accept packages" });
         //   return;
         // }
-
+        console.log(`User ${username} (${userId}) is accepting package ${packageId} for recipient ${recipientId}`);
         const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
@@ -294,6 +290,34 @@ const chatController = (io) => {
       } catch (error) {
         console.error("Error rejecting package:", error);
         socket.emit("error", { message: "Failed to reject package" });
+      }
+    });
+
+    socket.on("revoke-custom-package", async (packageId, recipientId) => {
+      try {
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
+        const chatRoomId = `${smallerId}-${largerId}`;
+
+        const updatedPackage = await chatModel.revokePackage(packageId);
+
+        if (!updatedPackage) {
+          socket.emit("error", {
+            message: "Package cannot be revoked. It may not exist or is no longer pending.",
+          });
+          return;
+        }
+
+        io.to(chatRoomId).emit("custom-package-revoked", {
+          packageId,
+          chatRoomId,
+          revokedBy: userId,
+          package: updatedPackage,
+        });
+
+        console.log(`Package ${packageId} revoked by ${username} (${userId})`);
+      } catch (error) {
+        console.error("Error revoking package:", error);
+        socket.emit("error", { message: "Failed to revoke package" });
       }
     });
 

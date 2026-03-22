@@ -29,10 +29,24 @@ const raiseDispute = async (req, res, next) => {
 
     if (role === 'freelancer') {
       freelancer_id = roleWiseId;
-      creator_id = other_party_id;
+      const{rows :creactorCheck} = await db.query(
+        `SELECT creator_id FROM creators WHERE user_id = $1`,
+        [other_party_id]
+      );
+      if (creactorCheck.length === 0) {
+        return next(new AppError('Creator not found', 404));
+      }
+      creator_id = creactorCheck[0].creator_id;
     } else if (role === 'creator') {
       creator_id = roleWiseId;
-      freelancer_id = other_party_id;
+      const{rows :freelancerCheck} = await db.query(
+        `SELECT freelancer_id FROM freelancer WHERE user_id = $1`,
+        [other_party_id]
+      );
+      if (freelancerCheck.length === 0) {
+        return next(new AppError('Freelancer not found', 404));
+      }
+      freelancer_id = freelancerCheck[0].freelancer_id;
     } else {
       return next(new AppError('Only creators and freelancers can raise a dispute', 403));
     }
