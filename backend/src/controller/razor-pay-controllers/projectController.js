@@ -339,46 +339,70 @@ const deleteProject = async (req, res, next) => {
 
 const getAllProjects = async (req, res, next) => {
   try {
-    logger.info('Admin fetching unified project + custom-package feed');
+    logger.info(`[getAllProjects] START user=${req.user?.user_id} role=${req.user?.role} query=${JSON.stringify(req.query)}`);
 
     const page   = Math.max(1, parseInt(req.query.page)  || 1);
     const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;
+    logger.info(`[getAllProjects] page=${page} limit=${limit} offset=${offset}`);
 
     // Optional filters
-    const statusFilter = req.query.status?.trim()   || null; // project status OR package status
-    const typeFilter   = req.query.type?.trim()     || null; // hire_req | package | direct
+    const statusFilter = req.query.status?.trim() || null;
+    const typeFilter   = req.query.type?.trim()   || null;
 
-    // ── UNION: projects (tagged with origin type) + pending/rejected packages ──
-    //
-    // record_type = 'project'        → accepted packages that became projects (CREATED / IN_PROGRESS / …)
-    // record_type = 'custom_package' → packages still in pending / rejected state
-    //
-    // type field:
-    //   'hire_req' – creator sent the hire request
-    //   'package'  – freelancer sent the offer
-    //   'direct'   – project created without a custom package
+    // Project-status type values — when typeFilter matches one of these,
+    // filter projects by their status and exclude custom_package rows.
+    const PROJECT_STATUS_TYPE_MAP = {
+      completed:   'COMPLETED',
+      in_progress: 'IN_PROGRESS',
+      on_hold:     'ON_HOLD',
+    };
+    const mappedProjectStatus = typeFilter
+      ? PROJECT_STATUS_TYPE_MAP[typeFilter.toLowerCase()] || null
+      : null;
+    const isProjectStatusFilter = !!mappedProjectStatus;
 
     const params = [];
     let p = 1;
 
-    const projectStatusWhere  = statusFilter ? `AND p.status = $${p++}` : '';
-    const packageStatusWhere  = statusFilter ? `AND cp2.status = $${p++}` : '';
-    const projectTypeWhere    = typeFilter
-      ? `AND COALESCE(cp.type, 'direct') = $${p++}`
+    const projectStatusWhere = statusFilter ? `AND p.status = $${p++}` : '';
+    const packageStatusWhere = statusFilter ? `AND cp2.status = $${p++}` : '';
+
+    // When typeFilter is a project-status label → filter by p.status, hide packages.
+    // Otherwise → filter by package_type as before.
+    const projectTypeWhere = typeFilter
+      ? isProjectStatusFilter
+        ? `AND p.status = $${p++}`
+        : `AND COALESCE(cp.package_type, 'direct') = $${p++}`
       : '';
-    const packageTypeWhere    = typeFilter
-      ? `AND cp2.type = $${p++}`
+    const packageTypeWhere = typeFilter
+      ? isProjectStatusFilter
+        ? `AND 1 = 0`  // exclude custom_package rows for status-based filters
+        : `AND cp2.package_type = $${p++}`
       : '';
 
     if (statusFilter) { params.push(statusFilter); params.push(statusFilter); }
-    if (typeFilter)   { params.push(typeFilter);   params.push(typeFilter); }
+    if (typeFilter) {
+      params.push(isProjectStatusFilter ? mappedProjectStatus : typeFilter);
+      if (!isProjectStatusFilter) params.push(typeFilter);
+    }
+    logger.info(`[getAllProjects] filters: status=${statusFilter} type=${typeFilter} isProjectStatusFilter=${isProjectStatusFilter} params=${JSON.stringify(params)}`);
 
     const unionQuery = `
       SELECT
-        'project'                       AS record_type,
+        CASE
+          WHEN p.status = 'COMPLETED'   THEN 'completed'
+          WHEN p.status = 'IN_PROGRESS' THEN 'in_progress'
+          WHEN p.status = 'ON_HOLD'     THEN 'on_hold'
+          ELSE 'project'
+        END                             AS record_type,
         p.id,
-        COALESCE(cp.type, 'direct')     AS type,
+        CASE
+          WHEN p.status = 'COMPLETED'   THEN 'completed'
+          WHEN p.status = 'IN_PROGRESS' THEN 'in_progress'
+          WHEN p.status = 'ON_HOLD'     THEN 'on_hold'
+          ELSE COALESCE(cp.package_type, 'direct')
+        END                             AS type,
         p.status                        AS status,
         p.amount                        AS price,
         p.number_of_units,
@@ -396,9 +420,17 @@ const getAllProjects = async (req, res, next) => {
         f.profile_image_url             AS freelancer_profile_image,
         s.service_name,
         p.created_at,
-        p.updated_at
+        p.updated_at,
+        cp.room_id                      AS chat_id
       FROM projects p
-      LEFT JOIN custom_packages cp ON cp.project_id = p.id
+      LEFT JOIN LATERAL (
+        SELECT package_type, initiator_role, room_id
+        FROM custom_packages
+        WHERE creator_id = p.creator_id
+          AND freelancer_id = p.freelancer_id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) cp ON true
       LEFT JOIN creators  c  ON p.creator_id   = c.creator_id
       LEFT JOIN freelancer f  ON p.freelancer_id = f.freelancer_id
       LEFT JOIN services   s  ON p.service_id   = s.id
@@ -409,16 +441,32 @@ const getAllProjects = async (req, res, next) => {
       UNION ALL
 
       SELECT
-        'custom_package'                AS record_type,
+        CASE
+          WHEN cp2.initiator_role = 'creator'    AND cp2.expires_at IS NOT NULL AND cp2.expires_at < NOW() THEN 'hire_req_expired'
+          WHEN cp2.initiator_role = 'creator'    AND cp2.status = 'rejected'                              THEN 'hire_rejected'
+          WHEN cp2.initiator_role = 'creator'    AND cp2.status = 'pending'                               THEN 'hire_requested'
+          WHEN cp2.initiator_role = 'freelancer' AND cp2.expires_at IS NOT NULL AND cp2.expires_at < NOW() THEN 'package_request_expired'
+          WHEN cp2.initiator_role = 'freelancer' AND cp2.status = 'rejected'                              THEN 'package_request_rejected'
+          WHEN cp2.initiator_role = 'freelancer' AND cp2.status = 'pending'                               THEN 'package_requested'
+          ELSE 'custom_package'
+        END                             AS record_type,
         cp2.id,
-        cp2.type                        AS type,
+        CASE
+          WHEN cp2.initiator_role = 'creator'    AND cp2.expires_at IS NOT NULL AND cp2.expires_at < NOW() THEN 'hire_req_expired'
+          WHEN cp2.initiator_role = 'creator'    AND cp2.status = 'rejected'                              THEN 'hire_rejected'
+          WHEN cp2.initiator_role = 'creator'    AND cp2.status = 'pending'                               THEN 'hire_requested'
+          WHEN cp2.initiator_role = 'freelancer' AND cp2.expires_at IS NOT NULL AND cp2.expires_at < NOW() THEN 'package_request_expired'
+          WHEN cp2.initiator_role = 'freelancer' AND cp2.status = 'rejected'                              THEN 'package_request_rejected'
+          WHEN cp2.initiator_role = 'freelancer' AND cp2.status = 'pending'                               THEN 'package_requested'
+          ELSE cp2.package_type
+        END                             AS type,
         cp2.status                      AS status,
         cp2.price,
-        NULL::integer                   AS number_of_units,
-        NULL::timestamptz               AS end_date,
-        cp2.delivery_days,
-        cp2.title,
-        cp2.description,
+        cp2.units                       AS number_of_units,
+        cp2.delivery_date               AS end_date,
+        NULL::integer                   AS delivery_days,
+        cp2.service_type                AS title,
+        NULL::text                      AS description,
         cp2.creator_id,
         cp2.freelancer_id,
         c2.full_name                    AS creator_name,
@@ -429,7 +477,8 @@ const getAllProjects = async (req, res, next) => {
         f2.profile_image_url            AS freelancer_profile_image,
         s2.service_name,
         cp2.created_at,
-        cp2.updated_at
+        NULL::timestamptz               AS updated_at,
+        cp2.room_id                     AS chat_id
       FROM custom_packages cp2
       JOIN creators  c2  ON cp2.creator_id   = c2.creator_id
       JOIN freelancer f2  ON cp2.freelancer_id = f2.freelancer_id
@@ -445,6 +494,7 @@ const getAllProjects = async (req, res, next) => {
     const dataParams  = [...params, limit, offset];
     const countParams = [...params];
 
+    logger.info(`[getAllProjects] executing queries — dataParams=${JSON.stringify(dataParams)}`);
     const [dataResult, countResult] = await Promise.all([
       db.query(dataQuery,  dataParams),
       db.query(countQuery, countParams),
@@ -452,6 +502,7 @@ const getAllProjects = async (req, res, next) => {
 
     const total      = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
+    logger.info(`[getAllProjects] DB returned rows=${dataResult.rows.length} total=${total}`);
 
     // Generate presigned URLs for profile images
     const EXPIRY = 4 * 60 * 60;
@@ -476,7 +527,7 @@ const getAllProjects = async (req, res, next) => {
       })
     );
 
-    logger.info(`getAllProjects unified feed: total=${total} page=${page}`);
+    logger.info(`[getAllProjects] SUCCESS total=${total} page=${page} items=${items.length}`);
 
     return res.status(200).json({
       status: 'success',
@@ -486,7 +537,7 @@ const getAllProjects = async (req, res, next) => {
       },
     });
   } catch (error) {
-    logger.error('getAllProjects error:', error);
+    logger.error(`[getAllProjects] CATCH error=${error.message}`, error.stack);
     return next(new AppError('Failed to fetch projects', 500));
   }
 };

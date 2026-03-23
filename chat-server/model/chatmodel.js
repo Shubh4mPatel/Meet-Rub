@@ -291,6 +291,33 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     }
   },
 
+  async getRoomParticipants(roomId) {
+    const query = `
+      SELECT
+        cr.user1_id,
+        cr.user2_id,
+        COALESCE(f1.user_name, c1.user_name)             AS user1_name,
+        COALESCE(f2.user_name, c2.user_name)             AS user2_name,
+        COALESCE(f1.profile_image_url, c1.profile_image_url) AS user1_avatar,
+        COALESCE(f2.profile_image_url, c2.profile_image_url) AS user2_avatar,
+        CASE WHEN f1.freelancer_id IS NOT NULL THEN 'freelancer' WHEN c1.creator_id IS NOT NULL THEN 'creator' END AS user1_role,
+        CASE WHEN f2.freelancer_id IS NOT NULL THEN 'freelancer' WHEN c2.creator_id IS NOT NULL THEN 'creator' END AS user2_role
+      FROM chat_rooms cr
+      LEFT JOIN freelancer f1 ON cr.user1_id = f1.user_id
+      LEFT JOIN creators   c1 ON cr.user1_id = c1.user_id
+      LEFT JOIN freelancer f2 ON cr.user2_id = f2.user_id
+      LEFT JOIN creators   c2 ON cr.user2_id = c2.user_id
+      WHERE cr.room_id = $1
+    `;
+    try {
+      const result = await pool.query(query, [roomId]);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error("Error getting room participants:", error);
+      throw error;
+    }
+  },
+
   // Mark messages as read
   async markMessagesAsRead(roomId, userId) {
     const query = `

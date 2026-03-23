@@ -1,5 +1,6 @@
 const chatModel = require("../model/chatmodel");
 const redis = require("../config/reddis");
+const { createPresignedUrl } = require("../utils/helper");
 
 // Save a web notification to DB and emit live to recipient if online.
 // For new_message: skips save and emit entirely if recipient is already in that chat room.
@@ -613,6 +614,39 @@ const chatController = (io) => {
         });
       } catch (error) {
         console.error("Error checking user status:", error);
+      }
+    });
+
+    // Admin: fetch full chat history for a given room
+    socket.on("admin-get-chat-history", async ({ roomId, limit = 100, offset = 0 }) => {
+      try {
+        if (userRole !== 'admin') {
+          socket.emit("error", { message: "Unauthorized" });
+          return;
+        }
+
+        const [chatHistory, participants] = await Promise.all([
+          chatModel.getChatHistory(roomId, limit, offset),
+          chatModel.getRoomParticipants(roomId),
+        ]);
+
+        if (participants) {
+          [participants.user1_avatar, participants.user2_avatar] = await Promise.all([
+            createPresignedUrl(participants.user1_avatar),
+            createPresignedUrl(participants.user2_avatar),
+          ]);
+        }
+
+        socket.emit("admin-chat-history", {
+          roomId,
+          chatHistory: chatHistory || [],
+          offset,
+          hasMore: chatHistory.length === limit,
+          participants,
+        });
+      } catch (error) {
+        console.error("Error fetching admin chat history:", error);
+        socket.emit("error", { message: "Failed to fetch chat history" });
       }
     });
 
