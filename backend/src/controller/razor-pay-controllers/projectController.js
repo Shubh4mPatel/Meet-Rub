@@ -339,134 +339,155 @@ const deleteProject = async (req, res, next) => {
 
 const getAllProjects = async (req, res, next) => {
   try {
-    logger.info('Admin fetching all projects with pagination');
+    logger.info('Admin fetching unified project + custom-package feed');
 
-    // Pagination parameters
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page   = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;
 
-    // Optional status filter - properly handle empty strings
-    const status = req.query.status?.trim() || 'CREATED';
+    // Optional filters
+    const statusFilter = req.query.status?.trim()   || null; // project status OR package status
+    const typeFilter   = req.query.type?.trim()     || null; // hire_req | package | direct
 
-    // Build query
-    let queryText = `
+    // ── UNION: projects (tagged with origin type) + pending/rejected packages ──
+    //
+    // record_type = 'project'        → accepted packages that became projects (CREATED / IN_PROGRESS / …)
+    // record_type = 'custom_package' → packages still in pending / rejected state
+    //
+    // type field:
+    //   'hire_req' – creator sent the hire request
+    //   'package'  – freelancer sent the offer
+    //   'direct'   – project created without a custom package
+
+    const params = [];
+    let p = 1;
+
+    const projectStatusWhere  = statusFilter ? `AND p.status = $${p++}` : '';
+    const packageStatusWhere  = statusFilter ? `AND cp2.status = $${p++}` : '';
+    const projectTypeWhere    = typeFilter
+      ? `AND COALESCE(cp.type, 'direct') = $${p++}`
+      : '';
+    const packageTypeWhere    = typeFilter
+      ? `AND cp2.type = $${p++}`
+      : '';
+
+    if (statusFilter) { params.push(statusFilter); params.push(statusFilter); }
+    if (typeFilter)   { params.push(typeFilter);   params.push(typeFilter); }
+
+    const unionQuery = `
       SELECT
+        'project'                       AS record_type,
         p.id,
+        COALESCE(cp.type, 'direct')     AS type,
+        p.status                        AS status,
+        p.amount                        AS price,
+        p.number_of_units,
+        p.end_date,
+        NULL::integer                   AS delivery_days,
+        NULL::text                      AS title,
+        NULL::text                      AS description,
         p.creator_id,
         p.freelancer_id,
-        p.service_id,
-        p.number_of_units,
-        p.amount,
-        p.end_date,
-        p.status,
-        p.created_at,
-        p.updated_at,
-        c.full_name AS creator_name,
-        c.email AS creator_email,
-        c.profile_image_url AS creator_profile_image,
-        f.freelancer_full_name AS freelancer_name,
-        f.freelancer_email AS freelancer_email,
-        f.profile_image_url AS freelancer_profile_image,
+        c.full_name                     AS creator_name,
+        c.email                         AS creator_email,
+        c.profile_image_url             AS creator_profile_image,
+        f.freelancer_full_name          AS freelancer_name,
+        f.freelancer_email              AS freelancer_email,
+        f.profile_image_url             AS freelancer_profile_image,
         s.service_name,
-        s.service_price,
-        s.service_description
+        p.created_at,
+        p.updated_at
       FROM projects p
-      LEFT JOIN creators c ON p.creator_id = c.creator_id
-      LEFT JOIN freelancer f ON p.freelancer_id = f.freelancer_id
-      LEFT JOIN services s ON p.service_id = s.id
+      LEFT JOIN custom_packages cp ON cp.project_id = p.id
+      LEFT JOIN creators  c  ON p.creator_id   = c.creator_id
+      LEFT JOIN freelancer f  ON p.freelancer_id = f.freelancer_id
+      LEFT JOIN services   s  ON p.service_id   = s.id
+      WHERE 1=1
+        ${projectStatusWhere}
+        ${projectTypeWhere}
+
+      UNION ALL
+
+      SELECT
+        'custom_package'                AS record_type,
+        cp2.id,
+        cp2.type                        AS type,
+        cp2.status                      AS status,
+        cp2.price,
+        NULL::integer                   AS number_of_units,
+        NULL::timestamptz               AS end_date,
+        cp2.delivery_days,
+        cp2.title,
+        cp2.description,
+        cp2.creator_id,
+        cp2.freelancer_id,
+        c2.full_name                    AS creator_name,
+        c2.email                        AS creator_email,
+        c2.profile_image_url            AS creator_profile_image,
+        f2.freelancer_full_name         AS freelancer_name,
+        f2.freelancer_email             AS freelancer_email,
+        f2.profile_image_url            AS freelancer_profile_image,
+        s2.service_name,
+        cp2.created_at,
+        cp2.updated_at
+      FROM custom_packages cp2
+      JOIN creators  c2  ON cp2.creator_id   = c2.creator_id
+      JOIN freelancer f2  ON cp2.freelancer_id = f2.freelancer_id
+      LEFT JOIN services  s2  ON cp2.service_id  = s2.id
+      WHERE cp2.status IN ('pending', 'rejected')
+        ${packageStatusWhere}
+        ${packageTypeWhere}
     `;
 
-    const queryParams = [];
-    let paramIndex = 1;
+    const dataQuery  = `${unionQuery} ORDER BY created_at DESC LIMIT $${p++} OFFSET $${p++}`;
+    const countQuery = `SELECT COUNT(*) AS total FROM (${unionQuery}) AS combined`;
 
-    // Add status filter if provided and not empty
-    if (status && status.length > 0) {
-      queryText += ` WHERE p.status = $${paramIndex++}`;
-      queryParams.push(status);
-    }
+    const dataParams  = [...params, limit, offset];
+    const countParams = [...params];
 
-    // Order by most recent first
-    queryText += ` ORDER BY p.created_at DESC`;
+    const [dataResult, countResult] = await Promise.all([
+      db.query(dataQuery,  dataParams),
+      db.query(countQuery, countParams),
+    ]);
 
-    // Add pagination
-    queryText += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-    queryParams.push(limit, offset);
-
-    // Execute main query
-    const { rows: projects } = await db.query(queryText, queryParams);
+    const total      = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / limit);
 
     // Generate presigned URLs for profile images
-    const expirySeconds = 4 * 60 * 60; // 4 hours
-
-    const projectsWithImages = await Promise.all(
-      projects.map(async (project) => {
-        // Generate presigned URL for creator profile image
-        if (project.creator_profile_image) {
+    const EXPIRY = 4 * 60 * 60;
+    const items = await Promise.all(
+      dataResult.rows.map(async (row) => {
+        for (const field of ['creator_profile_image', 'freelancer_profile_image']) {
+          if (!row[field]) continue;
           try {
-            const firstSlashIndex = project.creator_profile_image.indexOf("/");
-            if (firstSlashIndex !== -1) {
-              const bucketName = project.creator_profile_image.substring(0, firstSlashIndex);
-              const objectName = project.creator_profile_image.substring(firstSlashIndex + 1);
-              project.creator_profile_image = await createPresignedUrl(bucketName, objectName, expirySeconds);
+            const slash = row[field].indexOf('/');
+            if (slash !== -1) {
+              row[field] = await createPresignedUrl(
+                row[field].substring(0, slash),
+                row[field].substring(slash + 1),
+                EXPIRY
+              );
             }
-          } catch (error) {
-            logger.error(`Error generating presigned URL for creator profile image: ${error}`);
-            project.creator_profile_image = null;
+          } catch {
+            row[field] = null;
           }
         }
-
-        // Generate presigned URL for freelancer profile image
-        if (project.freelancer_profile_image) {
-          try {
-            const firstSlashIndex = project.freelancer_profile_image.indexOf("/");
-            if (firstSlashIndex !== -1) {
-              const bucketName = project.freelancer_profile_image.substring(0, firstSlashIndex);
-              const objectName = project.freelancer_profile_image.substring(firstSlashIndex + 1);
-              project.freelancer_profile_image = await createPresignedUrl(bucketName, objectName, expirySeconds);
-            }
-          } catch (error) {
-            logger.error(`Error generating presigned URL for freelancer profile image: ${error}`);
-            project.freelancer_profile_image = null;
-          }
-        }
-
-        return project;
+        return row;
       })
     );
 
-    // Get total count for pagination
-    let countQuery = 'SELECT COUNT(*) as total FROM projects p';
-    const countParams = [];
-
-    if (status && status.length > 0) {
-      countQuery += ' WHERE p.status = $1';
-      countParams.push(status);
-    }
-
-    const { rows: countResult } = await db.query(countQuery, countParams);
-    const totalCount = parseInt(countResult[0].total);
-    const totalPages = Math.ceil(totalCount / limit);
-
-    logger.info(`Fetched ${projects.length} projects for admin (page ${page})`);
+    logger.info(`getAllProjects unified feed: total=${total} page=${page}`);
 
     return res.status(200).json({
       status: 'success',
-      message: 'All projects fetched successfully',
       data: {
-        projects: projectsWithImages,
-        pagination: {
-          currentPage: page,
-          totalPages,
-          totalCount,
-          itemsPerPage: limit,
-        },
+        items,
+        pagination: { total, totalPages, currentPage: page, limit },
       },
     });
   } catch (error) {
-    console.error('Get all projects error:', error);
-    logger.error('Error fetching all projects for admin:', error);
-    return next(new AppError('Failed to fetch all projects', 500));
+    logger.error('getAllProjects error:', error);
+    return next(new AppError('Failed to fetch projects', 500));
   }
 };
 
