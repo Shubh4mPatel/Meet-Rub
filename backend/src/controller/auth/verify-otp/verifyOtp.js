@@ -7,6 +7,7 @@ const { minioClient } = require("../../../../config/minio");
 const Joi = require("joi");
 const crypto = require("crypto");
 const { generateTokens } = require("../../../../utils/helper");
+const { sendWelcomeEmail } = require("../../../../utils/welcomeEmail");
 const redisClient = require("../../../../config/reddis");
 
 const USERNAMES_SET_KEY = "usernames:set";
@@ -253,6 +254,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
           user = newUserResMeetRub[0];
           roleWiseId = freelancer[0].freelancer_id;
           logger.info("Freelancer registration successful", { email });
+          sendWelcomeEmail('freelancer', email, userName).catch((err) =>
+            logger.error('Failed to send freelancer welcome email:', err)
+          );
         } catch (error) {
           await client.query("ROLLBACK");
           // Clean up Redis username if it was already added before the commit failed
@@ -334,6 +338,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
           user = newUserResMeetRub[0];
           roleWiseId = creator[0].creator_id;
           logger.info("Creator registration successful", { email });
+          sendWelcomeEmail('creator', email, userName).catch((err) =>
+            logger.error('Failed to send creator welcome email:', err)
+          );
         } catch (error) {
           await client.query("ROLLBACK");
           // Clean up Redis username if it was already added before the commit failed
