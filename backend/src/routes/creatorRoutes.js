@@ -4,7 +4,7 @@ const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { getNiches } = require('../controller/services/serviceController');
 const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
-const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersForcreator, getFreelancerByIdForCreator, getFreeLancerByUserId, getFreelancerImpact, getFreelancerPortfolio } = require('../controller/users/userProfileController');
+const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersForcreator, getFreelancerByIdForCreator, getFreeLancerByUserId, getFreelancerImpact, getFreelancerPortfolio, getWishlistCount } = require('../controller/users/userProfileController');
 const { getFreelancerOverview } = require('../controller/users/freelancerOverviewController');
 const { getFreelancerReviews } = require('../controller/users/freelancerReviewsController');
 
@@ -22,6 +22,8 @@ router.post('/wishlist', authenticateUser, requireRole(['creator']), addFreelanc
 router.post('/remove-from-wishlist', authenticateUser, requireRole(['creator']), removeFreelancerFromWishlist);
 
 router.get('/wishlist', authenticateUser, requireRole(['creator']), getWishlistFreelancers);
+
+router.get('/wishlist/count', authenticateUser, requireRole(['creator']), getWishlistCount);
 
 router.get('/niches',authenticateUser, requireRole(['creator']), getNiches);
 

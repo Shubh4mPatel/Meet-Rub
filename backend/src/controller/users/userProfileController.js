@@ -3662,4 +3662,24 @@ module.exports = {
   getFreeLancerByIdForAdmin,
   getFreelancerForSuggestion,
   sendContactEmailToAdmin,
+  getWishlistCount,
 };
+
+async function getWishlistCount(req, res, next) {
+  try {
+    const creatorId = req.user.roleWiseId;
+
+    const { rows } = await query(
+      `SELECT COUNT(*) AS count FROM wishlist WHERE creator_id = $1`,
+      [creatorId]
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      data: { count: parseInt(rows[0].count) },
+    });
+  } catch (error) {
+    logger.error('getWishlistCount error:', error);
+    return next(new AppError('Failed to fetch wishlist count', 500));
+  }
+}
