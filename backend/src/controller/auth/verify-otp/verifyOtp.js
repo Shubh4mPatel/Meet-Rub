@@ -24,7 +24,7 @@ const baseSchema = {
 // Freelancer-specific schema
 const freelancerSchema = Joi.object({
   ...baseSchema,
-  userRole: Joi.string().valid("freelancer").required(),
+  role: Joi.string().valid("freelancer").required(),
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
   userName: Joi.string().required(),
@@ -42,8 +42,8 @@ const freelancerSchema = Joi.object({
 // Creator-specific schema
 const creatorSchema = Joi.object({
   ...baseSchema,
+  role: Joi.string().valid("creator").required(),
   firstName: Joi.string().required(),
-  userRole: Joi.string().valid("creator").required(),
   lastName: Joi.string().required(),
   userName: Joi.string().required(),
   phoneNo: Joi.string()
@@ -64,7 +64,7 @@ const passwordResetSchema = Joi.object({
 const verifyOtpAndProcess = async (req, res, next) => {
   let { email, otp, type, encryptedPassword, role } = req.body;
 
-  email = email?.trim();
+  email = email?.trim().toLowerCase();
   otp = otp?.trim();
 
   try {
@@ -114,9 +114,15 @@ const verifyOtpAndProcess = async (req, res, next) => {
     const currentTimestamp = new Date().toUTCString();
 
     // Verify OTP
+    const debugRes = await query(
+      "SELECT email, type, expires_at FROM otp_tokens WHERE email = $1",
+      [email]
+    );
+    logger.info(`[OTP debug] looking for email="${email}" type="${type}" | rows in DB: ${JSON.stringify(debugRes.rows)}`);
+
     const otpRes = await query(
-      "SELECT * FROM otp_tokens WHERE email = $1 AND type = $2 AND expires_at > $3",
-      [email, type, currentDateTime]
+      "SELECT * FROM otp_tokens WHERE email = $1 AND type = $2 AND expires_at > NOW()",
+      [email, type]
     );
 
     if (otpRes.rows.length === 0) {
@@ -201,13 +207,18 @@ const verifyOtpAndProcess = async (req, res, next) => {
             [email, type]
           );
 
-          await minioClient.putObject(
-            BUCKET_NAME,
-            objectName,
-            req.file.buffer,
-            req.file.size,
-            { "Content-Type": req.file.mimetype }
-          );
+          try {
+            await minioClient.putObject(
+              BUCKET_NAME,
+              objectName,
+              req.file.buffer,
+              req.file.size,
+              { "Content-Type": req.file.mimetype }
+            );
+          } catch (s3Err) {
+            logger.error(`MinIO upload failed — code: ${s3Err.code} message: ${s3Err.message}`);
+            throw s3Err;
+          }
 
           const { rows: freelancer } = await client.query(
             `INSERT INTO freelancer

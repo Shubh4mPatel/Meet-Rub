@@ -8,7 +8,7 @@ const { sendMail } = require("../../../../config/email");
 
 const otpSendApi = async (req, res, next) => {
   let { email, type } = req.body;
-  email = email?.trim();
+  email = email?.trim().toLowerCase();
 
   logger.info("OTP send request received", { email, type });
 
