@@ -1,6 +1,21 @@
 const { pool: db } = require('../../../config/dbConfig');
 const AppError = require('../../../utils/appError');
 const { logger } = require('../../../utils/logger');
+const { createPresignedUrl } = require('../../../utils/helper');
+
+const PROFILE_IMAGE_EXPIRY = 4 * 60 * 60; // 4 hours
+
+async function resolveProfileImageUrl(rawUrl) {
+  if (!rawUrl) return null;
+  try {
+    const parts = rawUrl.split('/');
+    const bucketName = parts[0];
+    const objectName = parts.slice(1).join('/');
+    return await createPresignedUrl(bucketName, objectName, PROFILE_IMAGE_EXPIRY);
+  } catch {
+    return null;
+  }
+}
 
 const getNotifications = async (req, res, next) => {
   try {
@@ -30,9 +45,13 @@ const getNotifications = async (req, res, next) => {
         n.read_at,
         n.created_at,
         u.user_name   AS sender_name,
-        u.user_role   AS sender_role
+        u.user_role   AS sender_role,
+        COALESCE(f.profile_image_url, c.profile_image_url) AS sender_profile_image,
+        f.freelancer_id AS sender_freelancer_id
       FROM web_notifications n
       LEFT JOIN users u ON n.sender_id = u.id
+      LEFT JOIN freelancer f ON f.user_id = n.sender_id
+      LEFT JOIN creators c ON c.user_id = n.sender_id
       WHERE n.recipient_id = $1
         ${unreadFilter}
       ORDER BY n.created_at DESC
@@ -64,12 +83,19 @@ const getNotifications = async (req, res, next) => {
     const totalPages = Math.ceil(total / limitNum);
     const unreadCount = parseInt(unreadResult.rows[0].unread_count);
 
+    const notifications = await Promise.all(
+      dataResult.rows.map(async (n) => ({
+        ...n,
+        sender_profile_image: await resolveProfileImageUrl(n.sender_profile_image),
+      }))
+    );
+
     logger.info(`getNotifications user=${userId} page=${pageNum} total=${total}`);
 
     return res.status(200).json({
       status: 'success',
       data: {
-        notifications: dataResult.rows,
+        notifications,
         unread_count: unreadCount,
         pagination: {
           total,
