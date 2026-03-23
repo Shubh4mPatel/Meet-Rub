@@ -111,10 +111,12 @@ const getNotifications = async (req, res, next) => {
   }
 };
 
-const markAsRead = async (req, res, next) => {
+const markAsRead = async (req, res) => {
   try {
     const userId = req.user.user_id;
     const { id } = req.params;
+
+    logger.info(`[markAsRead] START userId=${userId} notificationId=${id}`);
 
     const result = await db.query(
       `UPDATE web_notifications
@@ -124,17 +126,27 @@ const markAsRead = async (req, res, next) => {
       [id, userId]
     );
 
+    logger.info(`[markAsRead] DB rowCount=${result.rowCount} rows=${JSON.stringify(result.rows)}`);
+
     if (result.rows.length === 0) {
-      return next(new AppError('Notification not found or already read', 404));
+      logger.warn(`[markAsRead] No rows updated — notificationId=${id} userId=${userId}`);
+      return res.status(404).json({
+        status: 'error',
+        message: 'Notification not found or already read',
+      });
     }
 
+    logger.info(`[markAsRead] SUCCESS notificationId=${id}`);
     return res.status(200).json({
       status: 'success',
       data: result.rows[0],
     });
   } catch (error) {
-    logger.error('markAsRead error:', error);
-    return next(new AppError('Failed to mark notification as read', 500));
+    logger.error(`[markAsRead] CATCH error: ${error.message}`, error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to mark notification as read',
+    });
   }
 };
 
