@@ -2,6 +2,7 @@ const {pool:db} = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const {logger} = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
+const { sendNotification } = require('../notification/notificationServicer');
 
 // Create a new project
 const createProject = async (req, res, next) => {
@@ -103,21 +104,27 @@ const getProject = async (req, res, next) => {
       [project.service_id, project.creator_id, project.freelancer_id]
     );
 
-    // Generate presigned URLs for each deliverable file
+    // Resolve deliverable files — s3 gets a presigned URL, google_drive is returned as-is
     const deliverablesWithUrls = await Promise.all(
       deliverables.map(async (d) => {
         const files = Array.isArray(d.deliverable_url) ? d.deliverable_url : [d.deliverable_url];
-        const signedFiles = await Promise.all(
+        const resolvedFiles = await Promise.all(
           files.filter(Boolean).map(async (file) => {
-            const key = typeof file === 'string' ? file : file.key || file.url;
-            const url = await createPresignedUrl(key).catch(() => key);
-            return { ...(typeof file === 'object' ? file : { key }), url };
+            if (file.type === 'google_drive') {
+              return { type: 'google_drive', urls: file.urls };
+            }
+            // default: s3
+            const parts = file.key.split('/');
+            const bucket = parts[0];
+            const objectName = parts.slice(1).join('/');
+            const signedUrl = await createPresignedUrl(bucket, objectName, 4 * 60 * 60).catch(() => null);
+            return { type: 's3', key: file.key, url: signedUrl };
           })
         );
         return {
           id: d.id,
           project_description: d.project_description,
-          files: signedFiles,
+          files: resolvedFiles,
         };
       })
     );
@@ -463,11 +470,105 @@ const getAllProjects = async (req, res, next) => {
   }
 };
 
+const uploadDeliverable = async (req, res, next) => {
+  try {
+    const freelancerId = req.user.roleWiseId;
+    const { role } = req.user;
+
+    if (role !== 'freelancer') {
+      return next(new AppError('Only freelancers can upload deliverables', 403));
+    }
+
+    const { project_id, project_description, deliverable_url } = req.body;
+
+    if (!project_id || !deliverable_url) {
+      return next(new AppError('project_id and deliverable_url are required', 400));
+    }
+
+    const files = Array.isArray(deliverable_url) ? deliverable_url : [deliverable_url];
+    if (files.length === 0) {
+      return next(new AppError('deliverable_url must contain at least one file', 400));
+    }
+
+    // Validate each file entry
+    for (const file of files) {
+      if (!file.type || !['s3', 'google_drive'].includes(file.type)) {
+        return next(new AppError('Each file must have a type of "s3" or "google_drive"', 400));
+      }
+      if (file.type === 's3' && !file.key) {
+        return next(new AppError('S3 files must include a "key"', 400));
+      }
+      if (file.type === 'google_drive') {
+        const urls = Array.isArray(file.urls) ? file.urls : [];
+        if (urls.length === 0) {
+          return next(new AppError('Google Drive files must include a "urls" array with at least one URL', 400));
+        }
+        for (const u of urls) {
+          if (!u.startsWith('https://drive.google.com/')) {
+            return next(new AppError(`Invalid Google Drive URL: ${u}`, 400));
+          }
+        }
+      }
+    }
+
+    // Verify project belongs to this freelancer and get service_id / creator_id / creator user_id
+    const { rows: projects } = await db.query(
+      `SELECT p.id, p.service_id, p.creator_id, p.freelancer_id, p.status,
+              c.user_id AS creator_user_id, s.service_name
+       FROM projects p
+       JOIN creators c ON p.creator_id = c.creator_id
+       LEFT JOIN services s ON p.service_id = s.id
+       WHERE p.id = $1 AND p.freelancer_id = $2`,
+      [project_id, freelancerId]
+    );
+
+    if (projects.length === 0) {
+      return next(new AppError('Project not found or access denied', 404));
+    }
+
+    const project = projects[0];
+
+    if (project.status === 'CANCELLED') {
+      return next(new AppError('Cannot upload deliverable for a cancelled project', 400));
+    }
+
+    const { rows: inserted } = await db.query(
+      `INSERT INTO deliverables (deliverable_url, project_description, service_id, creator_id, freelancer_id)
+       VALUES ($1::jsonb, $2, $3, $4, $5)
+       RETURNING id, deliverable_url, project_description, created_at`,
+      [JSON.stringify(files), project_description || null, project.service_id, project.creator_id, freelancerId]
+    );
+
+    logger.info(`Deliverable uploaded by freelancer=${freelancerId} project=${project_id}`);
+
+    const serviceLabel = project.service_name ? ` for ${project.service_name}` : '';
+    await sendNotification({
+      recipientId: project.creator_user_id,
+      senderId: req.user.user_id,
+      eventType: 'deliverable_uploaded',
+      title: 'New deliverable uploaded',
+      body: `${req.user.name} has uploaded a deliverable${serviceLabel}.`,
+      actionType: 'link',
+      actionRoute: String(project_id),
+    });
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Deliverable uploaded successfully',
+      data: inserted[0],
+    });
+  } catch (error) {
+    logger.error('uploadDeliverable error:', error);
+    return next(new AppError('Failed to upload deliverable', 500));
+  }
+};
+
 module.exports = {
   createProject,
   getProject,
   getMyProjects,
   updateProjectStatus,
   deleteProject,
-  getAllProjects
+  getAllProjects,
+  uploadDeliverable,
 }
