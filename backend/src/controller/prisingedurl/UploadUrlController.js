@@ -1,60 +1,29 @@
-// uploadController.js
-const { createPresignedPost } = require('@aws-sdk/s3-presigned-post');
-const { S3Client } = require('@aws-sdk/client-s3');
+const { minioClient } = require('../../../config/minio');
 const { UPLOAD_CONFIGS } = require('../../../config/uploadConfig');
-const { createPresignedUrl } = require('../../../utils/helper');
-
-const expirySeconds = 4 * 60 * 60; // 4 hours
-
-// ─── MinIO S3 Client ─────────────────────────────────────────────────────────
-const s3Client = new S3Client({
-  region: 'us-east-1',
-  endpoint:"https://staging.meetrub.com",
-  // endpoint: `${process.env.MINIO_USE_SSL === 'true' ? 'https' : 'http'}://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT || 9000}`,
-  credentials: {
-    accessKeyId: process.env.MINIO_ACCESS_KEY,
-    secretAccessKey: process.env.MINIO_SECRET_KEY,
-  },
-  forcePathStyle: true,
-});
 
 const BUCKET = process.env.MINIO_BUCKET_NAME;
-const PUBLIC_BASE_URL = process.env.MINIO_PUBLIC_URL;
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
+const EXPIRY_SECONDS = 10 * 60; // 10 minutes to complete the upload
 
 const buildKey = (keyPrefix, uploadType, slotName) =>
   `${keyPrefix}/${uploadType}/${Date.now()}-${slotName}-${Math.random().toString(36).slice(2, 8)}`;
 
-const generatePresignedPost = async (slot, uploadType) => {
-  const blobKey = buildKey(slot.keyPrefix, uploadType, slot.name);
+const generatePresignedPut = async (slot, uploadType) => {
+  const objectKey = buildKey(slot.keyPrefix, uploadType, slot.name);
 
-  const { url, fields } = await createPresignedPost(s3Client, {
-    Bucket: BUCKET,
-    Key: blobKey,
-    Conditions: [
-      ['content-length-range', 0, slot.maxSizeBytes],
-      ['starts-with', '$Content-Type', ''],
-      ['starts-with', '$key', slot.keyPrefix],
-    ],
-    Fields: {},
-    Expires: 600,
-  });
+  const uploadUrl = await minioClient.presignedPutObject(BUCKET, objectKey, EXPIRY_SECONDS);
 
-  const fileUrl = await createPresignedUrl(BUCKET, blobKey, expirySeconds);
+  // Replace internal MinIO host with the public-facing domain
+  const parsed = new URL(uploadUrl);
+  const publicUploadUrl = `https://staging.meetrub.com${parsed.pathname}${parsed.search}`;
 
   return {
-    uploadUrl: url,
-    fields,
-    fileUrl,
-    blobKey,
+    uploadUrl: publicUploadUrl,
+    objectKey,
     allowedTypes: slot.allowedTypes,
     maxSizeBytes: slot.maxSizeBytes,
     required: slot.required,
   };
 };
-
-// ─── controller ──────────────────────────────────────────────────────────────
 
 const getUploadUrls = async (req, res) => {
   try {
@@ -74,15 +43,15 @@ const getUploadUrls = async (req, res) => {
 
     const slotEntries = await Promise.all(
       config.slots.map(async (slot) => {
-        const presigned = await generatePresignedPost(slot, uploadType);
+        const presigned = await generatePresignedPut(slot, uploadType);
         return [slot.name, presigned];
       })
     );
 
-    const slots = Object.fromEntries(slotEntries);
-
-    return res.status(200).json({ uploadType, slots });
-
+    return res.status(200).json({
+      uploadType,
+      slots: Object.fromEntries(slotEntries),
+    });
   } catch (err) {
     console.error('[getUploadUrls] error:', err);
     return res.status(500).json({ error: 'Failed to generate upload URLs' });
