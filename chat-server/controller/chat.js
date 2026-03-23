@@ -64,9 +64,19 @@ const chatController = (io) => {
 
         console.log(`${username} joined chat room: ${chatRoomId}`);
 
-        // Get chat history
-        const chatHistory = await chatModel.getChatHistory(chatRoomId);
+        // Get chat history and participants in parallel
+        const [chatHistory, participants] = await Promise.all([
+          chatModel.getChatHistory(chatRoomId),
+          chatModel.getRoomParticipants(chatRoomId),
+        ]);
         console.log(`Chat history for room ${chatRoomId}:`, chatHistory);
+
+        if (participants) {
+          [participants.user1_avatar, participants.user2_avatar] = await Promise.all([
+            createPresignedUrl(participants.user1_avatar),
+            createPresignedUrl(participants.user2_avatar),
+          ]);
+        }
 
         // Mark messages as read
         await chatModel.markMessagesAsRead(chatRoomId, userId);
@@ -76,6 +86,7 @@ const chatController = (io) => {
           chatRoomId,
           recipientId,
           chatHistory: chatHistory && chatHistory.length > 0 ? chatHistory : [],
+          participants,
         });
 
         // Update unread count
@@ -505,15 +516,21 @@ const chatController = (io) => {
         console.log(`Getting chat rooms for user: ${username} ${userId}`);
         const chatRooms = await chatModel.getUserChatRooms(userId);
 
-        // Enhance chat rooms with online status from Redis
+        // Enhance chat rooms with online status and presigned avatar URLs
         const enhancedChatRooms = await Promise.all(
           chatRooms.map(async (room) => {
             const otherUserId =
               room.user1_id === userId ? room.user2_id : room.user1_id;
-            const isOnline = await redis.get(`user:${otherUserId}:online`);
+            const [isOnline, user1_avatar, user2_avatar] = await Promise.all([
+              redis.get(`user:${otherUserId}:online`),
+              createPresignedUrl(room.user1_profile_image_url),
+              createPresignedUrl(room.user2_profile_image_url),
+            ]);
 
             return {
               ...room,
+              user1_profile_image_url: user1_avatar,
+              user2_profile_image_url: user2_avatar,
               isOnline: !!isOnline,
             };
           })
