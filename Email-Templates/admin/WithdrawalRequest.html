@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;}
+  .wrapper{max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);}
+  .header{background:#1A1A2E;padding:28px 32px 24px;text-align:center;}
+  .logo-row{text-align:center;margin-bottom:12px;}
+  .header-subtitle{color:#C4B5FD;font-size:13px;margin-top:2px;}
+  .body{padding:32px;}
+  .body h2{font-size:19px;color:#1A1A2E;margin:0 0 10px;font-family:Arial,sans-serif;}
+  .body p{font-size:15px;color:#4B5563;line-height:1.65;margin:0 0 16px;}
+  .highlight{background:#F5F3FF;border-left:4px solid #7C3AED;border-radius:6px;padding:16px 20px;margin:20px 0;}
+  .highlight p{margin:5px 0;color:#1A1A2E;font-size:14px;}
+  .highlight strong{color:#7C3AED;}
+  .btn{display:inline-block;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;text-decoration:none;margin:6px 4px;}
+  .btn-primary{background:#7C3AED;color:#ffffff;}
+  .btn-secondary{background:#F3F4F6;color:#1A1A2E;border:1px solid #D1D5DB;}
+  .footer{background:#F8F7FF;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
+  .footer p{font-size:12px;color:#9CA3AF;margin:4px 0;}
+  .social-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 10px;}
+  .social-row a{display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;}
+  .social-row img{width:32px;height:32px;display:block;}
+  .footer-links{margin-top:8px;}
+  .footer-links a{font-size:12px;color:#7C3AED;text-decoration:none;margin:0 8px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="logo-row">
+      <img src="{{logo_url}}" alt="Meetrub" style="height:48px;width:auto;display:block;margin:0 auto;">
+    </div>
+    <div class="header-subtitle">Withdrawal request — pending approval</div>
+  </div>
+  <div class="body">
+    
+        <h2>Withdrawal needs approval</h2>
+        <div class="highlight">
+          <p><strong>Freelancer:</strong> {{freelancer_username}}</p>
+          <p><strong>Email:</strong> {{freelancer_email}}</p>
+          <p><strong>Amount:</strong> {{currency}}{{amount}}</p>
+          <p><strong>Bank account:</strong> ending {{bank_last4}}</p>
+          <p><strong>Wallet balance:</strong> {{currency}}{{wallet_balance}}</p>
+          <p><strong>KYC status:</strong> {{kyc_status}}</p>
+          <p><strong>Requested at:</strong> {{request_time}}</p>
+        </div>
+        <a href="{{admin_withdrawal_url}}" class="btn btn-primary">Approve / Reject</a>
+  </div>
+  <div class="footer">
+    <div class="social-row">
+      <a href="https://twitter.com/meetrub" title="Twitter"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABFklEQVR4nLWXTRbCIAyEBy6gC72B3v9A9gZ2YU+gK3x9FJKZUNi1JfMNIfw0QWyX2+Nrfd/WJSl6VGcPOmImz4KzsV2HI+BW62WjmYGz4ZbmwcAMuKWdvQ6zTbhFCACf9ysEY+L+BnqjLyKqCStuz8oMvPfswa24wjSn4Hp/uuLM95ZOaW4NKCZUOAAktvI98QgcIFdBT8wqNAYOCBmooVZj4YCQAVZcgYcMWBAVHjagrILTDUT2gdMMsNWumMjsHc6CR01s65LCp2ENjZpwDSibTMREBvr3tcgOx5oozFy/sMTYde7F7Vn0aahuMmzcYdSz74V1pg8ZUH+tRuBNA7NM9DRd0OiUeINxi3AkG0ysLH727/kPrz2s52aSDIwAAAAASUVORK5CYII=" alt="Twitter"></a>
+      <a href="https://instagram.com/meetrub" title="Instagram"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABAUlEQVR4nNVXQRLCIAyEjl/SY3lYOerD9FgeVQ8ODkJICCGiubVAdrMbCrWGGffz9cDGXfCWk69pMgUqIbNogbeurTKUAENRUwNUYDQ4lrMgoAGO5V6oCdokTtjkdd+GAT8uN/D9W4FvVA9hWQw8KlBjjwWkXp7HBW/J74B2TCdgMe8pC1KZoTnUuDGdCqz7VngMvWvpHXQbUpEC9G5ZtgI1W+Izl8j0Jvw/AjWpez9aoiYccVYs3DucMa8qoSbkVu+Ct8O2YW/8RhP22CCNiPkBnJ8LWheStODpFhTSa9+McrsLBTT7AcoNWqBBopaTBJJaQhVDNqFEjZa17OSjf8+fRYF/NtVNsc8AAAAASUVORK5CYII=" alt="Instagram"></a>
+      <a href="https://linkedin.com/company/meetrub" title="LinkedIn"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABdklEQVR4nGNkIBFwpR36j0/+2yw7RlLMI0oxIUspcQwTrSwnVi9OF1JiMTaAKzSwhgC1LcdnJoYDaGE5PrOZCCmgtSMIJkJaA7gD6OF7bHYx0dtydEcMnijABRamajB8nWnL8HWmLYOyGCf1HTAQwQ8DXGmH/jMOpAMYGBgYWAgpWJiqwRBiIsrAwMDAoFd7huHuq+8oYpmLbjEEGYsy6MtyM7AwMzLsufaBoXj5XYZ3X39TxwGEwPQ4NRR+mKkoAzMjA0Pc7BtE6ac4F1x+8pVBp/o0g1HDWYb3X/8wMDAwMAQYiTCwMBHXLKDYAa2bHzLcf/OD4ebzbwyn7n9iYGBgYGBmYmSQFGCjjwNuvfwOZ//4/Q/OZmMhzmiKHfDnLyIT/ScjPzGR2oajJvg2y45x8BfFtAbw4Kd3iQiLeiZ0AXpajuKAgQIoDqBHKKDbgRECtHQENrOxRgEtHIHLTIIWUZo7CHmGYCKkJDSI0Uuy4dTungMA0D2HkF+lTRgAAAAASUVORK5CYII=" alt="LinkedIn"></a>
+    </div>
+    <p>Meetrub Admin — RazorpayX Payouts</p>
+    <p>&copy; 2026 Meetrub. All rights reserved.</p>
+    <div class="footer-links">
+      <a href="{{help_url}}">Help Center</a>
+      <a href="{{privacy_url}}">Privacy Policy</a>
+      <a href="{{unsubscribe_url}}">Unsubscribe</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>
