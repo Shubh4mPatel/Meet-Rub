@@ -604,14 +604,33 @@ const uploadDeliverable = async (req, res, next) => {
       return next(new AppError('Cannot upload deliverable for a cancelled project', 400));
     }
 
-    const { rows: inserted } = await db.query(
-      `INSERT INTO deliverables (deliverable_url, project_description, service_id, creator_id, freelancer_id)
-       VALUES ($1::jsonb, $2, $3, $4, $5)
-       RETURNING id, deliverable_url, project_description, created_at`,
-      [JSON.stringify(files), project_description || null, project.service_id, project.creator_id, freelancerId]
-    );
+    const client = await db.connect();
+    let inserted;
+    try {
+      await client.query('BEGIN');
 
-    logger.info(`Deliverable uploaded by freelancer=${freelancerId} project=${project_id}`);
+      const { rows } = await client.query(
+        `INSERT INTO deliverables (deliverable_url, project_description, service_id, creator_id, freelancer_id)
+         VALUES ($1::jsonb, $2, $3, $4, $5)
+         RETURNING id, deliverable_url, project_description, created_at`,
+        [JSON.stringify(files), project_description || null, project.service_id, project.creator_id, freelancerId]
+      );
+
+      await client.query(
+        `UPDATE projects SET status = 'COMPLETED' WHERE id = $1`,
+        [project_id]
+      );
+
+      await client.query('COMMIT');
+      inserted = rows;
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    logger.info(`Deliverable uploaded by freelancer=${freelancerId} project=${project_id} status set to COMPLETED`);
 
     const serviceLabel = project.service_name ? ` for ${project.service_name}` : '';
     await sendNotification({
