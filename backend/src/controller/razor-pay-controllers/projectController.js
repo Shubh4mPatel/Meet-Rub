@@ -114,9 +114,8 @@ const getProject = async (req, res, next) => {
               return { type: 'google_drive', urls: file.urls };
             }
             // default: s3
-            const parts = file.key.split('/');
-            const bucket = parts[0];
-            const objectName = parts.slice(1).join('/');
+            const bucket = process.env.MINIO_BUCKET_NAME;
+            const objectName = file.key;
             const signedUrl = await createPresignedUrl(bucket, objectName, 4 * 60 * 60).catch(() => null);
             return { type: 's3', key: file.key, url: signedUrl };
           })
@@ -131,7 +130,10 @@ const getProject = async (req, res, next) => {
 
     // Generate presigned URL for creator avatar
     if (project.creator_avatar) {
-      project.creator_avatar = await createPresignedUrl(project.creator_avatar).catch(() => project.creator_avatar);
+      const avatarParts = project.creator_avatar.split('/');
+      const avatarBucket = avatarParts[0];
+      const avatarObject = avatarParts.slice(1).join('/');
+      project.creator_avatar = await createPresignedUrl(avatarBucket, avatarObject, 4 * 60 * 60).catch(() => project.creator_avatar);
     }
 
     res.status(200).json({
