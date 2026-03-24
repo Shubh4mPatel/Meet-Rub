@@ -74,6 +74,13 @@ const raiseDispute = async (req, res, next) => {
       [creator_id, freelancer_id, reason_of_dispute, description || null, role, project_id || null]
     );
 
+    if (project_id) {
+      await db.query(
+        `UPDATE projects SET status = 'ON_HOLD' WHERE id = $1`,
+        [project_id]
+      );
+    }
+
     logger.info(`Dispute raised by ${role} (id: ${roleWiseId})`);
 
     const raiserId = req.user.user_id;
