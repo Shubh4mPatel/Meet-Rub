@@ -106,8 +106,8 @@ function generateTokens(user,roleWiseId) {
         role: user.user_role,
         roleWiseId: roleWiseId
     };
-    const accessToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "15m" });
-    const refreshToken = jwt.sign({ user_id: user.id }, process.env.JWT_SECRET, { expiresIn: "4h" });
+    const accessToken = jwt.sign(payload, process.env.JWT_SECRET);
+    const refreshToken = jwt.sign({ user_id: user.id }, process.env.JWT_SECRET);
 
     return { accessToken, refreshToken };
 }

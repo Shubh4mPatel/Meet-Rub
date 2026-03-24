@@ -4,8 +4,8 @@ function setTokenCookies(req, res, next) {
   const isHttps = isProduction ? true : false;
   // sameSite "None" requires secure:true — use "Lax" in dev so cookies work over HTTP (Postman, localhost)
   const sameSite = isProduction ? "strict" : "Lax";
-  const ACCESS_TOKEN_DURATION_WEB = 15 * 60 * 1000; // 15 minutes
-  const REFRESH_TOKEN_DURATION_WEB = 4 * 60 * 60 * 1000; // 4 hours
+  const ACCESS_TOKEN_DURATION_WEB = 365 * 24 * 60 * 60 * 1000; // 15 minutes
+  const REFRESH_TOKEN_DURATION_WEB = 365 * 24 * 60 * 60 * 1000; // 365 days
 
   if (res.locals.accessToken) {
     res.cookie("AccessToken", res.locals.accessToken, {
