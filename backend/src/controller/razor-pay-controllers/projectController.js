@@ -610,10 +610,10 @@ const uploadDeliverable = async (req, res, next) => {
       await client.query('BEGIN');
 
       const { rows } = await client.query(
-        `INSERT INTO deliverables (deliverable_url, project_description, service_id, creator_id, freelancer_id)
-         VALUES ($1::jsonb, $2, $3, $4, $5)
+        `INSERT INTO deliverables (deliverable_url, project_description, service_id, creator_id, freelancer_id, project_id)
+         VALUES ($1::jsonb, $2, $3, $4, $5, $6)
          RETURNING id, deliverable_url, project_description, created_at`,
-        [JSON.stringify(files), project_description || null, project.service_id, project.creator_id, freelancerId]
+        [JSON.stringify(files), project_description || null, project.service_id, project.creator_id, freelancerId, project_id]
       );
 
       await client.query(

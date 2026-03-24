@@ -61,6 +61,28 @@ const UPLOAD_CONFIGS = {
       },
     ],
   },
+
+  deliverable_file: {
+    slots: [
+      {
+        name: 'file',
+        required: true,
+        allowedTypes: [
+          'application/pdf',
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'image/gif',
+          'video/mp4',
+          'video/webm',
+          'application/zip',
+          'application/x-zip-compressed',
+        ],
+        maxSizeBytes: 100 * MB,
+        keyPrefix: 'deliverables',
+      },
+    ],
+  },
 };
 
 module.exports = { UPLOAD_CONFIGS };
