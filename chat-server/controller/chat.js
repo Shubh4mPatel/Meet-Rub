@@ -115,15 +115,7 @@ const chatController = (io) => {
       }
     });
 
-    // socket.on('get-services', async ({ freelancerId }) => {
-    //   try {
-    //     const services = await chatModel.getFreelancerServices(freelancerId);
-    //     socket.emit('services-list', { freelancerId, services });
-    //   } catch (error) {
-    //     console.error('Error getting services:', error);
-    //     socket.emit('error', { message: 'Failed to get services' });
-    //   }
-    // });
+   
     // Leave a chat room
     socket.on("leave-chat", async ({ recipientId }) => {
       try {
@@ -199,10 +191,6 @@ const chatController = (io) => {
 
     socket.on("accept-package", async (packageId, recipientId) => {
       try {
-        // if (userRole !== "creator") {
-        //   socket.emit("error", { message: "Only creators can accept packages" });
-        //   return;
-        // }
         console.log(`User ${username} (${userId}) is accepting package ${packageId} for recipient ${recipientId}`);
         const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
@@ -447,7 +435,6 @@ const chatController = (io) => {
         socket.emit("error", { message: "Failed to reject deadline extension" });
       }
     });
-    // socket.on("hier-freelancer", async ({ requestId }) => {
     // Send a message
     socket.on("send-message", async ({ recipientId, message }) => {
       try {
@@ -742,18 +729,16 @@ const chatController = (io) => {
 
         // Send top 5 unread notifications to the user on connect
         const recentNotifications = await chatModel.getRecentNotifications(userId, 5);
-        for (const notif of recentNotifications) {
-          socket.emit("notification", {
-            id: notif.id,
-            event_type: notif.event_type,
-            title: notif.title,
-            body: notif.body,
-            action_type: notif.action_type,
-            action_route: notif.action_route,
-            is_read: notif.is_read,
-            created_at: notif.created_at,
-          });
-        }
+        socket.emit("initial_notifications", recentNotifications.map(notif => ({
+          id: notif.id,
+          event_type: notif.event_type,
+          title: notif.title,
+          body: notif.body,
+          action_type: notif.action_type,
+          action_route: notif.action_route,
+          is_read: notif.is_read,
+          created_at: notif.created_at,
+        })));
 
       } catch (error) {
         console.error("Error on connection setup:", error);
