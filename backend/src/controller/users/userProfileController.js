@@ -2417,42 +2417,64 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
     const startDate = req.query.startDate || null;
     const endDate = req.query.endDate || null;
 
+    // serviceTypes filter
+    const serviceTypes = req.query.serviceType
+      ? Array.isArray(req.query.serviceType)
+        ? req.query.serviceType
+        : [req.query.serviceType]
+      : [];
+
+    // $1 is reserved for serviceTypes array when present
+    const serviceSubquery = serviceTypes.length > 0
+      ? `AND s2.service_name = ANY($1::text[])`
+      : ``;
+
     // Build WHERE clause dynamically
     const conditions = [];
-    const queryParams = [];
-    let paramIndex = 1;
+    const queryParams = serviceTypes.length > 0 ? [serviceTypes] : [];
+    let paramIndex = serviceTypes.length > 0 ? 2 : 1;
 
     if (search) {
-      conditions.push(`freelancer_full_name ILIKE $${paramIndex}`);
+      conditions.push(`f.freelancer_full_name ILIKE $${paramIndex}`);
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
 
     if (startDate) {
-      conditions.push(`created_at >= $${paramIndex}`);
+      conditions.push(`f.created_at >= $${paramIndex}`);
       queryParams.push(startDate);
       paramIndex++;
     }
 
     if (endDate) {
-      conditions.push(`created_at <= $${paramIndex}`);
+      conditions.push(`f.created_at <= $${paramIndex}`);
       queryParams.push(endDate);
       paramIndex++;
     }
 
+    if (serviceTypes.length > 0) {
+      conditions.push(`s.service_name = ANY($1::text[])`);
+    }
+
     const whereClause = conditions.length > 0 ? ` AND ${conditions.join(' AND ')}` : '';
 
-    // Query to get freelancers with only required fields
+    // Query to get freelancers with service banner fields
     const queryText = `
-      SELECT 
-        freelancer_id, 
-        freelancer_full_name, 
-        created_at as joining_date, 
-        gov_id_number, 
-        verification_status
-      FROM freelancer 
-      WHERE verification_status != 'VERIFIED' ${whereClause}
-      ORDER BY created_at DESC 
+      SELECT
+        f.freelancer_id,
+        f.freelancer_full_name,
+        f.created_at as joining_date,
+        f.gov_id_number,
+        f.verification_status,
+        ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
+        MIN(s.service_price) as lowest_price,
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
+      FROM freelancer f
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      WHERE f.verification_status != 'VERIFIED' ${whereClause}
+      GROUP BY f.freelancer_id, f.freelancer_full_name, f.created_at, f.gov_id_number, f.verification_status
+      ORDER BY f.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
@@ -2460,9 +2482,10 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
 
     // Get total count for pagination
     const countQueryText = `
-      SELECT COUNT(*) as total 
-      FROM freelancer 
-      WHERE verification_status != 'VERIFIED' ${whereClause}
+      SELECT COUNT(DISTINCT f.freelancer_id) as total
+      FROM freelancer f
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      WHERE f.verification_status != 'VERIFIED' ${whereClause}
     `;
     const { rows: countResult } = await query(countQueryText, queryParams);
 
@@ -2473,29 +2496,14 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
 
     const freelancersWithSignedUrls = await Promise.all(
       freelancers.map(async (freelancer) => {
-        // Note: profile_image_url is not in the SELECT, so this won't work
-        if (freelancer.profile_image_url) {
+        if (freelancer.service_banner) {
+          const parts = freelancer.service_banner.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
           try {
-            const profileImagePath = freelancer.profile_image_url;
-            const firstSlashIndex = profileImagePath.indexOf("/");
-
-            if (firstSlashIndex !== -1) {
-              const bucketName = profileImagePath.substring(0, firstSlashIndex);
-              const objectName = profileImagePath.substring(firstSlashIndex + 1);
-
-              const signedUrl = await createPresignedUrl(
-                bucketName,
-                objectName,
-                expirySeconds
-              );
-              freelancer.profile_image_url = signedUrl;
-            } else {
-              logger.warn(`Invalid profile image URL format: ${profileImagePath}`);
-              freelancer.profile_image_url = null;
-            }
-          } catch (error) {
-            logger.error(`Error generating signed URL for profile image: ${error}`);
-            freelancer.profile_image_url = null;
+            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
+          } catch {
+            freelancer.service_banner = null;
           }
         }
         return freelancer;
