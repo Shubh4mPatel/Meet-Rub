@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const{ createProject, getMyProjects, getProject, updateProjectStatus, deleteProject, getAllProjects, uploadDeliverable} = require('../controller/razor-pay-controllers/projectController');
+const{ createProject, getMyProjects, getProject, updateProjectStatus, deleteProject, getAllProjects, uploadDeliverable, sendHireRequest} = require('../controller/razor-pay-controllers/projectController');
 
 
 router.post('/create-project',  createProject);
@@ -21,5 +21,8 @@ router.get('/get-all-projects', getAllProjects);
 
 // POST /projects/upload-deliverable  (freelancer only)
 router.post('/upload-deliverable', uploadDeliverable);
+
+// POST /projects/hire-request  (creator or freelancer)
+router.post('/hire-request', sendHireRequest);
 
 module.exports = router;

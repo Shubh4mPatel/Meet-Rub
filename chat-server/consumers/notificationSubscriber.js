@@ -31,6 +31,27 @@ async function startNotificationSubscriber(io) {
     }
   });
 
+  await subscriber.subscribe('new_package', async (message) => {
+    const { chatRoomId, senderId, senderUsername, recipientId, message: savedMessage, customPackage } = JSON.parse(message);
+    logger.info(`[NEW_PACKAGE RECEIVED] room=${chatRoomId} sender=${senderId} package=${customPackage.id}`);
+
+    const messageData = {
+      id: savedMessage.id,
+      senderId,
+      senderUsername,
+      recipientId,
+      message: 'Package sent',
+      timestamp: savedMessage.created_at,
+      chatRoomId,
+      isRead: false,
+      messageType: 'package',
+      customPackage,
+    };
+
+    io.to(chatRoomId).emit('receive-custom-package', messageData);
+    logger.info(`[NEW_PACKAGE EMITTED] receive-custom-package to room=${chatRoomId} package=${customPackage.id}`);
+  });
+
   console.log('✅ Notification subscriber started');
 }
 

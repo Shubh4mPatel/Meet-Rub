@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs grep -l \"react\\\\|vue\\\\|angular\\\\|svelte\")"
+      "Bash(xargs grep -l \"react\\\\|vue\\\\|angular\\\\|svelte\")",
+      "Bash(grep -r 'CREATE TABLE' /home/shubh4m/projects/Meet-Rub --include=*.js --include=*.sql)"
     ]
   }
 }

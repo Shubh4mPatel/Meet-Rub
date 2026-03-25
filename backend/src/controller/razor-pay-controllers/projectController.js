@@ -2,7 +2,7 @@ const {pool:db} = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const {logger} = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
-const { sendNotification } = require('../notification/notificationServicer');
+const { sendNotification, publishToChannel } = require('../notification/notificationServicer');
 const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail } = require('../../../utils/deliveryEmails');
 
 // Create a new project
@@ -676,6 +676,170 @@ const uploadDeliverable = async (req, res, next) => {
   }
 };
 
+// Send a hire request (custom package) via REST API.
+// Creates the chat room if it doesn't exist, saves the package and chat message,
+// then publishes a real-time event to the chat-server via Redis.
+const sendHireRequest = async (req, res, next) => {
+  try {
+    const senderUserId  = req.user.user_id;
+    const senderName    = req.user.name;
+    const senderRole    = req.user.role; // 'creator' | 'freelancer'
+
+    const {
+      recipient_user_id,
+      plan_type,
+      price,
+      units,
+      package_type,
+      service_type,
+    } = req.body;
+
+    if (!recipient_user_id || !plan_type || !price || !units || !package_type || !service_type) {
+      return next(new AppError('recipient_user_id, plan_type, price, units, package_type and service_type are required', 400));
+    }
+
+    // Resolve freelancer row + service details (delivery_time in days, service_id)
+    const freelancerResult = await db.query(
+      `SELECT f.freelancer_id, f.user_id, s.id AS service_id, s.delivery_time AS delivery_days
+       FROM freelancer f
+       LEFT JOIN services s ON s.freelancer_id = f.freelancer_id
+         AND s.service_name = $3
+         AND LOWER(s.plan_type) = LOWER($4)
+       WHERE f.user_id = $1 OR f.user_id = $2`,
+      [senderUserId, recipient_user_id, service_type, plan_type]
+    );
+
+    if (freelancerResult.rows.length === 0) {
+      return next(new AppError('No freelancer found between these two users', 400));
+    }
+
+    const freelancerRow = freelancerResult.rows[0];
+    let freelancerId, creatorUserId, initiator_role;
+
+    if (freelancerRow.user_id == senderUserId) {
+      freelancerId    = freelancerRow.freelancer_id;
+      creatorUserId   = recipient_user_id;
+      initiator_role  = 'freelancer';
+    } else {
+      freelancerId    = freelancerRow.freelancer_id;
+      creatorUserId   = senderUserId;
+      initiator_role  = 'creator';
+    }
+
+    const creatorResult = await db.query(
+      `SELECT creator_id FROM creators WHERE user_id = $1`,
+      [creatorUserId]
+    );
+    const creatorId = creatorResult.rows[0]?.creator_id;
+    if (!creatorId) {
+      return next(new AppError('Creator profile not found', 404));
+    }
+
+    const service_id    = freelancerRow.service_id || null;
+    const deliveryDays  = freelancerRow.delivery_days || 0;
+
+    // delivery_date = today + (delivery_days * units) days in IST
+    const deliveryMs    = deliveryDays * units * 24 * 60 * 60 * 1000;
+    const deliveryDateObj = new Date(Date.now() + deliveryMs);
+    // Format as YYYY-MM-DD in IST (UTC+5:30)
+    const istOffset     = 5.5 * 60 * 60 * 1000;
+    const istDate       = new Date(deliveryDateObj.getTime() + istOffset);
+    const delivery_date = istDate.toISOString().slice(0, 10);
+    // End-of-day IST as UTC time string for delivery_time column
+    const delivery_time = '18:30:00Z'; // 18:30 UTC = 23:59:59 IST
+
+    // Get or create chat room
+    const [smallerId, largerId] = [senderUserId, recipient_user_id].sort((a, b) => a - b);
+    const chatRoomId = `${smallerId}-${largerId}`;
+
+    await db.query(
+      `INSERT INTO chat_rooms (room_id, user1_id, user2_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (room_id) DO UPDATE SET room_id = EXCLUDED.room_id`,
+      [chatRoomId, smallerId, largerId]
+    );
+
+    // Hire number: total custom packages between this creator-freelancer pair (before this one)
+    const hireCountResult = await db.query(
+      `SELECT COUNT(*) AS count FROM custom_packages WHERE freelancer_id = $1 AND creator_id = $2`,
+      [freelancerId, creatorId]
+    );
+    const hire_number = parseInt(hireCountResult.rows[0].count) + 1;
+
+    // Save custom package
+    const packageResult = await db.query(
+      `INSERT INTO custom_packages (
+         room_id, freelancer_id, creator_id,
+         plan_type, price, units, package_type, status, expires_at, created_at,
+         delivery_date, delivery_time, service_id, service_type, initiator_role
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10,$11,$12,$13,$14)
+       RETURNING *`,
+      [
+        chatRoomId, freelancerId, creatorId,
+        plan_type, price, units, package_type,
+        new Date(Date.now() + 24 * 7 * 60 * 60 * 1000).toISOString(),
+        new Date().toISOString(),
+        delivery_date,
+        delivery_time,
+        service_id, service_type, initiator_role,
+      ]
+    );
+    const customPackage = packageResult.rows[0];
+
+    // Save chat message
+    const messageResult = await db.query(
+      `INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type, custom_package_id, created_at)
+       VALUES ($1,$2,$3,'Package sent','package',$4,$5)
+       RETURNING *`,
+      [chatRoomId, senderUserId, recipient_user_id, customPackage.id, new Date().toISOString()]
+    );
+    const savedMessage = messageResult.rows[0];
+
+    // Publish real-time event to chat-server
+    await publishToChannel('new_package', {
+      chatRoomId,
+      senderId: senderUserId,
+      senderUsername: senderName,
+      recipientId: recipient_user_id,
+      message: savedMessage,
+      customPackage,
+    });
+
+    // Push notification to recipient
+    const notifTitle = initiator_role === 'creator' ? 'New Hire Request' : 'New Package Offer';
+    const notifBody  = initiator_role === 'creator'
+      ? `${senderName} has sent you a hire request.`
+      : `${senderName} has sent you a custom package offer.`;
+    const eventType  = initiator_role === 'creator' ? 'hire_request' : 'package_sent';
+
+    await sendNotification({
+      recipientId: recipient_user_id,
+      senderId: senderUserId,
+      eventType,
+      title: notifTitle,
+      body: notifBody,
+      actionType: 'link',
+      actionRoute: chatRoomId,
+    });
+
+    logger.info(`[sendHireRequest] package=${customPackage.id} room=${chatRoomId} initiator=${initiator_role}`);
+
+    return res.status(201).json({
+      status: 'success',
+      data: {
+        chatRoomId,
+        hire_number,
+        customPackage,
+        message: savedMessage,
+      },
+    });
+  } catch (error) {
+    logger.error('[sendHireRequest] error:', error.message);
+    return next(new AppError('Failed to send hire request', 500));
+  }
+};
+
 module.exports = {
   createProject,
   getProject,
@@ -684,4 +848,5 @@ module.exports = {
   deleteProject,
   getAllProjects,
   uploadDeliverable,
+  sendHireRequest,
 }
