@@ -1788,7 +1788,9 @@ const getWishlistFreelancers = async (req, res, next) => {
         f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
-        w.created_at as wishlist_added_at
+        w.created_at as wishlist_added_at,
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
       FROM freelancer f
       INNER JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
@@ -1938,6 +1940,18 @@ const getWishlistFreelancers = async (req, res, next) => {
               error
             );
             freelancer.freelancer_thumbnail_image = null;
+          }
+        }
+
+        // Generate presigned URL for service banner if it exists
+        if (freelancer.service_banner) {
+          const parts = freelancer.service_banner.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
+          try {
+            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
+          } catch {
+            freelancer.service_banner = null;
           }
         }
 
