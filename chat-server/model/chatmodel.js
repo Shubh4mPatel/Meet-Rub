@@ -846,7 +846,11 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         p.end_date,
         p.service_id,
         s.service_name,
-        cp.package_type
+        cp.package_type,
+        EXISTS (
+          SELECT 1 FROM deadline_extension_requested der
+          WHERE der.project_id = p.id AND der.status = 'pending'
+        ) AS has_pending_extension
       FROM projects p
       JOIN freelancer f ON p.freelancer_id = f.freelancer_id
       JOIN creators cr ON p.creator_id = cr.creator_id
@@ -857,6 +861,9 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         AND cp.status = 'accepted'
       WHERE f.user_id = $1
         AND cr.user_id = $2
+        AND p.status IN ('CREATED', 'IN_PROGRESS', 'ON_HOLD')
+        AND p.end_date IS NOT NULL
+        AND p.end_date > NOW()
       ORDER BY p.created_at DESC
     `;
     try {
