@@ -736,10 +736,10 @@ const sendHireRequest = async (req, res, next) => {
     }
 
     const service_id    = freelancerRow.service_id || null;
-    const deliveryDays  = freelancerRow.delivery_days || 0;
+    const deliveryDays  = parseInt(freelancerRow.delivery_days) || 0;
 
     // delivery_date = today + (delivery_days * units) days in IST
-    const deliveryMs    = deliveryDays * units * 24 * 60 * 60 * 1000;
+    const deliveryMs    = deliveryDays * parseInt(units) * 24 * 60 * 60 * 1000;
     const deliveryDateObj = new Date(Date.now() + deliveryMs);
     // Format as YYYY-MM-DD in IST (UTC+5:30)
     const istOffset     = 5.5 * 60 * 60 * 1000;
