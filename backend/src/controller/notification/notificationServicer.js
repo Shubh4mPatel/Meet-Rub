@@ -1,5 +1,8 @@
 const { createClient } = require('redis');
 const { pool } = require('../../../config/dbConfig');
+const { getLogger } = require('../../../utils/logger');
+
+const logger = getLogger('notification');
 
 const publisher = createClient({
   socket: {
@@ -29,6 +32,8 @@ async function sendNotification({ recipientId, senderId, eventType, title, body,
     'notifications',
     JSON.stringify({ recipientId, notification })
   );
+
+  logger.info(`[SENT] eventType=${eventType} recipientId=${recipientId} senderId=${senderId} notificationId=${notification.id}`);
 
   return notification;
 }

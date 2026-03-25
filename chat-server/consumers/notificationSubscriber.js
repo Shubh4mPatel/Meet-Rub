@@ -1,4 +1,8 @@
 const { createClient } = require('redis');
+const { getLogger } = require('../utils/logger');
+const redis = require('../config/reddis');
+
+const logger = getLogger('notification');
 
 let subscriber;
 
@@ -14,9 +18,17 @@ async function startNotificationSubscriber(io) {
   subscriber.on('error', (err) => console.error('Notification subscriber error:', err));
   await subscriber.connect();
 
-  await subscriber.subscribe('notifications', (message) => {
+  await subscriber.subscribe('notifications', async (message) => {
     const { recipientId, notification } = JSON.parse(message);
-    io.to(`user:${recipientId}`).emit('new_notification', notification);
+    logger.info(`[RECEIVED] eventType=${notification.event_type} recipientId=${recipientId} notificationId=${notification.id}`);
+
+    const socketId = await redis.get(`user:${recipientId}:socketId`);
+    if (socketId) {
+      io.to(socketId).emit('notification', notification);
+      logger.info(`[EMITTED] notification to socketId=${socketId} recipientId=${recipientId} notificationId=${notification.id}`);
+    } else {
+      logger.warn(`[SKIPPED] recipientId=${recipientId} not online, notificationId=${notification.id}`);
+    }
   });
 
   console.log('✅ Notification subscriber started');

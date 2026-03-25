@@ -87,8 +87,8 @@ const raiseDispute = async (req, res, next) => {
     const disputeRoute = disputeResult.rows[0].id;
     const disputeReason = reason_of_dispute === 'other' ? description : reason_of_dispute;
     const disputeBody = serviceName
-      ? `${req.user.user_name} has raised a dispute against you about ${disputeReason} on ${serviceName}.`
-      : `${req.user.user_name} has raised a dispute against you about ${disputeReason}.`;
+      ? `${req.user.name} has raised a dispute against you about ${disputeReason} on ${serviceName}.`
+      : `${req.user.name} has raised a dispute against you about ${disputeReason}.`;
 
     await Promise.all([
       // Notify the other party
@@ -107,7 +107,7 @@ const raiseDispute = async (req, res, next) => {
         senderId: raiserId,
         eventType: 'dispute_raised_by_you',
         title: 'Dispute raised successfully',
-        body: `Your dispute has been successfully raised ${req.user.user_name}.Our team will review the details and keep you informed for of the next steps.`,
+        body: `Your dispute has been successfully raised ${req.user.name}.Our team will review the details and keep you informed for of the next steps.`,
         actionType: 'link',
         actionRoute: disputeRoute,
       }),
