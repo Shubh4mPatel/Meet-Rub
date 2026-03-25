@@ -3,6 +3,7 @@ const AppError = require("../../../utils/appError");
 const {logger} = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
+const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail } = require('../../../utils/deliveryEmails');
 
 // Create a new project
 const createProject = async (req, res, next) => {
@@ -587,10 +588,12 @@ const uploadDeliverable = async (req, res, next) => {
 
     // Verify project belongs to this freelancer and get service_id / creator_id / creator user_id
     const { rows: projects } = await db.query(
-      `SELECT p.id, p.service_id, p.creator_id, p.freelancer_id, p.status,
-              c.user_id AS creator_user_id, s.service_name
+      `SELECT p.id, p.service_id, p.creator_id, p.freelancer_id, p.status, p.amount,
+              c.user_id AS creator_user_id, s.service_name,
+              u_c.user_email AS creator_email, u_c.user_name AS creator_name
        FROM projects p
        JOIN creators c ON p.creator_id = c.creator_id
+       JOIN users u_c ON c.user_id = u_c.id
        LEFT JOIN services s ON p.service_id = s.id
        WHERE p.id = $1 AND p.freelancer_id = $2`,
       [project_id, freelancerId]
@@ -644,6 +647,23 @@ const uploadDeliverable = async (req, res, next) => {
       actionType: 'link',
       actionRoute: String(project_id),
     });
+
+    await Promise.all([
+      sendDeliverySubmittedEmail({
+        freelancerEmail:  req.user.email,
+        freelancerName:   req.user.name,
+        projectId:        project_id,
+        amount:           project.amount,
+      }),
+      sendDeliveryReceivedEmail({
+        creatorEmail:     project.creator_email,
+        creatorName:      project.creator_name,
+        freelancerName:   req.user.name,
+        projectId:        project_id,
+        serviceTitle:     project.service_name,
+        deliveryMessage:  project_description,
+      }),
+    ]);
 
     return res.status(201).json({
       status: 'success',
