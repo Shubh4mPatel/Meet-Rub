@@ -757,6 +757,9 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     const suggestedFreelancerIds = suggestionRows[0].freelancer_id;
     logger.debug(`Total suggested freelancer IDs: ${suggestedFreelancerIds.length}`);
 
+    // Service type-wise banner: use desiredService from the request
+    const serviceSubquery = desiredService ? `AND s2.service_name = $3` : ``;
+
     // Build the query — return all suggested freelancers by ID only
     let queryText = `
       SELECT
@@ -766,14 +769,22 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
         f.freelancer_thumbnail_image,
         f.rating,
         f.profile_title,
-        CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
+        f.worked_with,
+        ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
+        MIN(s.service_price) as lowest_price,
+        CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist,
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
       FROM freelancer f
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       WHERE f.freelancer_id = ANY($2::int[])
     `;
 
-    const queryParams = [creator_id, suggestedFreelancerIds];
-    let paramCount = 3;
+    const queryParams = desiredService
+      ? [creator_id, suggestedFreelancerIds, desiredService]
+      : [creator_id, suggestedFreelancerIds];
+    let paramCount = desiredService ? 4 : 3;
 
     // Add search condition
     if (searchTerm) {
@@ -782,11 +793,11 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
       paramCount++;
     }
 
+    // Add GROUP BY clause
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, w.freelancer_id`;
+
     // Count total before pagination
-    const countQuery = queryText.replace(
-      /SELECT[\s\S]+FROM/,
-      'SELECT COUNT(DISTINCT f.freelancer_id) as count FROM'
-    );
+    const countQuery = `SELECT COUNT(*) as count FROM (${queryText}) as sub`;
     const countResult = await query(countQuery, queryParams);
     const totalCount = parseInt(countResult.rows[0].count);
 
@@ -852,6 +863,18 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
               error
             );
             freelancer.freelancer_thumbnail_image = null;
+          }
+        }
+
+        // Generate presigned URL for service banner
+        if (freelancer.service_banner) {
+          const parts = freelancer.service_banner.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
+          try {
+            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
+          } catch {
+            freelancer.service_banner = null;
           }
         }
 
