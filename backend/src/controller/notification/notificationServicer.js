@@ -38,8 +38,4 @@ async function sendNotification({ recipientId, senderId, eventType, title, body,
   return notification;
 }
 
-async function publishToChannel(channel, payload) {
-  await publisher.publish(channel, JSON.stringify(payload));
-}
-
-module.exports = { sendNotification, publishToChannel };
+module.exports = { sendNotification };

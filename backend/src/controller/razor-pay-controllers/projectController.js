@@ -2,7 +2,7 @@ const {pool:db} = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const {logger} = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
-const { sendNotification, publishToChannel } = require('../notification/notificationServicer');
+const { sendNotification } = require('../notification/notificationServicer');
 const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail } = require('../../../utils/deliveryEmails');
 
 // Create a new project
@@ -795,16 +795,6 @@ const sendHireRequest = async (req, res, next) => {
       [chatRoomId, senderUserId, recipient_user_id, customPackage.id, new Date().toISOString()]
     );
     const savedMessage = messageResult.rows[0];
-
-    // Publish real-time event to chat-server
-    await publishToChannel('new_package', {
-      chatRoomId,
-      senderId: senderUserId,
-      senderUsername: senderName,
-      recipientId: recipient_user_id,
-      message: savedMessage,
-      customPackage,
-    });
 
     // Push notification to recipient
     const notifTitle = initiator_role === 'creator' ? 'New Hire Request' : 'New Package Offer';
