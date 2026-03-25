@@ -358,7 +358,7 @@ const getAllProjects = async (req, res, next) => {
     const PROJECT_STATUS_TYPE_MAP = {
       completed:   'COMPLETED',
       in_progress: 'IN_PROGRESS',
-      on_hold:     'ON_HOLD',
+      on_hold:     'DISPUTE',
     };
     const mappedProjectStatus = typeFilter
       ? PROJECT_STATUS_TYPE_MAP[typeFilter.toLowerCase()] || null
@@ -396,14 +396,14 @@ const getAllProjects = async (req, res, next) => {
         CASE
           WHEN p.status = 'COMPLETED'   THEN 'completed'
           WHEN p.status = 'IN_PROGRESS' THEN 'in_progress'
-          WHEN p.status = 'ON_HOLD'     THEN 'on_hold'
+          WHEN p.status = 'DISPUTE'     THEN 'on_hold'
           ELSE 'project'
         END                             AS record_type,
         p.id,
         CASE
           WHEN p.status = 'COMPLETED'   THEN 'completed'
           WHEN p.status = 'IN_PROGRESS' THEN 'in_progress'
-          WHEN p.status = 'ON_HOLD'     THEN 'on_hold'
+          WHEN p.status = 'DISPUTE'     THEN 'on_hold'
           ELSE COALESCE(cp.package_type, 'direct')
         END                             AS type,
         p.status                        AS status,

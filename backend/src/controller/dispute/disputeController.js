@@ -76,7 +76,7 @@ const raiseDispute = async (req, res, next) => {
 
     if (project_id) {
       await db.query(
-        `UPDATE projects SET status = 'ON_HOLD' WHERE id = $1`,
+        `UPDATE projects SET status = 'DISPUTE' WHERE id = $1`,
         [project_id]
       );
     }

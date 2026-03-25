@@ -861,7 +861,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         AND cp.status = 'accepted'
       WHERE f.user_id = $1
         AND cr.user_id = $2
-        AND p.status IN ('CREATED', 'IN_PROGRESS', 'ON_HOLD')
+        AND p.status IN ('CREATED', 'IN_PROGRESS', 'DISPUTE')
         AND p.end_date IS NOT NULL
         AND p.end_date > NOW()
       ORDER BY p.created_at DESC
