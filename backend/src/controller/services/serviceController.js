@@ -796,6 +796,11 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     // Add GROUP BY clause
     queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, w.freelancer_id`;
 
+    // If desiredService is set, exclude freelancers with no matching service
+    if (desiredService) {
+      queryText += ` HAVING (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.service_name = $3 ORDER BY s2.created_at DESC LIMIT 1) IS NOT NULL`;
+    }
+
     // Count total before pagination
     const countQuery = `SELECT COUNT(*) as count FROM (${queryText}) as sub`;
     const countResult = await query(countQuery, queryParams);
