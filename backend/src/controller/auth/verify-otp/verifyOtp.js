@@ -7,7 +7,7 @@ const { minioClient } = require("../../../../config/minio");
 const Joi = require("joi");
 const crypto = require("crypto");
 const { generateTokens } = require("../../../../utils/helper");
-const { sendWelcomeEmail } = require("../../../../utils/welcomeEmail");
+const { sendWelcomeEmail, sendAdminNewUserEmail } = require("../../../../utils/welcomeEmail");
 const redisClient = require("../../../../config/reddis");
 
 const USERNAMES_SET_KEY = "usernames:set";
@@ -268,6 +268,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
           sendWelcomeEmail('freelancer', email, userName).catch((err) =>
             logger.error('Failed to send freelancer welcome email:', err)
           );
+          sendAdminNewUserEmail('freelancer', userName, email, currentTimestamp, req.ip).catch((err) =>
+            logger.error('Failed to send admin new-user email:', err)
+          );
         } catch (error) {
           await client.query("ROLLBACK");
           // Clean up Redis username if it was already added before the commit failed
@@ -351,6 +354,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
           logger.info("Creator registration successful", { email });
           sendWelcomeEmail('creator', email, userName).catch((err) =>
             logger.error('Failed to send creator welcome email:', err)
+          );
+          sendAdminNewUserEmail('creator', userName, email, currentTimestamp, req.ip).catch((err) =>
+            logger.error('Failed to send admin new-user email:', err)
           );
         } catch (error) {
           await client.query("ROLLBACK");
