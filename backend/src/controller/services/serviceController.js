@@ -758,7 +758,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     logger.debug(`Total suggested freelancer IDs: ${suggestedFreelancerIds.length}`);
 
     // Service type-wise banner: use desiredService from the request
-    const serviceSubquery = desiredService ? `AND s2.service_name ILIKE $3` : ``;
+    const serviceSubquery = desiredService ? `AND s2.service_name = $3` : ``;
 
     // Build the query — return all suggested freelancers by ID only
     let queryText = `
