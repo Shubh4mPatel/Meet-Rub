@@ -8,7 +8,6 @@ const APP_URL         = process.env.APP_URL         || 'https://meetrub.com';
 const LOGO_URL        = process.env.LOGO_URL        || `${APP_URL}/logo.png`;
 const HELP_URL        = process.env.HELP_URL        || `${APP_URL}/help`;
 const PRIVACY_URL     = process.env.PRIVACY_URL     || `${APP_URL}/privacy`;
-const UNSUBSCRIBE_URL = process.env.UNSUBSCRIBE_URL || `${APP_URL}/unsubscribe`;
 const CURRENCY        = process.env.CURRENCY        || '₹';
 const REVIEW_DAYS     = process.env.REVIEW_DAYS     || '7';
 
@@ -43,7 +42,6 @@ async function sendDeliverySubmittedEmail({ freelancerEmail, freelancerName, pro
     logo_url:             LOGO_URL,
     help_url:             HELP_URL,
     privacy_url:          PRIVACY_URL,
-    unsubscribe_url:      UNSUBSCRIBE_URL,
   });
   await sendMail(freelancerEmail, `Delivery submitted — Order #${projectId}`, filled);
 }

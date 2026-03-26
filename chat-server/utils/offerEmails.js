@@ -8,7 +8,6 @@ const APP_URL         = process.env.APP_URL         || 'https://meetrub.com';
 const LOGO_URL        = process.env.LOGO_URL        || `${APP_URL}/logo.png`;
 const HELP_URL        = process.env.HELP_URL        || `${APP_URL}/help`;
 const PRIVACY_URL     = process.env.PRIVACY_URL     || `${APP_URL}/privacy`;
-const UNSUBSCRIBE_URL = process.env.UNSUBSCRIBE_URL || `${APP_URL}/unsubscribe`;
 const CURRENCY        = process.env.CURRENCY        || '₹';
 
 const transporter = nodemailer.createTransport({
@@ -52,7 +51,6 @@ async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName
     logo_url:            LOGO_URL,
     help_url:            HELP_URL,
     privacy_url:         PRIVACY_URL,
-    unsubscribe_url:     UNSUBSCRIBE_URL,
   });
   await sendMail(freelancerEmail, `Offer sent to ${creatorName}`, filled);
 }
@@ -74,7 +72,6 @@ async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerNam
     logo_url:            LOGO_URL,
     help_url:            HELP_URL,
     privacy_url:         PRIVACY_URL,
-    unsubscribe_url:     UNSUBSCRIBE_URL,
   });
   await sendMail(creatorEmail, `New offer from ${freelancerName}`, filled);
 }
@@ -95,7 +92,6 @@ async function sendHireRequestEmail({ creatorEmail, creatorName, freelancerName,
     logo_url:            LOGO_URL,
     help_url:            HELP_URL,
     privacy_url:         PRIVACY_URL,
-    unsubscribe_url:     UNSUBSCRIBE_URL,
   });
   await sendMail(creatorEmail, `Your hire request was sent to ${freelancerName}`, filled);
 }
@@ -116,7 +112,6 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
     logo_url:            LOGO_URL,
     help_url:            HELP_URL,
     privacy_url:         PRIVACY_URL,
-    unsubscribe_url:     UNSUBSCRIBE_URL,
   });
   await sendMail(freelancerEmail, `New hire request from ${creatorName}`, filled);
 }
