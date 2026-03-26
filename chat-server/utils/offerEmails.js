@@ -79,4 +79,46 @@ async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerNam
   await sendMail(creatorEmail, `New offer from ${freelancerName}`, filled);
 }
 
-module.exports = { sendOfferSentEmail, sendOfferReceivedEmail };
+async function sendHireRequestEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, amount, deliveryDays, chatRoomId }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/hireRequest.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username:    creatorName,
+    freelancer_username: freelancerName,
+    service_title:       serviceTitle || 'Custom Package',
+    currency:            CURRENCY,
+    amount:              amount != null ? Number(amount).toFixed(2) : '—',
+    deadline:            deliveryDays ? `${deliveryDays} days` : '—',
+    chat_url:            `${APP_URL}/creator/chat/${chatRoomId}`,
+    logo_url:            LOGO_URL,
+    help_url:            HELP_URL,
+    privacy_url:         PRIVACY_URL,
+    unsubscribe_url:     UNSUBSCRIBE_URL,
+  });
+  await sendMail(creatorEmail, `Your hire request was sent to ${freelancerName}`, filled);
+}
+
+async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, chatRoomId }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/hireRequestRecevied.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    creator_username:    creatorName,
+    service_title:       serviceTitle || 'Custom Package',
+    currency:            CURRENCY,
+    amount:              amount != null ? Number(amount).toFixed(2) : '—',
+    deadline:            deliveryDays ? `${deliveryDays} days` : '—',
+    chat_url:            `${APP_URL}/freelancer/chat/${chatRoomId}`,
+    logo_url:            LOGO_URL,
+    help_url:            HELP_URL,
+    privacy_url:         PRIVACY_URL,
+    unsubscribe_url:     UNSUBSCRIBE_URL,
+  });
+  await sendMail(freelancerEmail, `New hire request from ${creatorName}`, filled);
+}
+
+module.exports = { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail };

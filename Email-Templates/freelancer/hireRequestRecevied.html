@@ -39,16 +39,14 @@
   <div class="body">
     
         <h2>Hi {{freelancer_username}},</h2>
-        <p>A creator wants to hire you on Meetrub! Review the details and accept or decline within <strong>{{response_hours}} hours</strong>.</p>
+        <p>A creator wants to hire you on Meetrub! Review the details in the chat and respond.</p>
         <div class="highlight">
           <p><strong>Creator:</strong> {{creator_username}}</p>
           <p><strong>Service requested:</strong> {{service_title}}</p>
           <p><strong>Budget:</strong> {{currency}}{{amount}}</p>
           <p><strong>Deadline:</strong> {{deadline}}</p>
-          <p><strong>Message:</strong> {{message_preview}}</p>
         </div>
-        <a href="{{accept_url}}" class="btn btn-primary">Accept Request</a>
-        <a href="{{decline_url}}" class="btn btn-secondary">Decline</a>
+        <a href="{{chat_url}}" class="btn btn-primary">View Request</a>
   </div>
   <div class="footer">
     <div class="social-row">
@@ -56,7 +54,6 @@
       <a href="https://instagram.com/meetrub" title="Instagram"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABAUlEQVR4nNVXQRLCIAyEjl/SY3lYOerD9FgeVQ8ODkJICCGiubVAdrMbCrWGGffz9cDGXfCWk69pMgUqIbNogbeurTKUAENRUwNUYDQ4lrMgoAGO5V6oCdokTtjkdd+GAT8uN/D9W4FvVA9hWQw8KlBjjwWkXp7HBW/J74B2TCdgMe8pC1KZoTnUuDGdCqz7VngMvWvpHXQbUpEC9G5ZtgI1W+Izl8j0Jvw/AjWpez9aoiYccVYs3DucMa8qoSbkVu+Ct8O2YW/8RhP22CCNiPkBnJ8LWheStODpFhTSa9+McrsLBTT7AcoNWqBBopaTBJJaQhVDNqFEjZa17OSjf8+fRYF/NtVNsc8AAAAASUVORK5CYII=" alt="Instagram"></a>
       <a href="https://linkedin.com/company/meetrub" title="LinkedIn"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABdklEQVR4nGNkIBFwpR36j0/+2yw7RlLMI0oxIUspcQwTrSwnVi9OF1JiMTaAKzSwhgC1LcdnJoYDaGE5PrOZCCmgtSMIJkJaA7gD6OF7bHYx0dtydEcMnijABRamajB8nWnL8HWmLYOyGCf1HTAQwQ8DXGmH/jMOpAMYGBgYWAgpWJiqwRBiIsrAwMDAoFd7huHuq+8oYpmLbjEEGYsy6MtyM7AwMzLsufaBoXj5XYZ3X39TxwGEwPQ4NRR+mKkoAzMjA0Pc7BtE6ac4F1x+8pVBp/o0g1HDWYb3X/8wMDAwMAQYiTCwMBHXLKDYAa2bHzLcf/OD4ebzbwyn7n9iYGBgYGBmYmSQFGCjjwNuvfwOZ//4/Q/OZmMhzmiKHfDnLyIT/ScjPzGR2oajJvg2y45x8BfFtAbw4Kd3iQiLeiZ0AXpajuKAgQIoDqBHKKDbgRECtHQENrOxRgEtHIHLTIIWUZo7CHmGYCKkJDSI0Uuy4dTungMA0D2HkF+lTRgAAAAASUVORK5CYII=" alt="LinkedIn"></a>
     </div>
-    <p>Request expires in {{response_hours}} hours.</p>
     <p>&copy; 2026 Meetrub. All rights reserved.</p>
     <div class="footer-links">
       <a href="{{help_url}}">Help Center</a>

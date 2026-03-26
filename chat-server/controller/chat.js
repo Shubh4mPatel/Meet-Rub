@@ -1,7 +1,7 @@
 const chatModel = require("../model/chatmodel");
 const redis = require("../config/reddis");
 const { createPresignedUrl } = require("../utils/helper");
-const { sendOfferSentEmail, sendOfferReceivedEmail } = require("../utils/offerEmails");
+const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail } = require("../utils/offerEmails");
 
 // Save a web notification to DB and emit live to recipient if online.
 // For new_message: skips save and emit entirely if recipient is already in that chat room.
@@ -172,6 +172,30 @@ const chatController = (io) => {
             `${username} has sent you a hire request.`,
             'link', chatRoomId
           );
+
+          const freelancer = await chatModel.getUserByUserId(recipientId);
+          if (freelancer) {
+            await Promise.all([
+              sendHireRequestEmail({
+                creatorEmail:    socket.user.email,
+                creatorName:     username,
+                freelancerName:  freelancer.user_name,
+                serviceTitle:    customPackage.service_type,
+                amount:          customPackage.price,
+                deliveryDays:    packageData.delivery_days,
+                chatRoomId,
+              }),
+              sendHireRequestReceivedEmail({
+                freelancerEmail: freelancer.user_email,
+                freelancerName:  freelancer.user_name,
+                creatorName:     username,
+                serviceTitle:    customPackage.service_type,
+                amount:          customPackage.price,
+                deliveryDays:    packageData.delivery_days,
+                chatRoomId,
+              }),
+            ]);
+          }
         } else {
           await emitWebNotification(io, recipientId, userId, 'package_sent',
             'New Package Offer',
