@@ -47,6 +47,30 @@ const chatController = (io) => {
     socket.on("join-chat", async ({ recipientId }) => {
       try {
         console.log(`${username} is joining chat with user ID: ${recipientId}`);
+
+        // Role-based access: admin cannot join chat rooms
+        if (userRole === 'admin') {
+          socket.emit("error", { message: "Admins cannot join or create chat rooms" });
+          return;
+        }
+
+        // Fetch recipient's role and validate pairing
+        const recipientRole = await chatModel.getUserRole(recipientId);
+        if (!recipientRole) {
+          socket.emit("error", { message: "Recipient not found" });
+          return;
+        }
+
+        if (recipientRole === 'admin') {
+          socket.emit("error", { message: "Cannot start a chat with an admin" });
+          return;
+        }
+
+        if (userRole === recipientRole) {
+          socket.emit("error", { message: `Two ${userRole}s cannot chat with each other` });
+          return;
+        }
+
         // Create a unique room ID (sorted to ensure same room for both users)
         const [smallerId, largerId] = [parseInt(userId), parseInt(recipientId)].sort((a, b) => a - b);
         console.log(`Sorted user IDs for chat room: ${smallerId}, ${largerId}`);
