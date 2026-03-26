@@ -954,6 +954,14 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     );
     return result.rows[0] || null;
   },
+
+  async getUserByUserId(userId) {
+    const result = await pool.query(
+      'SELECT user_email, user_name FROM users WHERE id = $1',
+      [userId]
+    );
+    return result.rows[0] || null;
+  },
 };
 
 /// we are storing date time in the custome package and in the project we have only end date col so add date and time and fill that col and also add no of units per service and also we have to ask question about the hire feature will freelancer have to accept that what will happen when i heir a freelancer

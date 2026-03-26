@@ -1,6 +1,7 @@
 const chatModel = require("../model/chatmodel");
 const redis = require("../config/reddis");
 const { createPresignedUrl } = require("../utils/helper");
+const { sendOfferSentEmail, sendOfferReceivedEmail } = require("../utils/offerEmails");
 
 // Save a web notification to DB and emit live to recipient if online.
 // For new_message: skips save and emit entirely if recipient is already in that chat room.
@@ -41,9 +42,6 @@ const chatController = (io) => {
 
     console.log(`User connected: ${username} (${userId})`);
 
-    // Register ALL event handlers synchronously first.
-    // If handlers are registered after async operations, clients can emit events
-    // before the listeners exist and those events are silently dropped.
 
     // Join a private chat room
     socket.on("join-chat", async ({ recipientId }) => {
@@ -180,6 +178,30 @@ const chatController = (io) => {
             `${username} has sent you a custom package offer.`,
             'link', chatRoomId
           );
+
+          const recipient = await chatModel.getUserByUserId(recipientId);
+          if (recipient) {
+            await Promise.all([
+              sendOfferSentEmail({
+                freelancerEmail: socket.user.email,
+                freelancerName:  username,
+                creatorName:     recipient.user_name,
+                serviceTitle:    customPackage.service_type,
+                amount:          customPackage.price,
+                deliveryDays:    packageData.delivery_days,
+                chatRoomId,
+              }),
+              sendOfferReceivedEmail({
+                creatorEmail:    recipient.user_email,
+                creatorName:     recipient.user_name,
+                freelancerName:  username,
+                serviceTitle:    customPackage.service_type,
+                amount:          customPackage.price,
+                deliveryDays:    packageData.delivery_days,
+                chatRoomId,
+              }),
+            ]);
+          }
         }
 
         console.log(`Message saved: ${username} to ${recipientId}`);
