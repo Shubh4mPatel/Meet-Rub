@@ -3,7 +3,7 @@ const AppError = require('../../../utils/appError');
 const { logger } = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
-const { sendAdminDisputeEmail } = require('../../../../utils/welcomeEmail');
+const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
 
 const EXPIRY_SECONDS = 4 * 60 * 60; // 4 hours
 
