@@ -3,6 +3,7 @@ const AppError = require('../../../utils/appError');
 const { logger } = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
+const { sendAdminDisputeEmail } = require('../../../../utils/welcomeEmail');
 
 const EXPIRY_SECONDS = 4 * 60 * 60; // 4 hours
 
@@ -31,7 +32,7 @@ const raiseDispute = async (req, res, next) => {
     if (role === 'freelancer') {
       freelancer_id = roleWiseId;
       const{rows :creactorCheck} = await db.query(
-        `SELECT creator_id FROM creators WHERE user_id = $1`,
+        `SELECT creator_id, full_name, email FROM creators WHERE user_id = $1`,
         [other_party_id]
       );
       if (creactorCheck.length === 0) {
@@ -41,7 +42,7 @@ const raiseDispute = async (req, res, next) => {
     } else if (role === 'creator') {
       creator_id = roleWiseId;
       const{rows :freelancerCheck} = await db.query(
-        `SELECT freelancer_id FROM freelancer WHERE user_id = $1`,
+        `SELECT freelancer_id, freelancer_full_name, freelancer_email FROM freelancer WHERE user_id = $1`,
         [other_party_id]
       );
       if (freelancerCheck.length === 0) {
@@ -53,9 +54,10 @@ const raiseDispute = async (req, res, next) => {
     }
 
     let serviceName = null;
+    let projectAmount = null;
     if (project_id) {
       const projectCheck = await db.query(
-        `SELECT p.id, s.service_name
+        `SELECT p.id, p.amount, s.service_name
          FROM projects p
          LEFT JOIN services s ON p.service_id = s.id
          WHERE p.id = $1`,
@@ -65,6 +67,7 @@ const raiseDispute = async (req, res, next) => {
         return next(new AppError('Project not found', 404));
       }
       serviceName = projectCheck.rows[0].service_name;
+      projectAmount = projectCheck.rows[0].amount;
     }
 
     const disputeResult = await db.query(
@@ -82,6 +85,30 @@ const raiseDispute = async (req, res, next) => {
     }
 
     logger.info(`Dispute raised by ${role} (id: ${roleWiseId})`);
+
+    // Fetch both parties' info for the admin email
+    const partiesRes = await db.query(
+      `SELECT c.full_name AS creator_name, c.email AS creator_email,
+              f.freelancer_full_name AS freelancer_name, f.freelancer_email AS freelancer_email
+       FROM creators c, freelancer f
+       WHERE c.creator_id = $1 AND f.freelancer_id = $2`,
+      [creator_id, freelancer_id]
+    );
+
+    if (partiesRes.rows.length > 0) {
+      const { creator_name, creator_email, freelancer_name, freelancer_email } = partiesRes.rows[0];
+      sendAdminDisputeEmail({
+        disputeId:       disputeResult.rows[0].id,
+        projectId:       project_id || null,
+        creatorName:     creator_name,
+        creatorEmail:    creator_email,
+        freelancerName:  freelancer_name,
+        freelancerEmail: freelancer_email,
+        serviceTitle:    serviceName,
+        amount:          projectAmount,
+        disputeReason:   reason_of_dispute === 'other' ? description : reason_of_dispute,
+      }).catch((err) => logger.error('Failed to send admin dispute email:', err));
+    }
 
     const raiserId = req.user.user_id;
     const disputeRoute = disputeResult.rows[0].id;

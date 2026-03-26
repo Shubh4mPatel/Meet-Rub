@@ -7,18 +7,22 @@
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;}
   .wrapper{max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);}
-  .header{background:#0F766E;padding:28px 32px 24px;text-align:center;}
+  .header{padding:28px 32px 24px;text-align:center;}
+  .header-approved{background:#0F766E;}
+  .header-rejected{background:#DC2626;}
   .logo-row{text-align:center;margin-bottom:12px;}
   .header-subtitle{color:#C4B5FD;font-size:13px;margin-top:2px;}
   .body{padding:32px;}
   .body h2{font-size:19px;color:#1A1A2E;margin:0 0 10px;font-family:Arial,sans-serif;}
   .body p{font-size:15px;color:#4B5563;line-height:1.65;margin:0 0 16px;}
-  .highlight{background:#F5F3FF;border-left:4px solid #7C3AED;border-radius:6px;padding:16px 20px;margin:20px 0;}
+  .highlight{border-radius:6px;padding:16px 20px;margin:20px 0;border-left:4px solid;}
+  .highlight-approved{background:#F0FDF4;border-color:#0F766E;}
+  .highlight-rejected{background:#FEF2F2;border-color:#DC2626;}
   .highlight p{margin:5px 0;color:#1A1A2E;font-size:14px;}
   .highlight strong{color:#7C3AED;}
-  .btn{display:inline-block;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;text-decoration:none;margin:6px 4px;}
-  .btn-primary{background:#7C3AED;color:#ffffff;}
-  .btn-secondary{background:#F3F4F6;color:#1A1A2E;border:1px solid #D1D5DB;}
+  .btn{display:inline-block;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;text-decoration:none;margin:6px 4px;color:#ffffff;}
+  .btn-approved{background:#0F766E;}
+  .btn-rejected{background:#DC2626;}
   .footer{background:#F8F7FF;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
   .footer p{font-size:12px;color:#9CA3AF;margin:4px 0;}
   .social-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 10px;}
@@ -30,22 +34,19 @@
 </head>
 <body>
 <div class="wrapper">
-  <div class="header">
+  <div class="header header-{{status}}">
     <div class="logo-row">
       <img src="{{logo_url}}" alt="Meetrub" style="height:48px;width:auto;display:block;margin:0 auto;">
     </div>
-    <div class="header-subtitle">Identity verified successfully</div>
+    <div class="header-subtitle">{{header_subtitle}}</div>
   </div>
   <div class="body">
-    
         <h2>Hi {{freelancer_username}},</h2>
-        <p>Your identity has been verified on Meetrub. You now have full platform access including withdrawals, and your profile will display the <strong>KYC Verified</strong> badge.</p>
-        <div class="highlight" style="border-color:#0F766E;background:#F0FDF4;">
-          <p>&#10003; Withdrawals enabled</p>
-          <p>&#10003; KYC Verified badge added to your profile</p>
-          <p>&#10003; Increased trust with creators</p>
+        <p>{{body_message}}</p>
+        <div class="highlight highlight-{{status}}">
+          {{highlight_content}}
         </div>
-        <a href="{{dashboard_url}}" class="btn btn-primary" style="background:#0F766E;">Go to Dashboard</a>
+        <a href="{{action_url}}" class="btn btn-{{status}}">{{action_label}}</a>
   </div>
   <div class="footer">
     <div class="social-row">
