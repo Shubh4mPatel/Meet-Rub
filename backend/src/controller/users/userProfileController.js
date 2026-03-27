@@ -3379,8 +3379,8 @@ const getAllfreelancersForcreator = async (req, res, next) => {
 
     // Search and filter parameters
     const search = req.query.search || ""; // Search by freelancer name
-    const minPrice = parseFloat(req.query.minPrice) || 0;
-    const maxPrice = parseFloat(req.query.maxPrice) || Number.MAX_SAFE_INTEGER;
+    const minPrice = req.query.minPrice !== undefined ? parseFloat(req.query.minPrice) : null;
+    const maxPrice = req.query.maxPrice !== undefined ? parseFloat(req.query.maxPrice) : null;
     // Handle serviceType as an array
     const serviceTypes = req.query.serviceType
       ? Array.isArray(req.query.serviceType)
@@ -3432,11 +3432,17 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       queryText += ` AND s.service_name = ANY($${serviceTypesParamIdx}::text[])`;
     }
 
-    // Add price range filter
-    queryText += ` AND (s.service_price >= $${paramCount} AND s.service_price <= $${paramCount + 1
-      })`;
-    queryParams.push(minPrice, maxPrice);
-    paramCount += 2;
+    // Add price range filter (only when explicitly provided)
+    if (minPrice !== null) {
+      queryText += ` AND s.service_price >= $${paramCount}`;
+      queryParams.push(minPrice);
+      paramCount++;
+    }
+    if (maxPrice !== null) {
+      queryText += ` AND s.service_price <= $${paramCount}`;
+      queryParams.push(maxPrice);
+      paramCount++;
+    }
 
     // Add delivery time filter
     if (deliveryTime) {
@@ -3487,10 +3493,16 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       countQuery += ` AND s.service_name = ANY($1::text[])`;
     }
 
-    countQuery += ` AND (s.service_price >= $${countParamIndex} AND s.service_price <= $${countParamIndex + 1
-      })`;
-    countParams.push(minPrice, maxPrice);
-    countParamIndex += 2;
+    if (minPrice !== null) {
+      countQuery += ` AND s.service_price >= $${countParamIndex}`;
+      countParams.push(minPrice);
+      countParamIndex++;
+    }
+    if (maxPrice !== null) {
+      countQuery += ` AND s.service_price <= $${countParamIndex}`;
+      countParams.push(maxPrice);
+      countParamIndex++;
+    }
 
     if (deliveryTime) {
       countQuery += ` AND s.delivery_time = $${countParamIndex}`;

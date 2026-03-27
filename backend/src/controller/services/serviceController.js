@@ -210,6 +210,14 @@ const addServicesByFreelancer = async (req, res, next) => {
       return next(new AppError("Service, price, description, and delivery duration are required", 400));
     }
 
+    // Validate deliveryDuration must be in "X-Y" format (e.g. "6-7")
+    const deliveryDurationMatch = String(deliveryDuration).trim().match(/^(\d+)-(\d+)$/);
+    if (!deliveryDurationMatch) {
+      logger.warn("Invalid delivery duration format:", deliveryDuration);
+      return next(new AppError("Delivery duration must be in 'X-Y' format (e.g. '6-7')", 400));
+    }
+    const normalizedDeliveryDuration = `${deliveryDurationMatch[1]}-${deliveryDurationMatch[2]}`;
+
     // Validate planType if provided
     const normalizedPlanType = planType ? planType.toLowerCase() : 'basic';
     if (!['basic', 'pro', 'premium'].includes(normalizedPlanType)) {
@@ -284,7 +292,7 @@ const addServicesByFreelancer = async (req, res, next) => {
       `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at, delivery_time, plan_type, thumbnail_file)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [freelancer_id, service, description, price, new Date(), new Date(), deliveryDuration, normalizedPlanType, thumbnailFileUrl]
+      [freelancer_id, service, description, price, new Date(), new Date(), normalizedDeliveryDuration, normalizedPlanType, thumbnailFileUrl]
     );
 
     logger.info("Service added successfully");

@@ -13,13 +13,24 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
     const user = req.user;
     logger.debug("Decoded user:", user);
 
-    const { rows: userPortFolios } = await query(
-      `SELECT * FROM portfolio WHERE freelancer_id =$1;`,
-      [user.roleWiseId]
-    );
+    const serviceType = req.query.serviceType ? req.query.serviceType.trim() : null;
+
+    const queryText = serviceType
+      ? `SELECT p.*
+         FROM portfolio p
+         INNER JOIN services s ON s.freelancer_id = p.freelancer_id AND s.service_name = $2
+         WHERE p.freelancer_id = $1`
+      : `SELECT p.*
+         FROM portfolio p
+         LEFT JOIN services s ON s.freelancer_id = p.freelancer_id
+         WHERE p.freelancer_id = $1
+         GROUP BY p.portfolio_item_id`;
+
+    const queryParams = serviceType ? [user.roleWiseId, serviceType] : [user.roleWiseId];
+
+    const { rows: userPortFolios } = await query(queryText, queryParams);
 
     logger.info(`Found portfolio count: ${userPortFolios.length}`);
-    console.log("User :", user);
     if (userPortFolios.length === 0) {
       logger.warn("No portfolio data found");
       return res.status(200).json({
@@ -28,21 +39,35 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
       });
     }
 
+    if (serviceType) {
+      // Return flat array filtered by service type
+      const userPortFolioData = await Promise.all(
+        userPortFolios.map(async (curr) => {
+          const objectName = curr.portfolio_item_url.split("/").slice(1).join("/");
+          logger.debug("Generating presigned URL for:", objectName);
+          curr.portfolio_item_url = await createPresignedUrl(BUCKET_NAME, objectName, expirySeconds);
+          return curr;
+        })
+      );
+
+      logger.info("Portfolio data successfully fetched");
+      return res.status(200).json({
+        status: "success",
+        data: userPortFolioData,
+        message: "portfolio data found",
+      });
+    }
+
+    // No filter — return grouped by service type from services table
     const userPortFolioData = await userPortFolios.reduce(
       async (accPromise, curr) => {
         const acc = await accPromise;
-        console.log("Current portfolio item URL:", curr.portfolio_item_url);
         const objectName = curr.portfolio_item_url.split("/").slice(1).join("/");
         logger.debug("Generating presigned URL for:", objectName);
 
-        const url = await createPresignedUrl(
-          BUCKET_NAME,
-          objectName,
-          expirySeconds
-        );
+        curr.portfolio_item_url = await createPresignedUrl(BUCKET_NAME, objectName, expirySeconds);
 
-        curr.portfolio_item_url = url;
-        const key = curr.portfolio_item_service_type;
+        const key = curr.service_name || "uncategorized";
         (acc[key] ||= []).push(curr);
         return acc;
       },
