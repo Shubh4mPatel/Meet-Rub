@@ -156,6 +156,7 @@ const getMyProjects = async (req, res, next) => {
     const userType = req.user.role;
     const status = req.query.status;
     const service = req.query.service;
+    const search = req.query.search ? req.query.search.trim() : null;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
@@ -184,6 +185,12 @@ const getMyProjects = async (req, res, next) => {
       filterParams.push(`%${service}%`);
     }
 
+    if (search) {
+      whereClauses.push(`(f.freelancer_full_name ILIKE $${paramIndex} OR c.full_name ILIKE $${paramIndex})`);
+      paramIndex++;
+      filterParams.push(`%${search}%`);
+    }
+
     const joins = `
 FROM projects p
 JOIN creators c        ON p.creator_id   = c.creator_id
@@ -198,7 +205,9 @@ LEFT JOIN services s   ON p.service_id   = s.id`;
 SELECT
   p.*,
   c.full_name               AS client_name,
+  c.profile_image_url       AS creator_profile_image,
   f.freelancer_full_name    AS freelancer_name,
+  f.profile_image_url       AS freelancer_profile_image,
   s.service_name
 ${joins}
 ${whereClause}
@@ -215,11 +224,33 @@ LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
     const totalCount = parseInt(countResult[0].total);
     const totalPages = Math.ceil(totalCount / limit);
 
+    // Generate presigned URL for the other party's profile image
+    const profileImageKey = userType === 'creator' ? 'freelancer_profile_image' : 'creator_profile_image';
+    const projectsWithImages = await Promise.all(
+      projects.map(async (project) => {
+        const rawUrl = project[profileImageKey];
+        if (rawUrl) {
+          try {
+            const parts = rawUrl.split('/');
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join('/');
+            project[profileImageKey] = await createPresignedUrl(bucketName, objectName, 4 * 60 * 60);
+          } catch {
+            project[profileImageKey] = null;
+          }
+        }
+        // Remove the unused party's image from response
+        const unusedKey = userType === 'creator' ? 'creator_profile_image' : 'freelancer_profile_image';
+        delete project[unusedKey];
+        return project;
+      })
+    );
+
     res.status(200).json({
       status: 'success',
       message: 'Projects fetched successfully',
       data: {
-        projects,
+        projects: projectsWithImages,
         pagination: {
           currentPage: page,
           totalPages,
