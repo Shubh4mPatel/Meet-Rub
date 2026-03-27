@@ -19,12 +19,11 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
       ? `SELECT p.*
          FROM portfolio p
          INNER JOIN services s ON s.freelancer_id = p.freelancer_id AND s.service_name = $2
-         WHERE p.freelancer_id = $1`
+         WHERE p.freelancer_id = $1 AND p.portfolio_item_service_type = $2
+         GROUP BY p.portfolio_item_id`
       : `SELECT p.*
          FROM portfolio p
-         LEFT JOIN services s ON s.freelancer_id = p.freelancer_id
-         WHERE p.freelancer_id = $1
-         GROUP BY p.portfolio_item_id`;
+         WHERE p.freelancer_id = $1`;
 
     const queryParams = serviceType ? [user.roleWiseId, serviceType] : [user.roleWiseId];
 
@@ -39,26 +38,7 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
       });
     }
 
-    if (serviceType) {
-      // Return flat array filtered by service type
-      const userPortFolioData = await Promise.all(
-        userPortFolios.map(async (curr) => {
-          const objectName = curr.portfolio_item_url.split("/").slice(1).join("/");
-          logger.debug("Generating presigned URL for:", objectName);
-          curr.portfolio_item_url = await createPresignedUrl(BUCKET_NAME, objectName, expirySeconds);
-          return curr;
-        })
-      );
-
-      logger.info("Portfolio data successfully fetched");
-      return res.status(200).json({
-        status: "success",
-        data: userPortFolioData,
-        message: "portfolio data found",
-      });
-    }
-
-    // No filter — return grouped by service type from services table
+    // Generate presigned URLs and group by portfolio_item_service_type
     const userPortFolioData = await userPortFolios.reduce(
       async (accPromise, curr) => {
         const acc = await accPromise;
@@ -67,7 +47,7 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
 
         curr.portfolio_item_url = await createPresignedUrl(BUCKET_NAME, objectName, expirySeconds);
 
-        const key = curr.service_name || "uncategorized";
+        const key = curr.portfolio_item_service_type || "uncategorized";
         (acc[key] ||= []).push(curr);
         return acc;
       },
