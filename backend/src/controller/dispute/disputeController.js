@@ -178,7 +178,7 @@ const getDisputes = async (req, res, next) => {
       : role;
 
     const myCol = role === 'freelancer' ? 'd.freelancer_id' : 'd.creator_id';
-    const searchNameCol = raisedByFilter === 'creator' ? 'c.full_name' : 'f.freelancer_full_name';
+    const searchNameCol = role === 'creator' ? 'f.freelancer_full_name' : 'c.full_name';
 
     const params = [roleWiseId, raisedByFilter];
     let nextParam = 3;
