@@ -767,17 +767,10 @@ const sendHireRequest = async (req, res, next) => {
     }
 
     const service_id    = freelancerRow.service_id || null;
+    // delivery_days = service delivery days × number of units (stored as integer)
     const deliveryDays  = parseInt(freelancerRow.delivery_days) || 0;
-
-    // delivery_date = today + (delivery_days * units) days in IST
-    const deliveryMs    = deliveryDays * parseInt(units) * 24 * 60 * 60 * 1000;
-    const deliveryDateObj = new Date(Date.now() + deliveryMs);
-    // Format as YYYY-MM-DD in IST (UTC+5:30)
-    const istOffset     = 5.5 * 60 * 60 * 1000;
-    const istDate       = new Date(deliveryDateObj.getTime() + istOffset);
-    const delivery_date = istDate.toISOString().slice(0, 10);
-    // End-of-day IST as UTC time string for delivery_time column
-    const delivery_time = '18:30:00Z'; // 18:30 UTC = 23:59:59 IST
+    const delivery_days = deliveryDays * parseInt(units);
+    const delivery_time = 0; // hours (no hour component from service definition)
 
     // Get or create chat room
     const [smallerId, largerId] = [senderUserId, recipient_user_id].sort((a, b) => a - b);
@@ -802,7 +795,7 @@ const sendHireRequest = async (req, res, next) => {
       `INSERT INTO custom_packages (
          room_id, freelancer_id, creator_id,
          plan_type, price, units, package_type, status, expires_at, created_at,
-         delivery_date, delivery_time, service_id, service_type, initiator_role
+         delivery_days, delivery_time, service_id, service_type, initiator_role
        )
        VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10,$11,$12,$13,$14)
        RETURNING *`,
@@ -811,7 +804,7 @@ const sendHireRequest = async (req, res, next) => {
         plan_type, price, units, package_type,
         new Date(Date.now() + 24 * 7 * 60 * 60 * 1000).toISOString(),
         new Date().toISOString(),
-        delivery_date,
+        delivery_days,
         delivery_time,
         service_id, service_type, initiator_role,
       ]

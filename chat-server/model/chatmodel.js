@@ -145,8 +145,10 @@ const chatModel = {
     cp.units as cp_units,
     cp.package_type as cp_package_type,
     cp.status as cp_status,
-    cp.delivery_date as cp_delivery_date,
+    cp.delivery_days as cp_delivery_days,
     cp.delivery_time as cp_delivery_time,
+    cp.reason_for_revoke as cp_reason_for_revoke,
+    cp.reason_for_rejection as cp_reason_for_rejection,
     cp.service_id as cp_service_id,
     cp.service_type as cp_service_type,
     cp.initiator_role as cp_initiator_role,
@@ -218,8 +220,10 @@ LIMIT $2 OFFSET $3;
               units: row.cp_units,
               package_type: row.cp_package_type,
               status: row.cp_status,
-              delivery_date: row.cp_delivery_date,
+              delivery_days: row.cp_delivery_days,
               delivery_time: row.cp_delivery_time,
+              reason_for_revoke: row.cp_reason_for_revoke,
+              reason_for_rejection: row.cp_reason_for_rejection,
               service_id: row.cp_service_id,
               service_type: row.cp_service_type,
               initiator_role: row.cp_initiator_role,
@@ -379,7 +383,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       price,
       units,
       package_type,
-      delivery_date,
+      delivery_days,
       delivery_time,
       service,
       service_type,
@@ -425,7 +429,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       INSERT INTO custom_packages (
         room_id, freelancer_id, creator_id,
         plan_type, price, units, package_type, status, expires_at, created_at,
-        delivery_date, delivery_time,service_id,service_type,initiator_role
+        delivery_days, delivery_time, service_id, service_type, initiator_role
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
@@ -443,8 +447,8 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         status || "pending",
         new Date(Date.now() + 24*7 * 60 * 60 * 1000).toISOString(),
         new Date().toISOString(),
-        delivery_date || null,
-        toUTCTime(delivery_time) || null,
+        delivery_days != null ? parseInt(delivery_days) : null,
+        delivery_time != null ? parseInt(delivery_time) : null,
         service_id,
         service_type,
         initiator_role,
@@ -478,17 +482,18 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   },
 
   // Reject custom package - update status to 'rejected'
-  async rejectPackage(packageId, recipientId) {
+  async rejectPackage(packageId, recipientId, reason) {
     const query = `
       UPDATE custom_packages
       SET status = 'rejected',
-      responded_at = NOW()
+          reason_for_rejection = $2,
+          responded_at = NOW()
       WHERE id = $1
       RETURNING *
     `;
 
     try {
-      const result = await pool.query(query, [packageId]);
+      const result = await pool.query(query, [packageId, reason || null]);
       return result.rows[0];
     } catch (error) {
       console.error("Error rejecting package:", error);
@@ -497,16 +502,17 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   },
 
   // Revoke custom package - only allowed if status is 'pending'
-  async revokePackage(packageId) {
+  async revokePackage(packageId, reason) {
     const query = `
       UPDATE custom_packages
       SET status = 'revoked',
+          reason_for_revoke = $2,
           responded_at = NOW()
       WHERE id = $1 AND status = 'pending'
       RETURNING *
     `;
     try {
-      const result = await pool.query(query, [packageId]);
+      const result = await pool.query(query, [packageId, reason || null]);
       return result.rows[0] || null;
     } catch (error) {
       console.error("Error revoking package:", error);
@@ -514,37 +520,12 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     }
   },
 
-  // Create a project from an accepted custom package
+  // Create a project from an accepted custom package.
+  // end_date is intentionally left NULL here — it will be set once the creator pays.
   async createProjectFromPackage(pkg) {
-    let endDate = pkg.delivery_date || null;
-
-    // When the package was initiated by the creator, derive deadline from the
-    // service's delivery_time string (e.g. "6-7 days") — take the max value
-    // and add it to today's date.
-    if (pkg.initiator_role === 'creator' && pkg.service_id) {
-      try {
-        const svcResult = await pool.query(
-          `SELECT delivery_time FROM services WHERE id = $1`,
-          [pkg.service_id]
-        );
-        const deliveryTime = svcResult.rows[0]?.delivery_time;
-        if (deliveryTime) {
-          const numbers = deliveryTime.match(/\d+/g);
-          if (numbers && numbers.length > 0) {
-            const maxDays = Math.max(...numbers.map(Number));
-            const deadline = new Date();
-            deadline.setDate(deadline.getDate() + maxDays);
-            endDate = deadline.toISOString();
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching service delivery_time for deadline:", err);
-      }
-    }
-
     const query = `
       INSERT INTO projects (creator_id, freelancer_id, number_of_units, amount, status, end_date, service_id)
-      VALUES ($1, $2, $3, $4, 'CREATED', $5, $6)
+      VALUES ($1, $2, $3, $4, 'CREATED', NULL, $5)
       RETURNING *
     `;
 
@@ -554,7 +535,6 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         pkg.freelancer_id,
         pkg.units || null,
         pkg.price,
-        endDate,
         pkg.service_id || null,
       ]);
       return result.rows[0];
@@ -798,7 +778,8 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         cp.plan_type,
         cp.package_type,
         cp.service_type,
-        cp.delivery_date,
+        cp.delivery_days,
+        cp.delivery_time,
         cp.created_at,
         cp.room_id         AS chat_room_id,
         cp.freelancer_id,

@@ -313,12 +313,12 @@ const chatController = (io) => {
       }
     });
 
-    socket.on("reject-package", async (packageId, recipientId) => {
+    socket.on("reject-package", async ({ packageId, reason } = {}, recipientId) => {
       try {
         const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
-        const updatedPackage = await chatModel.rejectPackage(packageId, userId);
+        const updatedPackage = await chatModel.rejectPackage(packageId, userId, reason);
 
         if (!updatedPackage) {
           socket.emit("error", {
@@ -348,12 +348,12 @@ const chatController = (io) => {
       }
     });
 
-    socket.on("revoke-custom-package", async (packageId, recipientId) => {
+    socket.on("revoke-custom-package", async ({ packageId, reason } = {}, recipientId) => {
       try {
         const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
-        const updatedPackage = await chatModel.revokePackage(packageId);
+        const updatedPackage = await chatModel.revokePackage(packageId, reason);
 
         if (!updatedPackage) {
           socket.emit("error", {

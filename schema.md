@@ -155,8 +155,7 @@ ALTER TABLE IF EXISTS public.creators
     OWNER to postgres;
 
 
-
-    -- Table: public.custom_packages
+-- Table: public.custom_packages
 
 -- DROP TABLE IF EXISTS public.custom_packages;
 
@@ -175,11 +174,13 @@ CREATE TABLE IF NOT EXISTS public.custom_packages
     units integer,
     plan_type character varying COLLATE pg_catalog."default",
     package_intiated_by character varying COLLATE pg_catalog."default",
-    delivery_date timestamp without time zone,
-    delivery_time time with time zone,
     initiator_role character varying COLLATE pg_catalog."default",
     service_type character varying COLLATE pg_catalog."default",
     package_type character varying COLLATE pg_catalog."default",
+    reason_for_revoke text COLLATE pg_catalog."default",
+    reason_for_rejection text COLLATE pg_catalog."default",
+    delivery_days integer,
+    delivery_time integer,
     CONSTRAINT custom_packages_pkey PRIMARY KEY (id),
     CONSTRAINT custom_packages_creator_fkey FOREIGN KEY (freelancer_id)
         REFERENCES public.freelancer (freelancer_id) MATCH SIMPLE
@@ -203,7 +204,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.custom_packages
     OWNER to postgres;
-
+ 
 
     -- Table: public.deadline_extension_requested
 
