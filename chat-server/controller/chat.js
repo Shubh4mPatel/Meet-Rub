@@ -331,6 +331,7 @@ const chatController = (io) => {
           packageId,
           chatRoomId,
           rejectedBy: userId,
+          reason: updatedPackage.reason_for_rejection,
           package: updatedPackage,
         });
 
@@ -366,6 +367,7 @@ const chatController = (io) => {
           packageId,
           chatRoomId,
           revokedBy: userId,
+          reason: updatedPackage.reason_for_revoke,
           package: updatedPackage,
         });
 

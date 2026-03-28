@@ -723,6 +723,8 @@ const sendHireRequest = async (req, res, next) => {
       units,
       package_type,
       service_type,
+      delivery_days: bodyDeliveryDays,
+      delivery_time: bodyDeliveryTime,
     } = req.body;
 
     if (!recipient_user_id || !plan_type || !price || !units || !package_type || !service_type) {
@@ -767,10 +769,11 @@ const sendHireRequest = async (req, res, next) => {
     }
 
     const service_id    = freelancerRow.service_id || null;
-    // delivery_days = service delivery days × number of units (stored as integer)
-    const deliveryDays  = parseInt(freelancerRow.delivery_days) || 0;
-    const delivery_days = deliveryDays * parseInt(units);
-    const delivery_time = 0; // hours (no hour component from service definition)
+    // Use body-provided values if given, otherwise compute from service data
+    const delivery_days = bodyDeliveryDays !== undefined
+      ? parseInt(bodyDeliveryDays) || 0
+      : (parseInt(freelancerRow.delivery_days) || 0) * parseInt(units);
+    const delivery_time = bodyDeliveryTime !== undefined ? parseInt(bodyDeliveryTime) || 0 : 0;
 
     // Get or create chat room
     const [smallerId, largerId] = [senderUserId, recipient_user_id].sort((a, b) => a - b);
