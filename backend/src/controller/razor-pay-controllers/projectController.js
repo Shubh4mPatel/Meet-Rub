@@ -679,6 +679,16 @@ const uploadDeliverable = async (req, res, next) => {
       actionRoute: String(project_id),
     });
 
+    await sendNotification({
+      recipientId: project.creator_user_id,
+      senderId: req.user.user_id,
+      eventType: 'rating_request',
+      title: 'Rate your experience',
+      body: `Your project${serviceLabel} is complete. Please rate ${req.user.name} for their work.`,
+      actionType: 'link',
+      actionRoute: String(project_id),
+    });
+
     await Promise.all([
       sendDeliverySubmittedEmail({
         freelancerEmail:  req.user.email,
