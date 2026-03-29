@@ -44,7 +44,6 @@ async function sendWelcomeEmail(role, email, username) {
       logo_url:           LOGO_URL,
       help_url:           HELP_URL,
       privacy_url:        PRIVACY_URL,
-      unsubscribe_url:    UNSUBSCRIBE_URL,
     });
     await sendMail(email, 'Welcome to Meetrub — start hiring freelancers', filled);
   }
@@ -71,7 +70,6 @@ async function sendAdminNewUserEmail(role, username, userEmail, signupTime, ipAd
     logo_url:       LOGO_URL,
     help_url:       HELP_URL,
     privacy_url:    PRIVACY_URL,
-    unsubscribe_url: UNSUBSCRIBE_URL,
   });
 
   await Promise.all(

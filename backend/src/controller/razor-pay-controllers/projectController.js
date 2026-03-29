@@ -669,27 +669,26 @@ const uploadDeliverable = async (req, res, next) => {
     logger.info(`Deliverable uploaded by freelancer=${freelancerId} project=${project_id} status set to COMPLETED`);
 
     const serviceLabel = project.service_name ? ` for ${project.service_name}` : '';
-    await sendNotification({
-      recipientId: project.creator_user_id,
-      senderId: req.user.user_id,
-      eventType: 'deliverable_uploaded',
-      title: 'New deliverable uploaded',
-      body: `${req.user.name} has uploaded a deliverable${serviceLabel}.`,
-      actionType: 'link',
-      actionRoute: String(project_id),
-    });
 
-    await sendNotification({
-      recipientId: project.creator_user_id,
-      senderId: req.user.user_id,
-      eventType: 'rating_request',
-      title: 'Rate your experience',
-      body: `Your project${serviceLabel} is complete. Please rate ${req.user.name} for their work.`,
-      actionType: 'link',
-      actionRoute: String(project_id),
-    });
-
-    await Promise.all([
+    const notificationResults = await Promise.allSettled([
+      sendNotification({
+        recipientId: project.creator_user_id,
+        senderId: req.user.user_id,
+        eventType: 'deliverable_uploaded',
+        title: 'New deliverable uploaded',
+        body: `${req.user.name} has uploaded a deliverable${serviceLabel}.`,
+        actionType: 'link',
+        actionRoute: String(project_id),
+      }),
+      sendNotification({
+        recipientId: project.creator_user_id,
+        senderId: req.user.user_id,
+        eventType: 'rating_request',
+        title: 'Rate your experience',
+        body: `Your project${serviceLabel} is complete. Please rate ${req.user.name} for their work.`,
+        actionType: 'link',
+        actionRoute: String(project_id),
+      }),
       sendDeliverySubmittedEmail({
         freelancerEmail:  req.user.email,
         freelancerName:   req.user.name,
@@ -705,6 +704,13 @@ const uploadDeliverable = async (req, res, next) => {
         deliveryMessage:  project_description,
       }),
     ]);
+
+    notificationResults.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        const labels = ['deliverable_uploaded notification', 'rating_request notification', 'delivery submitted email', 'delivery received email'];
+        logger.error(`uploadDeliverable: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
+      }
+    });
 
     return res.status(201).json({
       status: 'success',

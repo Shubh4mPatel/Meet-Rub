@@ -68,7 +68,6 @@ async function sendDeliveryReceivedEmail({
     logo_url:           LOGO_URL,
     help_url:           HELP_URL,
     privacy_url:        PRIVACY_URL,
-    unsubscribe_url:    UNSUBSCRIBE_URL,
   });
   await sendMail(creatorEmail, `New delivery received — Order #${projectId}`, filled);
 }
