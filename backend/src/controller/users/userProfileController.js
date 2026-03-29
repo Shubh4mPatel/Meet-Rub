@@ -256,8 +256,7 @@ const freelancerBasicInfoSchema = Joi.object({
   phoneNumber: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .required(),
-  profileTitle: Joi.string().required(),
-  thumbnailImageUrl: Joi.string().optional().allow(""),
+  profileTitle: Joi.string().required()
 });
 
 const ProfileImageSchema = Joi.object({
@@ -760,207 +759,17 @@ const editProfile = async (req, res, next) => {
           dateOfBirth,
           phoneNumber,
           profileTitle,
-          thumbnailImageUrl,
           about_me
         } = req.body;
 
         // Start transaction
         await query("BEGIN");
         try {
-          // Check if thumbnail file needs to be uploaded
-          let newThumbnailUrl = null;
-          let signedUrl = null;
-
-          // Fetch current thumbnail URL from database
-          const { rows: currentData } = await query(
-            "SELECT freelancer_thumbnail_image FROM freelancer WHERE user_id = $1",
-            [user.user_id]
+          const { rows } = await query(
+            `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, first_name=$5, last_name=$6, freelancer_email=$7, about_me=$8 WHERE user_id=$9
+             RETURNING freelancer_full_name, first_name, last_name, freelancer_email, date_of_birth, phone_number, profile_title, about_me, created_at`,
+            [freelancerFullName, dateOfBirth, phoneNumber, profileTitle, first_name, last_name, email, about_me, user.user_id]
           );
-
-          const currentThumbnailUrl =
-            currentData[0]?.freelancer_thumbnail_image;
-
-          // Validate only single file upload
-          if (req.files && Array.isArray(req.files) && req.files.length > 1) {
-            await query("ROLLBACK");
-            logger.warn("Multiple files uploaded, only single file allowed");
-            return next(
-              new AppError(
-                "Only one thumbnail image can be uploaded at a time",
-                400
-              )
-            );
-          }
-
-          // Case 1: thumbnailImageUrl is empty/null - upload new file
-          if (!thumbnailImageUrl || thumbnailImageUrl.trim() === "") {
-            if (!req.file) {
-              await query("ROLLBACK");
-              logger.warn("No thumbnail URL provided and no file uploaded");
-              return next(
-                new AppError(
-                  "Thumbnail file is required when thumbnail URL is empty",
-                  400
-                )
-              );
-            }
-
-            // Validate that the file is an image
-            if (!req.file.mimetype.startsWith("image/")) {
-              await query("ROLLBACK");
-              logger.warn(
-                "Invalid file type for thumbnail:",
-                req.file.mimetype
-              );
-              return next(
-                new AppError(
-                  "Thumbnail must be an image file (JPEG, PNG, GIF, etc.)",
-                  400
-                )
-              );
-            }
-
-            logger.info(
-              "No thumbnail URL provided, uploading new file to MinIO"
-            );
-
-            const fileExt = path.extname(req.file.originalname);
-            const fileName = `${crypto.randomUUID()}${fileExt}`;
-            const folder = "freelancer/freelancer-profile-thumbnail";
-            const objectName = `${folder}/${fileName}`;
-            newThumbnailUrl = `${BUCKET_NAME}/${objectName}`;
-
-            // Upload to MinIO
-            await minioClient.putObject(
-              BUCKET_NAME,
-              objectName,
-              req.file.buffer,
-              req.file.size,
-              { "Content-Type": req.file.mimetype }
-            );
-
-            signedUrl = await createPresignedUrl(
-              BUCKET_NAME,
-              objectName,
-              expirySeconds
-            );
-            logger.info("New thumbnail uploaded successfully to MinIO");
-          }
-          // Case 2: thumbnailImageUrl is provided
-          else {
-            // Check if thumbnail URL is different from the one in DB
-            if (currentThumbnailUrl !== thumbnailImageUrl) {
-              // URL has changed, check if file is uploaded
-              if (!req.file) {
-                await query("ROLLBACK");
-                logger.warn("Thumbnail URL changed but no file uploaded");
-                return next(
-                  new AppError(
-                    "Thumbnail file is required when URL changes",
-                    400
-                  )
-                );
-              }
-
-              // Validate that the file is an image
-              if (!req.file.mimetype.startsWith("image/")) {
-                await query("ROLLBACK");
-                logger.warn(
-                  "Invalid file type for thumbnail:",
-                  req.file.mimetype
-                );
-                return next(
-                  new AppError(
-                    "Thumbnail must be an image file (JPEG, PNG, GIF, etc.)",
-                    400
-                  )
-                );
-              }
-
-              logger.info(
-                "Thumbnail URL changed, replacing old file with new one"
-              );
-
-              // Delete old thumbnail from MinIO if it exists
-              if (currentThumbnailUrl) {
-                try {
-                  const parts = currentThumbnailUrl.split("/");
-                  if (parts.length >= 4) {
-                    const oldBucketName = parts[2];
-                    const oldObjectName = parts.slice(3).join("/");
-                    await minioClient.removeObject(
-                      oldBucketName,
-                      oldObjectName
-                    );
-                    logger.info("Old thumbnail deleted from MinIO");
-                  }
-                } catch (deleteError) {
-                  logger.warn("Failed to delete old thumbnail:", deleteError);
-                  // Continue with upload even if delete fails
-                }
-              }
-
-              // Upload new thumbnail
-              const fileExt = path.extname(req.file.originalname);
-              const fileName = `${crypto.randomUUID()}${fileExt}`;
-              const folder = "freelancer/freelancer-profile-thumbnail";
-              const objectName = `${folder}/${fileName}`;
-              newThumbnailUrl = `${BUCKET_NAME}/${objectName}`;
-
-              // Upload to MinIO
-              await minioClient.putObject(
-                BUCKET_NAME,
-                objectName,
-                req.file.buffer,
-                req.file.size,
-                { "Content-Type": req.file.mimetype }
-              );
-
-              signedUrl = await createPresignedUrl(
-                BUCKET_NAME,
-                objectName,
-                expirySeconds
-              );
-              logger.info("New thumbnail uploaded successfully to MinIO");
-            } else {
-              logger.info("Thumbnail URL unchanged, skipping upload");
-            }
-          }
-
-          // Update database with or without new thumbnail URL
-          let updateQuery, updateParams;
-          if (newThumbnailUrl) {
-            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, freelancer_thumbnail_image=$5,first_name=$6, last_name=$7, freelancer_email=$8, about_me=$9 WHERE user_id=$10
-             RETURNING freelancer_full_name,first_name,last_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image,about_me,created_at`;
-            updateParams = [
-              freelancerFullName,
-              dateOfBirth,
-              phoneNumber,
-              profileTitle,
-              newThumbnailUrl,
-              first_name,
-              last_name,
-              email,
-              about_me,
-              user.user_id,
-            ];
-          } else {
-            updateQuery = `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4 , first_name =$5 , last_name =$6 , freelancer_email=$7, about_me=$8 WHERE user_id=$9
-             RETURNING freelancer_full_name, first_name, last_name, freelancer_email, date_of_birth, phone_number, profile_title, freelancer_thumbnail_image,about_me,created_at`;
-            updateParams = [
-              freelancerFullName,
-              dateOfBirth,
-              phoneNumber,
-              profileTitle,
-              first_name,
-              last_name,
-              email,
-              about_me,
-              user.user_id,
-            ];
-          }
-
-          const { rows } = await query(updateQuery, updateParams);
 
           // Commit transaction
           await query("COMMIT");
@@ -968,7 +777,7 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Profile updated successfully",
-            data: { full_name: rows[0].freelancer_full_name, first_name: rows[0].first_name, last_name: rows[0].last_name, email: rows[0].freelancer_email, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, freelancer_thumbnail_image: signedUrl || rows[0].freelancer_thumbnail_image,about_me:rows[0].about_me , joined_at: rows[0].created_at }
+            data: { full_name: rows[0].freelancer_full_name, first_name: rows[0].first_name, last_name: rows[0].last_name, email: rows[0].freelancer_email, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, about_me: rows[0].about_me, joined_at: rows[0].created_at },
           });
         } catch (error) {
           await query("ROLLBACK");
