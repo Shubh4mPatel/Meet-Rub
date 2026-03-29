@@ -873,7 +873,6 @@ const sendHireRequest = async (req, res, next) => {
   }
 };
 
-
 const rateFreelancer = async (req, res, next) => {
   try {
     const { projectId } = req.params;

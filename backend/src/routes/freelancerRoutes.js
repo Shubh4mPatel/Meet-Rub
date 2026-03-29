@@ -10,6 +10,7 @@ const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/port
 const { getFreelancerOverview } = require("../controller/users/freelancerOverviewController");
 const { getNiches } = require('../controller/services/serviceController');
 const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
+const { rateFreelancer } = require('../controller/razor-pay-controllers/projectController');
 
 
 router.post('/portfolio/upload-after-before',authenticateUser, requireRole(['freelancer']), upload.fields([
@@ -94,5 +95,7 @@ router.post('/dispute-raise', authenticateUser, requireRole(['freelancer']), rai
 router.get('/disputes', authenticateUser, requireRole(['freelancer']), getDisputes);
 
 router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(['freelancer']), getCreatorByUserId);
+
+router.post('rate-creator/:creatorId', authenticateUser, requireRole(['freelancer']), rateFreelancer);
 
 module.exports = router

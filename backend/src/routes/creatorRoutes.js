@@ -7,6 +7,7 @@ const { raiseDispute, getDisputes } = require('../controller/dispute/disputeCont
 const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersForcreator, getFreelancerByIdForCreator, getFreeLancerByUserId, getFreelancerImpact, getFreelancerPortfolio, getWishlistCount } = require('../controller/users/userProfileController');
 const { getFreelancerOverview } = require('../controller/users/freelancerOverviewController');
 const { getFreelancerReviews } = require('../controller/users/freelancerReviewsController');
+const { rateFreelancer } = require('../controller/razor-pay-controllers/projectController');
 
 router.post('/service-request',authenticateUser, requireRole(['creator']), createSreviceRequest);
 
@@ -44,5 +45,7 @@ router.get('/freelancers/:id/impact', authenticateUser, requireRole(['creator'])
 router.get('/freelancers/:id/portfolio', authenticateUser, requireRole(['creator']), getFreelancerPortfolio);
 
 router.get('/freelancers/:id/reviews', authenticateUser, requireRole(['creator']), getFreelancerReviews);
+
+router.post(`/rate-freelancer/:freelancerId`, authenticateUser, requireRole(['creator']),rateFreelancer);
 
 module.exports = router;
