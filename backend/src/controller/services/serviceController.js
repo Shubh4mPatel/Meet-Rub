@@ -358,6 +358,14 @@ const updateServiceByFreelancer = async (req, res, next) => {
       return next(new AppError("Plan type must be 'basic', 'pro', or 'premium'", 400));
     }
 
+    // Validate deliveryDuration must be in "X-Y" format (e.g. "6-7")
+    const deliveryDurationMatch = String(deliveryDuration).trim().match(/^(\d+)-(\d+)$/);
+    if (!deliveryDurationMatch) {
+      logger.warn("Invalid delivery duration format:", deliveryDuration);
+      return next(new AppError("Delivery duration must be in 'X-Y' format (e.g. '6-7')", 400));
+    }
+    const normalizedDeliveryDuration = `${deliveryDurationMatch[1]}-${deliveryDurationMatch[2]}`;
+
     // Begin transaction
     await client.query('BEGIN');
     logger.debug("Transaction started for service update");
@@ -419,7 +427,7 @@ const updateServiceByFreelancer = async (req, res, next) => {
        SET service_name=$1, service_price=$2, service_description=$3, updated_at=$4, delivery_time=$5, plan_type=$6, thumbnail_file=$7
        WHERE id=$8 AND freelancer_id=$9
        RETURNING *`,
-      [service, price, description, new Date(), deliveryDuration, planType || null, thumbnailFileUrl, serviceId, freelancer_id]
+      [service, price, description, new Date(), normalizedDeliveryDuration, planType || null, thumbnailFileUrl, serviceId, freelancer_id]
     );
 
     if (!rows.length) {

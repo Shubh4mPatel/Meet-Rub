@@ -1,6 +1,6 @@
-const {pool:db} = require('../../../config/dbConfig');
+const { pool: db } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
-const {logger} = require('../../../utils/logger');
+const { logger } = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
 const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail } = require('../../../utils/deliveryEmails');
@@ -375,21 +375,21 @@ const getAllProjects = async (req, res, next) => {
   try {
     logger.info(`[getAllProjects] START user=${req.user?.user_id} role=${req.user?.role} query=${JSON.stringify(req.query)}`);
 
-    const page   = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;
     logger.info(`[getAllProjects] page=${page} limit=${limit} offset=${offset}`);
 
     // Optional filters
     const statusFilter = req.query.status?.trim() || null;
-    const typeFilter   = req.query.type?.trim()   || null;
+    const typeFilter = req.query.type?.trim() || null;
 
     // Project-status type values — when typeFilter matches one of these,
     // filter projects by their status and exclude custom_package rows.
     const PROJECT_STATUS_TYPE_MAP = {
-      completed:   'COMPLETED',
+      completed: 'COMPLETED',
       in_progress: 'IN_PROGRESS',
-      on_hold:     'DISPUTE',
+      on_hold: 'DISPUTE',
     };
     const mappedProjectStatus = typeFilter
       ? PROJECT_STATUS_TYPE_MAP[typeFilter.toLowerCase()] || null
@@ -522,19 +522,19 @@ const getAllProjects = async (req, res, next) => {
         ${packageTypeWhere}
     `;
 
-    const dataQuery  = `${unionQuery} ORDER BY created_at DESC LIMIT $${p++} OFFSET $${p++}`;
+    const dataQuery = `${unionQuery} ORDER BY created_at DESC LIMIT $${p++} OFFSET $${p++}`;
     const countQuery = `SELECT COUNT(*) AS total FROM (${unionQuery}) AS combined`;
 
-    const dataParams  = [...params, limit, offset];
+    const dataParams = [...params, limit, offset];
     const countParams = [...params];
 
     logger.info(`[getAllProjects] executing queries — dataParams=${JSON.stringify(dataParams)}`);
     const [dataResult, countResult] = await Promise.all([
-      db.query(dataQuery,  dataParams),
+      db.query(dataQuery, dataParams),
       db.query(countQuery, countParams),
     ]);
 
-    const total      = parseInt(countResult.rows[0].total);
+    const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
     logger.info(`[getAllProjects] DB returned rows=${dataResult.rows.length} total=${total}`);
 
@@ -690,18 +690,18 @@ const uploadDeliverable = async (req, res, next) => {
         actionRoute: String(project_id),
       }),
       sendDeliverySubmittedEmail({
-        freelancerEmail:  req.user.email,
-        freelancerName:   req.user.name,
-        projectId:        project_id,
-        amount:           project.amount,
+        freelancerEmail: req.user.email,
+        freelancerName: req.user.name,
+        projectId: project_id,
+        amount: project.amount,
       }),
       sendDeliveryReceivedEmail({
-        creatorEmail:     project.creator_email,
-        creatorName:      project.creator_name,
-        freelancerName:   req.user.name,
-        projectId:        project_id,
-        serviceTitle:     project.service_name,
-        deliveryMessage:  project_description,
+        creatorEmail: project.creator_email,
+        creatorName: project.creator_name,
+        freelancerName: req.user.name,
+        projectId: project_id,
+        serviceTitle: project.service_name,
+        deliveryMessage: project_description,
       }),
     ]);
 
@@ -728,9 +728,9 @@ const uploadDeliverable = async (req, res, next) => {
 // then publishes a real-time event to the chat-server via Redis.
 const sendHireRequest = async (req, res, next) => {
   try {
-    const senderUserId  = req.user.user_id;
-    const senderName    = req.user.name;
-    const senderRole    = req.user.role; // 'creator' | 'freelancer'
+    const senderUserId = req.user.user_id;
+    const senderName = req.user.name;
+    const senderRole = req.user.role; // 'creator' | 'freelancer'
 
     const {
       recipient_user_id,
@@ -766,13 +766,13 @@ const sendHireRequest = async (req, res, next) => {
     let freelancerId, creatorUserId, initiator_role;
 
     if (freelancerRow.user_id == senderUserId) {
-      freelancerId    = freelancerRow.freelancer_id;
-      creatorUserId   = recipient_user_id;
-      initiator_role  = 'freelancer';
+      freelancerId = freelancerRow.freelancer_id;
+      creatorUserId = recipient_user_id;
+      initiator_role = 'freelancer';
     } else {
-      freelancerId    = freelancerRow.freelancer_id;
-      creatorUserId   = senderUserId;
-      initiator_role  = 'creator';
+      freelancerId = freelancerRow.freelancer_id;
+      creatorUserId = senderUserId;
+      initiator_role = 'creator';
     }
 
     const creatorResult = await db.query(
@@ -784,7 +784,7 @@ const sendHireRequest = async (req, res, next) => {
       return next(new AppError('Creator profile not found', 404));
     }
 
-    const service_id    = freelancerRow.service_id || null;
+    const service_id = freelancerRow.service_id || null;
     // Use body-provided values if given, otherwise compute from service data
     const delivery_days = bodyDeliveryDays !== undefined
       ? parseInt(bodyDeliveryDays) || 0
@@ -841,10 +841,10 @@ const sendHireRequest = async (req, res, next) => {
 
     // Push notification to recipient
     const notifTitle = initiator_role === 'creator' ? 'New Hire Request' : 'New Package Offer';
-    const notifBody  = initiator_role === 'creator'
+    const notifBody = initiator_role === 'creator'
       ? `${senderName} has sent you a hire request.`
       : `${senderName} has sent you a custom package offer.`;
-    const eventType  = initiator_role === 'creator' ? 'hire_request' : 'package_sent';
+    const eventType = initiator_role === 'creator' ? 'hire_request' : 'package_sent';
 
     await sendNotification({
       recipientId: recipient_user_id,
@@ -873,6 +873,155 @@ const sendHireRequest = async (req, res, next) => {
   }
 };
 
+
+const rateFreelancer = async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const { rating, review } = req.body;
+    const creatorId = req.user.roleWiseId;
+
+    if (req.user.role !== 'creator') {
+      return next(new AppError('Only creators can rate freelancers', 403));
+    }
+
+    const ratingVal = Number(rating);
+    if (!ratingVal || ratingVal < 1 || ratingVal > 5) {
+      return next(new AppError('Rating must be between 1 and 5', 400));
+    }
+
+    // Verify project belongs to this creator and is COMPLETED
+    const { rows: projects } = await db.query(
+      `SELECT p.id, p.freelancer_id, p.status,
+              f.user_id AS freelancer_user_id
+       FROM projects p
+       JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+       WHERE p.id = $1 AND p.creator_id = $2`,
+      [projectId, creatorId]
+    );
+
+    if (projects.length === 0) {
+      return next(new AppError('Project not found or access denied', 404));
+    }
+
+    const project = projects[0];
+
+    if (project.status !== 'COMPLETED') {
+      return next(new AppError('You can only rate a completed project', 400));
+    }
+
+    // Check if creator has already rated this project
+    const { rows: existing } = await db.query(
+      `SELECT freelancer_rating FROM ratings WHERE project_id = $1 AND freelancer_rating IS NOT NULL`,
+      [projectId]
+    );
+    if (existing.length > 0) {
+      return next(new AppError('You have already rated this freelancer', 409));
+    }
+
+    // Upsert rating row — one row per project, set freelancer side
+    await db.query(
+      `INSERT INTO ratings (project_id, freelancer_id, creator_id, freelancer_rating, freelancer_review)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (project_id) DO NOTHING`,
+      [projectId, project.freelancer_id, creatorId, ratingVal, review || null]
+    );
+
+    // await sendNotification({
+    //   recipientId: project.freelancer_user_id,
+    //   senderId: req.user.user_id,
+    //   eventType: 'new_rating',
+    //   title: 'You received a new rating',
+    //   body: `${req.user.name} rated your work ${ratingVal}/5.`,
+    //   actionType: 'link',
+    //   actionRoute: String(projectId),
+    // });
+
+    logger.info(`rateFreelancer: creator=${creatorId} rated freelancer=${project.freelancer_id} project=${projectId} rating=${ratingVal}`);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Freelancer rated successfully',
+    });
+  } catch (error) {
+    logger.error('rateFreelancer error:', error);
+    return next(new AppError('Failed to rate freelancer', 500));
+  }
+};
+
+const rateCreator = async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const { rating, review } = req.body;
+    const freelancerId = req.user.roleWiseId;
+
+    if (req.user.role !== 'freelancer') {
+      return next(new AppError('Only freelancers can rate creators', 403));
+    }
+
+    const ratingVal = Number(rating);
+    if (!ratingVal || ratingVal < 1 || ratingVal > 5) {
+      return next(new AppError('Rating must be between 1 and 5', 400));
+    }
+
+    // Verify project belongs to this freelancer and is COMPLETED
+    const { rows: projects } = await db.query(
+      `SELECT p.id, p.creator_id, p.status,
+              c.user_id AS creator_user_id
+       FROM projects p
+       JOIN creators c ON p.creator_id = c.creator_id
+       WHERE p.id = $1 AND p.freelancer_id = $2`,
+      [projectId, freelancerId]
+    );
+
+    if (projects.length === 0) {
+      return next(new AppError('Project not found or access denied', 404));
+    }
+
+    const project = projects[0];
+
+    if (project.status !== 'COMPLETED') {
+      return next(new AppError('You can only rate a completed project', 400));
+    }
+
+    // Check if freelancer has already rated this project
+    const { rows: existing } = await db.query(
+      `SELECT creator_rating FROM ratings WHERE project_id = $1 AND creator_rating IS NOT NULL`,
+      [projectId]
+    );
+    if (existing.length > 0) {
+      return next(new AppError('You have already rated this creator', 409));
+    }
+
+    // Upsert rating row — one row per project, set creator side
+    await db.query(
+      `INSERT INTO ratings (project_id, freelancer_id, creator_id, creator_rating, creator_review)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (project_id) DO NOTHING`,
+      [projectId, freelancerId, project.creator_id, ratingVal, review || null]
+    );
+
+    // await sendNotification({
+    //   recipientId: project.creator_user_id,
+    //   senderId: req.user.user_id,
+    //   eventType: 'new_rating',
+    //   title: 'You received a new rating',
+    //   body: `${req.user.name} rated their experience ${ratingVal}/5.`,
+    //   actionType: 'link',
+    //   actionRoute: String(projectId),
+    // });
+
+    logger.info(`rateCreator: freelancer=${freelancerId} rated creator=${project.creator_id} project=${projectId} rating=${ratingVal}`);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Creator rated successfully',
+    });
+  } catch (error) {
+    logger.error('rateCreator error:', error);
+    return next(new AppError('Failed to rate creator', 500));
+  }
+};
+
 module.exports = {
   createProject,
   getProject,
@@ -882,4 +1031,6 @@ module.exports = {
   getAllProjects,
   uploadDeliverable,
   sendHireRequest,
+  rateFreelancer,
+  rateCreator,
 }
