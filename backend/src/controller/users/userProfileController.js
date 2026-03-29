@@ -1041,7 +1041,8 @@ const getAllFreelancers = async (req, res, next) => {
 
     // Sort and delivery time filters
     const sortBy = req.query.sortBy || "newest"; // toprated, newest
-    const deliveryTime = req.query.deliveryTime || ""; // e.g., "2-3 days"
+    const minDays = req.query.minDays ? parseInt(req.query.minDays) : null;
+    const maxDays = req.query.maxDays ? parseInt(req.query.maxDays) : null;
     // const type = req.query.type || "all"; // e.g., "all", "featured", etc.
 
     // Build the query based on filters
@@ -1058,7 +1059,8 @@ const getAllFreelancers = async (req, res, next) => {
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
+        (SELECT s2.delivery_time FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
@@ -1085,10 +1087,15 @@ const getAllFreelancers = async (req, res, next) => {
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
-    // Add delivery time filter
-    if (deliveryTime) {
-      queryText += ` AND s.delivery_time = $${paramCount}`;
-      queryParams.push(deliveryTime);
+    // Add delivery time range filter
+    if (minDays !== null) {
+      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${paramCount}`;
+      queryParams.push(minDays);
+      paramCount++;
+    }
+    if (maxDays !== null) {
+      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${paramCount}`;
+      queryParams.push(maxDays);
       paramCount++;
     }
 
@@ -1139,9 +1146,15 @@ const getAllFreelancers = async (req, res, next) => {
     countParams.push(minPrice, maxPrice);
     countParamIndex += 2;
 
-    if (deliveryTime) {
-      countQuery += ` AND s.delivery_time = $${countParamIndex}`;
-      countParams.push(deliveryTime);
+    if (minDays !== null) {
+      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${countParamIndex}`;
+      countParams.push(minDays);
+      countParamIndex++;
+    }
+    if (maxDays !== null) {
+      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${countParamIndex}`;
+      countParams.push(maxDays);
+      countParamIndex++;
     }
     console.log("Final Query:", queryText);
     console.log("With Parameters:", queryParams);
@@ -1208,6 +1221,10 @@ const getAllFreelancers = async (req, res, next) => {
           } catch {
             freelancer.service_banner = null;
           }
+        }
+
+        if (freelancer.delivery_time) {
+          freelancer.delivery_time = `${freelancer.delivery_time} days`;
         }
 
         return freelancer;
@@ -1774,7 +1791,8 @@ const getWishlistFreelancers = async (req, res, next) => {
 
     // Sort and delivery time filters
     const sortBy = req.query.sortBy || "newest"; // toprated, newest
-    const deliveryTime = req.query.deliveryTime || ""; // e.g., "2-3 days"
+    const minDays = req.query.minDays ? parseInt(req.query.minDays) : null;
+    const maxDays = req.query.maxDays ? parseInt(req.query.maxDays) : null;
 
     // Build the query based on filters
     let queryText = `
@@ -1790,7 +1808,8 @@ const getWishlistFreelancers = async (req, res, next) => {
         MIN(s.service_price) as lowest_price,
         w.created_at as wishlist_added_at,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
+        (SELECT s2.delivery_time FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
       FROM freelancer f
       INNER JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
@@ -1823,9 +1842,14 @@ const getWishlistFreelancers = async (req, res, next) => {
     paramCount += 2;
 
     // Add delivery time filter
-    if (deliveryTime) {
-      queryText += ` AND s.delivery_time = $${paramCount}`;
-      queryParams.push(deliveryTime);
+    if (minDays !== null) {
+      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${paramCount}`;
+      queryParams.push(minDays);
+      paramCount++;
+    }
+    if (maxDays !== null) {
+      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${paramCount}`;
+      queryParams.push(maxDays);
       paramCount++;
     }
 
@@ -1881,9 +1905,15 @@ const getWishlistFreelancers = async (req, res, next) => {
     countParams.push(minPrice, maxPrice);
     countParamIndex += 2;
 
-    if (deliveryTime) {
-      countQuery += ` AND s.delivery_time = $${countParamIndex}`;
-      countParams.push(deliveryTime);
+    if (minDays !== null) {
+      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${countParamIndex}`;
+      countParams.push(minDays);
+      countParamIndex++;
+    }
+    if (maxDays !== null) {
+      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${countParamIndex}`;
+      countParams.push(maxDays);
+      countParamIndex++;
     }
 
     logger.debug("Wishlist Query:", queryText);
@@ -1953,6 +1983,10 @@ const getWishlistFreelancers = async (req, res, next) => {
           } catch {
             freelancer.service_banner = null;
           }
+        }
+
+        if (freelancer.delivery_time) {
+          freelancer.delivery_time = `${freelancer.delivery_time} days`;
         }
 
         return freelancer;
@@ -2784,11 +2818,17 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
 
     // Fetch freelancer services
     const { rows: services } = await query(
-      `SELECT service_name
+      `SELECT service_name, delivery_time
        FROM services
        WHERE freelancer_id = $1`,
       [freelancer_id]
     );
+
+    for (const service of services) {
+      if (service.delivery_time) {
+        service.delivery_time = `${service.delivery_time} days`;
+      }
+    }
 
     logger.info(`Successfully fetched KYC details for freelancer ID: ${freelancer_id}`);
 
@@ -2922,6 +2962,9 @@ const getFreeLancerByUserId = async (req, res, next) => {
 
     // Generate presigned URLs for service thumbnails
     for (const service of services) {
+      if (service.delivery_time) {
+        service.delivery_time = `${service.delivery_time} days`;
+      }
       if (service.thumbnail_file) {
         try {
           const firstSlashIndex = service.thumbnail_file.indexOf("/");
@@ -2991,7 +3034,8 @@ const getFreelancerForSuggestion = async (req, res, next) => {
 
     // Sort and delivery time filters
     const sortBy = req.query.sortBy || "newest"; // toprated, newest
-    const deliveryTime = req.query.deliveryTime || ""; // e.g., "2-3 days"
+    const minDays = req.query.minDays ? parseInt(req.query.minDays) : null;
+    const maxDays = req.query.maxDays ? parseInt(req.query.maxDays) : null;
     // const type = req.query.type || "all"; // e.g., "all", "featured", etc.
 
     // Fetch suggested freelancers for this request_id
@@ -3026,7 +3070,8 @@ const getFreelancerForSuggestion = async (req, res, next) => {
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
+        (SELECT s2.delivery_time FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
@@ -3053,10 +3098,15 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
-    // Add delivery time filter
-    if (deliveryTime) {
-      queryText += ` AND s.delivery_time = $${paramCount}`;
-      queryParams.push(deliveryTime);
+    // Add delivery time range filter
+    if (minDays !== null) {
+      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${paramCount}`;
+      queryParams.push(minDays);
+      paramCount++;
+    }
+    if (maxDays !== null) {
+      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${paramCount}`;
+      queryParams.push(maxDays);
       paramCount++;
     }
 
@@ -3107,9 +3157,15 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     countParams.push(minPrice, maxPrice);
     countParamIndex += 2;
 
-    if (deliveryTime) {
-      countQuery += ` AND s.delivery_time = $${countParamIndex}`;
-      countParams.push(deliveryTime);
+    if (minDays !== null) {
+      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${countParamIndex}`;
+      countParams.push(minDays);
+      countParamIndex++;
+    }
+    if (maxDays !== null) {
+      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${countParamIndex}`;
+      countParams.push(maxDays);
+      countParamIndex++;
     }
     console.log("Final Query:", queryText);
     console.log("With Parameters:", queryParams);
@@ -3180,6 +3236,10 @@ const getFreelancerForSuggestion = async (req, res, next) => {
           } catch {
             freelancer.service_banner = null;
           }
+        }
+
+        if (freelancer.delivery_time) {
+          freelancer.delivery_time = `${freelancer.delivery_time} days`;
         }
 
         return freelancer;
@@ -3325,6 +3385,9 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
     // Generate presigned URLs for thumbnails and group by service_name
     const servicesMap = {};
     for (const row of serviceRows) {
+      if (row.delivery_time) {
+        row.delivery_time = `${row.delivery_time} days`;
+      }
       if (row.thumbnail_file) {
         try {
           const firstSlashIndex = row.thumbnail_file.indexOf("/");
@@ -3390,7 +3453,8 @@ const getAllfreelancersForcreator = async (req, res, next) => {
 
     // Sort and delivery time filters
     const sortBy = req.query.sortBy || "newest"; // toprated, newest
-    const deliveryTime = req.query.deliveryTime || ""; // e.g., "2-3 days"
+    const minDays = req.query.minDays ? parseInt(req.query.minDays) : null;
+    const maxDays = req.query.maxDays ? parseInt(req.query.maxDays) : null;
     // const type = req.query.type || "all"; // e.g., "all", "featured", etc.
 
     // Build the query based on filters
@@ -3410,7 +3474,8 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         MIN(s.service_price) as lowest_price,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
+        (SELECT s2.delivery_time FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
@@ -3445,9 +3510,14 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     }
 
     // Add delivery time filter
-    if (deliveryTime) {
-      queryText += ` AND s.delivery_time = $${paramCount}`;
-      queryParams.push(deliveryTime);
+    if (minDays !== null) {
+      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${paramCount}`;
+      queryParams.push(minDays);
+      paramCount++;
+    }
+    if (maxDays !== null) {
+      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${paramCount}`;
+      queryParams.push(maxDays);
       paramCount++;
     }
 
@@ -3504,9 +3574,15 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       countParamIndex++;
     }
 
-    if (deliveryTime) {
-      countQuery += ` AND s.delivery_time = $${countParamIndex}`;
-      countParams.push(deliveryTime);
+    if (minDays !== null) {
+      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${countParamIndex}`;
+      countParams.push(minDays);
+      countParamIndex++;
+    }
+    if (maxDays !== null) {
+      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${countParamIndex}`;
+      countParams.push(maxDays);
+      countParamIndex++;
     }
     console.log("Final Query:", queryText);
     console.log("With Parameters:", queryParams);
@@ -3573,6 +3649,10 @@ const getAllfreelancersForcreator = async (req, res, next) => {
           } catch {
             freelancer.service_banner = null;
           }
+        }
+
+        if (freelancer.delivery_time) {
+          freelancer.delivery_time = `${freelancer.delivery_time} days`;
         }
 
         return freelancer;
