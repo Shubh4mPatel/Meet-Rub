@@ -113,7 +113,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Freelancer Basic Info");
         const { rows } = await query(
-          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, profile_title,freelancer_thumbnail_image, freelancer_email,about_me,created_at FROM freelancer WHERE user_id = $1",
+          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, profile_title, freelancer_email,about_me,created_at FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -122,41 +122,11 @@ const getUserProfile = async (req, res, next) => {
           return next(new AppError("Freelancer profile not found", 404));
         }
 
-        // Generate presigned URL for thumbnail image if it exists
-        if (rows[0].freelancer_thumbnail_image) {
-          try {
-            logger.info(
-              "Generating presigned URL for thumbnail image",
-              rows[0].freelancer_thumbnail_image
-            );
-            const parts = rows[0].freelancer_thumbnail_image.split("/");
-            const bucketName = parts[0];
-            const objectName = parts.slice(1).join("/");
-
-            logger.debug(
-              `Generating presigned URL for bucket: ${bucketName}, object: ${objectName}`
-            );
-
-            const signedUrl = await createPresignedUrl(
-              bucketName,
-              objectName,
-              expirySeconds
-            );
-
-            rows[0].freelancer_thumbnail_image = signedUrl;
-          } catch (error) {
-            logger.error(
-              `Failed to generate presigned URL for thumbnail: ${error.message}`
-            );
-            // Keep the original URL or set to null
-            rows[0].freelancer_thumbnail_image = null;
-          }
-        }
 
         return res.status(200).json({
           status: "success",
           message: "Freelancer basic info fetched successfully",
-          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name,user_name: rows[0].user_name , date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, freelancer_thumbnail_image: rows[0].freelancer_thumbnail_image, email: rows[0].freelancer_email, about_me:rows[0].about_me,joined_at: rows[0].created_at },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name,user_name: rows[0].user_name , date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, email: rows[0].freelancer_email, about_me:rows[0].about_me,joined_at: rows[0].created_at },
         });
       }
 
