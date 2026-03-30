@@ -939,23 +939,40 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
     const searchTerm = req.query.search?.trim() || '';
     const sortBy = req.query.sortBy || 'created_at';
     const sortOrder = req.query.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    const startDate = req.query.startDate?.trim() || '';
+    const endDate = req.query.endDate?.trim() || '';
 
     const allowedSortFields = ['created_at', 'creator_name'];
     const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
     const orderByClause = sortField === 'creator_name' ? `c.full_name ${sortOrder}` : `sr.${sortField} ${sortOrder}`;
 
-    const searchCondition = searchTerm ? `AND c.full_name ILIKE $3` : '';
-    const countParams = searchTerm ? [`%${searchTerm}%`] : [];
+    const filterParams = [];
+    const conditions = [`sr.status NOT IN ('assigned','completed')`];
+
+    if (searchTerm) {
+      filterParams.push(`%${searchTerm}%`);
+      conditions.push(`c.full_name ILIKE $${filterParams.length}`);
+    }
+    if (startDate) {
+      filterParams.push(startDate);
+      conditions.push(`sr.created_at >= $${filterParams.length}::date`);
+    }
+    if (endDate) {
+      filterParams.push(endDate);
+      conditions.push(`sr.created_at < ($${filterParams.length}::date + INTERVAL '1 day')`);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
     const countResult = await query(
       `SELECT COUNT(*) FROM service_requests sr
        LEFT JOIN creators c ON sr.creator_id = c.creator_id
-       WHERE sr.status NOT IN ('assigned','completed') ${searchCondition}`,
-      countParams
+       ${whereClause}`,
+      filterParams
     );
     const totalCount = parseInt(countResult.rows[0].count);
 
-    const queryParams = searchTerm ? [limit, offset, `%${searchTerm}%`] : [limit, offset];
+    const queryParams = [...filterParams, limit, offset];
 
     const { rows: serviceRequests } = await query(
       `SELECT
@@ -963,9 +980,9 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
          c.full_name AS creator_name
        FROM service_requests sr
        LEFT JOIN creators c ON sr.creator_id = c.creator_id
-       WHERE sr.status NOT IN ('assigned','completed') ${searchCondition}
+       ${whereClause}
        ORDER BY ${orderByClause}
-       LIMIT $1 OFFSET $2`,
+       LIMIT $${filterParams.length + 1} OFFSET $${filterParams.length + 2}`,
       queryParams
     );
 

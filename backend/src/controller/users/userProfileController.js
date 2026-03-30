@@ -810,7 +810,7 @@ const getAllFreelancers = async (req, res, next) => {
     // Search and filter parameters
     const search = req.query.search || ""; // Search by freelancer name
     const minPrice = parseFloat(req.query.minPrice) || 0;
-    const maxPrice = parseFloat(req.query.maxPrice) || Number.MAX_SAFE_INTEGER;
+    const maxPrice = parseFloat(req.query.maxPrice) || 99999999.99; // numeric(10,2) max
     // Handle serviceType as an array
     const serviceTypes = req.query.serviceType
       ? Array.isArray(req.query.serviceType)
@@ -3221,8 +3221,8 @@ const getAllfreelancersForcreator = async (req, res, next) => {
 
     // Search and filter parameters
     const search = req.query.search || ""; // Search by freelancer name
-    const minPrice = req.query.minPrice !== undefined ? parseFloat(req.query.minPrice) : null;
-    const maxPrice = req.query.maxPrice !== undefined ? parseFloat(req.query.maxPrice) : null;
+    const minPrice = parseFloat(req.query.minPrice) || 0;
+    const maxPrice = parseFloat(req.query.maxPrice) || 99999999.99; // numeric(10,2) max
     // Handle serviceType as an array
     const serviceTypes = req.query.serviceType
       ? Array.isArray(req.query.serviceType)
@@ -3276,17 +3276,10 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       queryText += ` AND s.service_name = ANY($${serviceTypesParamIdx}::text[])`;
     }
 
-    // Add price range filter (only when explicitly provided)
-    if (minPrice !== null) {
-      queryText += ` AND s.service_price >= $${paramCount}`;
-      queryParams.push(minPrice);
-      paramCount++;
-    }
-    if (maxPrice !== null) {
-      queryText += ` AND s.service_price <= $${paramCount}`;
-      queryParams.push(maxPrice);
-      paramCount++;
-    }
+    // Add price range filter
+    queryText += ` AND (s.service_price >= $${paramCount} AND s.service_price <= $${paramCount + 1})`;
+    queryParams.push(minPrice, maxPrice);
+    paramCount += 2;
 
     // Add delivery time filter
     if (minDays !== null) {
