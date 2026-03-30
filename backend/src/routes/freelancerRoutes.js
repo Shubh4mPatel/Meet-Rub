@@ -97,7 +97,7 @@ router.get('/disputes', authenticateUser, requireRole(['freelancer']), getDisput
 
 router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(['freelancer']), getCreatorByUserId);
 
-router.post('rate-creator/:creatorId', authenticateUser, requireRole(['freelancer']), rateFreelancer);
+router.post('/rate-creator/:projectId', authenticateUser, requireRole(['freelancer']), rateFreelancer);
 
 router.get('/my-reviews', authenticateUser, requireRole(['freelancer']), getMyReviews);
 

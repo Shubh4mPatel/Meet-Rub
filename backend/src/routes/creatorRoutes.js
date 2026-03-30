@@ -46,6 +46,6 @@ router.get('/freelancers/:id/portfolio', authenticateUser, requireRole(['creator
 
 router.get('/freelancers/:id/reviews', authenticateUser, requireRole(['creator']), getFreelancerReviews);
 
-router.post(`/rate-freelancer/:freelancerId`, authenticateUser, requireRole(['creator']),rateFreelancer);
+router.post(`/rate-freelancer/:projectId`, authenticateUser, requireRole(['creator']),rateFreelancer);
 
 module.exports = router;
