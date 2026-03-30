@@ -11,6 +11,7 @@ const { getFreelancerOverview } = require("../controller/users/freelancerOvervie
 const { getNiches } = require('../controller/services/serviceController');
 const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
 const { rateFreelancer } = require('../controller/razor-pay-controllers/projectController');
+const { getMyReviews } = require('../controller/users/freelancerReviewsController');
 
 
 router.post('/portfolio/upload-after-before',authenticateUser, requireRole(['freelancer']), upload.fields([
@@ -97,5 +98,7 @@ router.get('/disputes', authenticateUser, requireRole(['freelancer']), getDisput
 router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(['freelancer']), getCreatorByUserId);
 
 router.post('rate-creator/:creatorId', authenticateUser, requireRole(['freelancer']), rateFreelancer);
+
+router.get('/my-reviews', authenticateUser, requireRole(['freelancer']), getMyReviews);
 
 module.exports = router
