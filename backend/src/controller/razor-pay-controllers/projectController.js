@@ -381,46 +381,59 @@ const getAllProjects = async (req, res, next) => {
     logger.info(`[getAllProjects] page=${page} limit=${limit} offset=${offset}`);
 
     // Optional filters
-    const statusFilter = req.query.status?.trim() || null;
-    const typeFilter = req.query.type?.trim() || null;
+    const statusFilter = req.query.status?.trim()    || null;
+    const search       = req.query.search?.trim()    || null;
+    const startDate    = req.query.startDate?.trim() || null;
+    const endDate      = req.query.endDate?.trim()   || null;
+    const service      = req.query.service?.trim()   || null;
 
-    // Project-status type values — when typeFilter matches one of these,
-    // filter projects by their status and exclude custom_package rows.
-    const PROJECT_STATUS_TYPE_MAP = {
-      completed: 'COMPLETED',
-      in_progress: 'IN_PROGRESS',
-      on_hold: 'DISPUTE',
-    };
-    const mappedProjectStatus = typeFilter
-      ? PROJECT_STATUS_TYPE_MAP[typeFilter.toLowerCase()] || null
-      : null;
-    const isProjectStatusFilter = !!mappedProjectStatus;
+    const PROJECT_STATUSES = new Set(['CREATED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'DISPUTE']);
+    const isProjectStatus = statusFilter ? PROJECT_STATUSES.has(statusFilter.toUpperCase()) : false;
 
     const params = [];
     let p = 1;
 
-    const projectStatusWhere = statusFilter ? `AND p.status = $${p++}` : '';
-    const packageStatusWhere = statusFilter ? `AND cp2.status = $${p++}` : '';
+    // Status — routed to correct table only
+    const projectStatusWhere = (statusFilter && isProjectStatus)  ? `AND p.status = $${p++}`   : '';
+    const packageStatusWhere = (statusFilter && !isProjectStatus) ? `AND cp2.status = $${p++}` : '';
+    if (statusFilter) params.push(statusFilter);
 
-    // When typeFilter is a project-status label → filter by p.status, hide packages.
-    // Otherwise → filter by package_type as before.
-    const projectTypeWhere = typeFilter
-      ? isProjectStatusFilter
-        ? `AND p.status = $${p++}`
-        : `AND COALESCE(cp.package_type, 'direct') = $${p++}`
-      : '';
-    const packageTypeWhere = typeFilter
-      ? isProjectStatusFilter
-        ? `AND 1 = 0`  // exclude custom_package rows for status-based filters
-        : `AND cp2.package_type = $${p++}`
-      : '';
-
-    if (statusFilter) { params.push(statusFilter); params.push(statusFilter); }
-    if (typeFilter) {
-      params.push(isProjectStatusFilter ? mappedProjectStatus : typeFilter);
-      if (!isProjectStatusFilter) params.push(typeFilter);
+    // Search — applied to both sides using same param index
+    let projectSearchWhere = '', packageSearchWhere = '';
+    if (search) {
+      projectSearchWhere = `AND (c.full_name ILIKE $${p} OR f.freelancer_full_name ILIKE $${p})`;
+      packageSearchWhere = `AND (c2.full_name ILIKE $${p} OR f2.freelancer_full_name ILIKE $${p})`;
+      p++;
+      params.push(`%${search}%`);
     }
-    logger.info(`[getAllProjects] filters: status=${statusFilter} type=${typeFilter} isProjectStatusFilter=${isProjectStatusFilter} params=${JSON.stringify(params)}`);
+
+    // Date range — applied to both sides using same param indices
+    let projectStartWhere = '', packageStartWhere = '';
+    if (startDate) {
+      projectStartWhere = `AND p.created_at >= $${p}::date`;
+      packageStartWhere = `AND cp2.created_at >= $${p}::date`;
+      p++;
+      params.push(startDate);
+    }
+
+    let projectEndWhere = '', packageEndWhere = '';
+    if (endDate) {
+      projectEndWhere = `AND p.created_at < ($${p}::date + INTERVAL '1 day')`;
+      packageEndWhere = `AND cp2.created_at < ($${p}::date + INTERVAL '1 day')`;
+      p++;
+      params.push(endDate);
+    }
+
+    // Service name — applied to both sides using same param index
+    let projectServiceWhere = '', packageServiceWhere = '';
+    if (service) {
+      projectServiceWhere = `AND s.service_name ILIKE $${p}`;
+      packageServiceWhere = `AND s2.service_name ILIKE $${p}`;
+      p++;
+      params.push(`%${service}%`);
+    }
+
+    logger.info(`[getAllProjects] filters: status=${statusFilter} search=${search} startDate=${startDate} endDate=${endDate} service=${service} params=${JSON.stringify(params)}`);
 
     const unionQuery = `
       SELECT
@@ -470,7 +483,10 @@ const getAllProjects = async (req, res, next) => {
       LEFT JOIN services   s  ON p.service_id   = s.id
       WHERE 1=1
         ${projectStatusWhere}
-        ${projectTypeWhere}
+        ${projectSearchWhere}
+        ${projectStartWhere}
+        ${projectEndWhere}
+        ${projectServiceWhere}
 
       UNION ALL
 
@@ -519,7 +535,10 @@ const getAllProjects = async (req, res, next) => {
       LEFT JOIN services  s2  ON cp2.service_id  = s2.id
       WHERE cp2.status IN ('pending', 'rejected')
         ${packageStatusWhere}
-        ${packageTypeWhere}
+        ${packageSearchWhere}
+        ${packageStartWhere}
+        ${packageEndWhere}
+        ${packageServiceWhere}
     `;
 
     const dataQuery = `${unionQuery} ORDER BY created_at DESC LIMIT $${p++} OFFSET $${p++}`;
