@@ -273,7 +273,7 @@ const getDisputes = async (req, res, next) => {
 
 const getAllDisputes = async (req, res, next) => {
   try {
-    const { status = '', page = 1, limit = 10 } = req.query;
+    const { status = '', search = '', page = 1, limit = 10 } = req.query;
 
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
@@ -281,9 +281,19 @@ const getAllDisputes = async (req, res, next) => {
 
     const params = [];
     let nextParam = 1;
+    const conditions = [];
 
-    const statusFilter = status.trim() ? `WHERE d.status = $${nextParam++}` : '';
-    if (status.trim()) params.push(status.trim());
+    if (status.trim()) {
+      conditions.push(`d.status = $${nextParam++}`);
+      params.push(status.trim());
+    }
+    if (search.trim()) {
+      conditions.push(`(c.full_name ILIKE $${nextParam} OR f.freelancer_full_name ILIKE $${nextParam})`);
+      params.push(`%${search.trim()}%`);
+      nextParam++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const dataQuery = `
       SELECT
@@ -311,7 +321,7 @@ const getAllDisputes = async (req, res, next) => {
         (cr.user1_id = c.user_id AND cr.user2_id = f.user_id) OR
         (cr.user1_id = f.user_id AND cr.user2_id = c.user_id)
       )
-      ${statusFilter}
+      ${whereClause}
       ORDER BY d.created_at DESC
       LIMIT $${nextParam++} OFFSET $${nextParam++}
     `;
@@ -319,7 +329,9 @@ const getAllDisputes = async (req, res, next) => {
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM disputes d
-      ${statusFilter}
+      JOIN creators c   ON d.creator_id   = c.creator_id
+      JOIN freelancer f ON d.freelancer_id = f.freelancer_id
+      ${whereClause}
     `;
 
     const paginatedParams = [...params, limitNum, offset];
