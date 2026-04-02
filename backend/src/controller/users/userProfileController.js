@@ -826,6 +826,19 @@ const getAllFreelancers = async (req, res, next) => {
 
     // Build the query based on filters
     const serviceSubquery = serviceTypes.length > 0 ? `AND s2.service_name = ANY($1::text[])` : ``;
+
+    // Build delivery time condition for subqueries using overlap logic:
+    // include if service_start <= maxDays AND service_end >= minDays
+    // (safe to inline — values are parseInt'd integers)
+    let deliverySubqueryFilter = '';
+    if (minDays !== null && maxDays !== null) {
+      deliverySubqueryFilter = `AND CAST(NULLIF(SPLIT_PART(s2.delivery_time, '-', 1), '') AS INTEGER) <= ${maxDays} AND CAST(NULLIF(SPLIT_PART(s2.delivery_time, '-', 2), '') AS INTEGER) >= ${minDays}`;
+    } else if (minDays !== null) {
+      deliverySubqueryFilter = `AND CAST(NULLIF(SPLIT_PART(s2.delivery_time, '-', 2), '') AS INTEGER) >= ${minDays}`;
+    } else if (maxDays !== null) {
+      deliverySubqueryFilter = `AND CAST(NULLIF(SPLIT_PART(s2.delivery_time, '-', 1), '') AS INTEGER) <= ${maxDays}`;
+    }
+
     let queryText = `
       SELECT
         f.freelancer_id,
@@ -837,9 +850,9 @@ const getAllFreelancers = async (req, res, next) => {
         f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
-        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
-        (SELECT s2.delivery_time FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
+        (SELECT s2.delivery_time FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
@@ -866,14 +879,18 @@ const getAllFreelancers = async (req, res, next) => {
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
-    // Add delivery time range filter
-    if (minDays !== null) {
-      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${paramCount}`;
+    // Add delivery time range filter using overlap logic:
+    // include if service_start <= maxDays AND service_end >= minDays
+    if (minDays !== null && maxDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${paramCount} AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${paramCount + 1}`;
+      queryParams.push(maxDays, minDays);
+      paramCount += 2;
+    } else if (minDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${paramCount}`;
       queryParams.push(minDays);
       paramCount++;
-    }
-    if (maxDays !== null) {
-      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${paramCount}`;
+    } else if (maxDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${paramCount}`;
       queryParams.push(maxDays);
       paramCount++;
     }
@@ -925,13 +942,16 @@ const getAllFreelancers = async (req, res, next) => {
     countParams.push(minPrice, maxPrice);
     countParamIndex += 2;
 
-    if (minDays !== null) {
-      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${countParamIndex}`;
+    if (minDays !== null && maxDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${countParamIndex} AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${countParamIndex + 1}`;
+      countParams.push(maxDays, minDays);
+      countParamIndex += 2;
+    } else if (minDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${countParamIndex}`;
       countParams.push(minDays);
       countParamIndex++;
-    }
-    if (maxDays !== null) {
-      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${countParamIndex}`;
+    } else if (maxDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${countParamIndex}`;
       countParams.push(maxDays);
       countParamIndex++;
     }
@@ -1620,14 +1640,18 @@ const getWishlistFreelancers = async (req, res, next) => {
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
-    // Add delivery time filter
-    if (minDays !== null) {
-      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${paramCount}`;
+    // Add delivery time filter using overlap logic:
+    // include if service_start <= maxDays AND service_end >= minDays
+    if (minDays !== null && maxDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${paramCount} AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${paramCount + 1}`;
+      queryParams.push(maxDays, minDays);
+      paramCount += 2;
+    } else if (minDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${paramCount}`;
       queryParams.push(minDays);
       paramCount++;
-    }
-    if (maxDays !== null) {
-      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${paramCount}`;
+    } else if (maxDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${paramCount}`;
       queryParams.push(maxDays);
       paramCount++;
     }
@@ -1684,13 +1708,16 @@ const getWishlistFreelancers = async (req, res, next) => {
     countParams.push(minPrice, maxPrice);
     countParamIndex += 2;
 
-    if (minDays !== null) {
-      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${countParamIndex}`;
+    if (minDays !== null && maxDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${countParamIndex} AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${countParamIndex + 1}`;
+      countParams.push(maxDays, minDays);
+      countParamIndex += 2;
+    } else if (minDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${countParamIndex}`;
       countParams.push(minDays);
       countParamIndex++;
-    }
-    if (maxDays !== null) {
-      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${countParamIndex}`;
+    } else if (maxDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${countParamIndex}`;
       countParams.push(maxDays);
       countParamIndex++;
     }
@@ -2877,14 +2904,18 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
-    // Add delivery time range filter
-    if (minDays !== null) {
-      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${paramCount}`;
+    // Add delivery time range filter using overlap logic:
+    // include if service_start <= maxDays AND service_end >= minDays
+    if (minDays !== null && maxDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${paramCount} AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${paramCount + 1}`;
+      queryParams.push(maxDays, minDays);
+      paramCount += 2;
+    } else if (minDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${paramCount}`;
       queryParams.push(minDays);
       paramCount++;
-    }
-    if (maxDays !== null) {
-      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${paramCount}`;
+    } else if (maxDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${paramCount}`;
       queryParams.push(maxDays);
       paramCount++;
     }
@@ -2936,13 +2967,16 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     countParams.push(minPrice, maxPrice);
     countParamIndex += 2;
 
-    if (minDays !== null) {
-      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${countParamIndex}`;
+    if (minDays !== null && maxDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${countParamIndex} AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${countParamIndex + 1}`;
+      countParams.push(maxDays, minDays);
+      countParamIndex += 2;
+    } else if (minDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${countParamIndex}`;
       countParams.push(minDays);
       countParamIndex++;
-    }
-    if (maxDays !== null) {
-      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${countParamIndex}`;
+    } else if (maxDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${countParamIndex}`;
       countParams.push(maxDays);
       countParamIndex++;
     }
@@ -3281,14 +3315,18 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
-    // Add delivery time filter
-    if (minDays !== null) {
-      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${paramCount}`;
+    // Add delivery time filter using overlap logic:
+    // include if service_start <= maxDays AND service_end >= minDays
+    if (minDays !== null && maxDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${paramCount} AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${paramCount + 1}`;
+      queryParams.push(maxDays, minDays);
+      paramCount += 2;
+    } else if (minDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${paramCount}`;
       queryParams.push(minDays);
       paramCount++;
-    }
-    if (maxDays !== null) {
-      queryText += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${paramCount}`;
+    } else if (maxDays !== null) {
+      queryText += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${paramCount}`;
       queryParams.push(maxDays);
       paramCount++;
     }
@@ -3346,13 +3384,16 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       countParamIndex++;
     }
 
-    if (minDays !== null) {
-      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 1) AS INTEGER) >= $${countParamIndex}`;
+    if (minDays !== null && maxDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${countParamIndex} AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${countParamIndex + 1}`;
+      countParams.push(maxDays, minDays);
+      countParamIndex += 2;
+    } else if (minDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 2), '') AS INTEGER) >= $${countParamIndex}`;
       countParams.push(minDays);
       countParamIndex++;
-    }
-    if (maxDays !== null) {
-      countQuery += ` AND CAST(SPLIT_PART(s.delivery_time, '-', 2) AS INTEGER) <= $${countParamIndex}`;
+    } else if (maxDays !== null) {
+      countQuery += ` AND CAST(NULLIF(SPLIT_PART(s.delivery_time, '-', 1), '') AS INTEGER) <= $${countParamIndex}`;
       countParams.push(maxDays);
       countParamIndex++;
     }
