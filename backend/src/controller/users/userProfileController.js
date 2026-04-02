@@ -1934,15 +1934,15 @@ const getAllCreatorProfiles = async (req, res, next) => {
       paramCount++;
     }
 
-    // Add date range filter
+    // Add date range filter (strip time by casting both sides to date)
     if (startDate) {
-      queryText += ` AND created_at >= $${paramCount}`;
+      queryText += ` AND created_at::date >= $${paramCount}::date`;
       queryParams.push(startDate);
       paramCount++;
     }
 
     if (endDate) {
-      queryText += ` AND created_at <= $${paramCount}`;
+      queryText += ` AND created_at::date <= $${paramCount}::date`;
       queryParams.push(endDate);
       paramCount++;
     }
@@ -2295,13 +2295,13 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
     }
 
     if (startDate) {
-      conditions.push(`f.created_at >= $${paramIndex}`);
+      conditions.push(`f.created_at::date >= $${paramIndex}::date`);
       queryParams.push(startDate);
       paramIndex++;
     }
 
     if (endDate) {
-      conditions.push(`f.created_at <= $${paramIndex}`);
+      conditions.push(`f.created_at::date <= $${paramIndex}::date`);
       queryParams.push(endDate);
       paramIndex++;
     }
@@ -2419,13 +2419,13 @@ const getFreelancerForAdmin = async (req, res, next) => {
     }
 
     if (startDate) {
-      conditions.push(`f.created_at >= $${paramIndex}`);
+      conditions.push(`f.created_at::date >= $${paramIndex}::date`);
       queryParams.push(startDate);
       paramIndex++;
     }
 
     if (endDate) {
-      conditions.push(`f.created_at <= $${paramIndex}`);
+      conditions.push(`f.created_at::date <= $${paramIndex}::date`);
       queryParams.push(endDate);
       paramIndex++;
     }

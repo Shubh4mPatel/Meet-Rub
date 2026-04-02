@@ -683,12 +683,29 @@ const getUserServiceRequests = async (req, res, next) => {
   try {
     const user = req.user;
     const creator_id = user?.roleWiseId;
+    const { search = '', service = '' } = req.query;
+
+    const params = [creator_id];
+    let paramCount = 2;
+    const conditions = [];
+
+    if (service.trim()) {
+      conditions.push(`desired_service = $${paramCount++}`);
+      params.push(service.trim());
+    }
+    if (search.trim()) {
+      conditions.push(`(desired_service ILIKE $${paramCount} OR details ILIKE $${paramCount})`);
+      params.push(`%${search.trim()}%`);
+      paramCount++;
+    }
+
+    const whereClause = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
 
     const { rows: serviceRequests } = await query(
       `SELECT * FROM service_requests
-       WHERE creator_id = $1
+       WHERE creator_id = $1 ${whereClause}
        ORDER BY created_at DESC`,
-      [creator_id]
+      params
     );
 
     logger.debug(`Total service requests found: ${serviceRequests.length}`);
