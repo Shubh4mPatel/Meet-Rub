@@ -1,7 +1,13 @@
+const fs = require('fs');
+const path = require('path');
 const dbQuery = require("../../../config/dbConfig");
 const AppError = require("../../../utils/appError");
 const sendMail = require("../../../config/email").sendMail;
 const { logger } = require('../../../utils/logger');
+
+const LOGO_SVG_PATH = path.join(__dirname, '../../../../../Email-Templates/assets/logo-large.svg');
+const LOGO_URL = process.env.LOGO_URL ||
+  `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
 
 const blockUserController = async (req, res, next) => {
   try {
@@ -48,20 +54,20 @@ const blockUserController = async (req, res, next) => {
       <body>
           <div class="container">
               <div class="header">
-                  <img src="https://chatgmpreports.blob.core.windows.net/filestorage/Ai4Pharma%20Image.png" alt="Ai4Pharma Logo" class="logo">
+                  <img src="${LOGO_URL}" alt="Meetrub" class="logo">
                   <h1>Account Access Notification</h1>
               </div>
               <div class="content">
                   <p>Dear ${user[0].name},</p>
                   <div class="alert-box">
                       <p>We have detected some unusual activity on your account, which appears to be suspicious or unauthorized. As a result, access to your account has been temporarily restricted.</p>
-                      <p>Please contact us at <a href="mailto:help@ai4pharma.ai">help@ai4pharma.ai</a> so we can verify and help resolve this issue promptly.</p>
+                      <p>Please contact us at <a href="mailto:help@meetrub.com">help@meetrub.com</a> so we can verify and help resolve this issue promptly.</p>
                   </div>
                   <p>Thank you for your understanding.</p>
-                  <p>Best regards,<br>The ChatOrange Team</p>
+                  <p>Best regards,<br>The Meetrub Team</p>
               </div>
               <div class="footer">
-                  <p>Copyright &copy; ${new Date().getFullYear()} Ai4Pharma Tech Limited. All Rights Reserved.</p>
+                  <p>Copyright &copy; ${new Date().getFullYear()} Meetrub. All Rights Reserved.</p>
               </div>
           </div>
       </body>

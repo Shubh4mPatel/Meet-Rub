@@ -5,7 +5,9 @@ const { sendMail } = require('../config/email');
 const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
 const APP_URL         = process.env.APP_URL         || 'https://meetrub.com';
-const LOGO_URL        = process.env.LOGO_URL        || `${APP_URL}/logo.png`;
+const LOGO_SVG_PATH   = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
+const LOGO_URL        = process.env.LOGO_URL        ||
+  `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
 const HELP_URL        = process.env.HELP_URL        || `${APP_URL}/help`;
 const PRIVACY_URL     = process.env.PRIVACY_URL     || `${APP_URL}/privacy`;
 const CURRENCY        = process.env.CURRENCY        || '₹';
