@@ -3,7 +3,8 @@
     "allow": [
       "Bash(xargs grep -l \"react\\\\|vue\\\\|angular\\\\|svelte\")",
       "Bash(grep -r 'CREATE TABLE' /home/shubh4m/projects/Meet-Rub --include=*.js --include=*.sql)",
-      "Bash(grep -r \"delivery_time\" /home/shubh4m/projects/Meet-Rub/backend --include=\"*.js\" ! -path \"*/node_modules/*\")"
+      "Bash(grep -r \"delivery_time\" /home/shubh4m/projects/Meet-Rub/backend --include=\"*.js\" ! -path \"*/node_modules/*\")",
+      "mcp__code-review-graph__build_or_update_graph_tool"
     ]
   }
 }

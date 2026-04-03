@@ -30,3 +30,5 @@ docker-compose.override.yml
 # Build outputs
 dist/
 build/
+
+.claude/
