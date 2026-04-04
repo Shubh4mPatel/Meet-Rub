@@ -43,7 +43,7 @@ const getUserProfile = async (req, res, next) => {
         return res.status(200).json({
           status: "success",
           message: "Creator basic info fetched successfully",
-          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_links: rows[0].social_links, niche: rows[0].niche, user_name: rows[0].user_name, about_me:rows[0].about_me, joined_at: rows[0].created_at },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, email: rows[0].email, social_links: rows[0].social_links, niche: rows[0].niche, user_name: rows[0].user_name, about_me: rows[0].about_me, joined_at: rows[0].created_at },
         });
       }
       if (type === "profileImage") {
@@ -126,7 +126,7 @@ const getUserProfile = async (req, res, next) => {
         return res.status(200).json({
           status: "success",
           message: "Freelancer basic info fetched successfully",
-          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name,user_name: rows[0].user_name , date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, email: rows[0].freelancer_email, about_me:rows[0].about_me,joined_at: rows[0].created_at },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name, user_name: rows[0].user_name, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, email: rows[0].freelancer_email, about_me: rows[0].about_me, joined_at: rows[0].created_at },
         });
       }
 
@@ -410,7 +410,7 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Creator profile updated successfully",
-            data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche, email: rows[0].email,about_me:rows[0].about_me, joined_at: rows[0].created_at },
+            data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche, email: rows[0].email, about_me: rows[0].about_me, joined_at: rows[0].created_at },
           });
         } catch (error) {
           await query("ROLLBACK");
@@ -544,11 +544,11 @@ const editProfile = async (req, res, next) => {
     // ✅ FREELANCER ROLE HANDLING
     if (role === "freelancer") {
       const { rows: freelancerExistsResult } = await query(`SELECT verification_status FROM freelancer WHERE user_id=$1`, [user.user_id]);
-      if (freelancerExistsResult.length === 0 ) {
+      if (freelancerExistsResult.length === 0) {
         logger.warn("Freelancer not verified or does not exist");
-       
-          return next(new AppError("Freelancer does not exist", 403));
-        
+
+        return next(new AppError("Freelancer does not exist", 403));
+
       }
       if (type === "bankDetails") {
         logger.info("Updating Freelancer Bank Details");
@@ -2199,7 +2199,7 @@ const getCreatorByUserId = async (req, res, next) => {
       try {
         const profileImagePath = creator.profile_image_url;
 
-        
+
         // Extract bucket name and object key
         // Assuming format: "bucket-name/path/to/object"
         const firstSlashIndex = profileImagePath.indexOf("/");
