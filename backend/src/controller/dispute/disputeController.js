@@ -210,7 +210,7 @@ const getDisputes = async (req, res, next) => {
         s.service_name,
         s.service_price,
         s.plan_type,
-        s.delivery_time
+        s.min_delivery_days::text || '-' || s.max_delivery_days::text AS delivery_time
       FROM disputes d
       JOIN creators c   ON d.creator_id   = c.creator_id
       JOIN freelancer f ON d.freelancer_id = f.freelancer_id

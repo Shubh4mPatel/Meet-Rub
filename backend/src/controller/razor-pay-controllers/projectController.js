@@ -768,7 +768,7 @@ const sendHireRequest = async (req, res, next) => {
 
     // Resolve freelancer row + service details (delivery_time in days, service_id)
     const freelancerResult = await db.query(
-      `SELECT f.freelancer_id, f.user_id, s.id AS service_id, s.delivery_time AS delivery_days
+      `SELECT f.freelancer_id, f.user_id, s.id AS service_id, s.min_delivery_days AS delivery_days
        FROM freelancer f
        LEFT JOIN services s ON s.freelancer_id = f.freelancer_id
          AND s.service_name = $3

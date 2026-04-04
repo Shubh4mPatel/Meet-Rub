@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS public.services
     delivery_time character varying COLLATE pg_catalog."default",
     plan_type character varying COLLATE pg_catalog."default",
     thumbnail_file text COLLATE pg_catalog."default",
+    min_delivery_days integer,
+    max_delivery_days integer,
     CONSTRAINT services_pkey PRIMARY KEY (id),
     CONSTRAINT services_freelancer_id_fkey FOREIGN KEY (freelancer_id)
         REFERENCES public.freelancer (freelancer_id) MATCH SIMPLE
@@ -26,8 +28,6 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.services
     OWNER to postgres;
-
-
 
 
     -- Table: public.admin

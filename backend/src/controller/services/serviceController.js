@@ -216,7 +216,8 @@ const addServicesByFreelancer = async (req, res, next) => {
       logger.warn("Invalid delivery duration format:", deliveryDuration);
       return next(new AppError("Delivery duration must be in 'X-Y' format (e.g. '6-7')", 400));
     }
-    const normalizedDeliveryDuration = `${deliveryDurationMatch[1]}-${deliveryDurationMatch[2]}`;
+    const minDeliveryDays = parseInt(deliveryDurationMatch[1]);
+    const maxDeliveryDays = parseInt(deliveryDurationMatch[2]);
 
     // Validate planType if provided
     const normalizedPlanType = planType ? planType.toLowerCase() : 'basic';
@@ -289,10 +290,10 @@ const addServicesByFreelancer = async (req, res, next) => {
     }
 
     const { rows } = await query(
-      `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at, delivery_time, plan_type, thumbnail_file)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at, min_delivery_days, max_delivery_days, plan_type, thumbnail_file)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [freelancer_id, service, description, price, new Date(), new Date(), normalizedDeliveryDuration, normalizedPlanType, thumbnailFileUrl]
+      [freelancer_id, service, description, price, new Date(), new Date(), minDeliveryDays, maxDeliveryDays, normalizedPlanType, thumbnailFileUrl]
     );
 
     logger.info("Service added successfully");
@@ -313,6 +314,12 @@ const addServicesByFreelancer = async (req, res, next) => {
         serviceData.thumbnail_file = null;
       }
     }
+
+    serviceData.delivery_time = serviceData.min_delivery_days != null && serviceData.max_delivery_days != null
+      ? `${serviceData.min_delivery_days}-${serviceData.max_delivery_days}`
+      : null;
+    delete serviceData.min_delivery_days;
+    delete serviceData.max_delivery_days;
 
     return res.status(200).json({
       status: "success",
@@ -364,7 +371,8 @@ const updateServiceByFreelancer = async (req, res, next) => {
       logger.warn("Invalid delivery duration format:", deliveryDuration);
       return next(new AppError("Delivery duration must be in 'X-Y' format (e.g. '6-7')", 400));
     }
-    const normalizedDeliveryDuration = `${deliveryDurationMatch[1]}-${deliveryDurationMatch[2]}`;
+    const minDeliveryDays = parseInt(deliveryDurationMatch[1]);
+    const maxDeliveryDays = parseInt(deliveryDurationMatch[2]);
 
     // Begin transaction
     await client.query('BEGIN');
@@ -424,10 +432,10 @@ const updateServiceByFreelancer = async (req, res, next) => {
 
     const { rows } = await client.query(
       `UPDATE services
-       SET service_name=$1, service_price=$2, service_description=$3, updated_at=$4, delivery_time=$5, plan_type=$6, thumbnail_file=$7
-       WHERE id=$8 AND freelancer_id=$9
+       SET service_name=$1, service_price=$2, service_description=$3, updated_at=$4, min_delivery_days=$5, max_delivery_days=$6, plan_type=$7, thumbnail_file=$8
+       WHERE id=$9 AND freelancer_id=$10
        RETURNING *`,
-      [service, price, description, new Date(), normalizedDeliveryDuration, planType || null, thumbnailFileUrl, serviceId, freelancer_id]
+      [service, price, description, new Date(), minDeliveryDays, maxDeliveryDays, planType || null, thumbnailFileUrl, serviceId, freelancer_id]
     );
 
     if (!rows.length) {
@@ -466,6 +474,12 @@ const updateServiceByFreelancer = async (req, res, next) => {
         serviceData.thumbnail_file = null;
       }
     }
+
+    serviceData.delivery_time = serviceData.min_delivery_days != null && serviceData.max_delivery_days != null
+      ? `${serviceData.min_delivery_days}-${serviceData.max_delivery_days}`
+      : null;
+    delete serviceData.min_delivery_days;
+    delete serviceData.max_delivery_days;
 
     return res.status(200).json({
       status: "success",
@@ -620,7 +634,9 @@ const getServicesByFreelaner = async (req, res, next) => {
         plan_type: service.plan_type,
         service_description: service.service_description,
         service_price: service.service_price,
-        delivery_time: service.delivery_time,
+        delivery_time: service.min_delivery_days != null && service.max_delivery_days != null
+          ? `${service.min_delivery_days}-${service.max_delivery_days}`
+          : null,
         thumbnail_file: service.thumbnail_file,
         is_active: service.is_active,
         created_at: service.created_at,
