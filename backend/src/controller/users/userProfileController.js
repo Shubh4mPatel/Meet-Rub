@@ -2171,6 +2171,7 @@ const getCreatorByUserId = async (req, res, next) => {
         first_name,
         last_name,
         full_name,
+        user_name,
         phone_number,
         email,
         profile_image_url,
@@ -2178,6 +2179,8 @@ const getCreatorByUserId = async (req, res, next) => {
         social_links,
         niche,
         about_me,
+        rating,
+        worked_with,
         created_at
       FROM creators
       WHERE user_id = $1`,
@@ -2228,6 +2231,8 @@ const getCreatorByUserId = async (req, res, next) => {
     const response = {
       creator_id: creator.creator_id,
       name: creator.full_name || `${creator.first_name || ""} ${creator.last_name || ""}`.trim(),
+      user_name: creator.user_name,
+      role: "Creator",
       first_name: creator.first_name,
       last_name: creator.last_name,
       phone_number: creator.phone_number,
@@ -2237,6 +2242,8 @@ const getCreatorByUserId = async (req, res, next) => {
       social_links: creator.social_links,
       niches: creator.niche || [],
       about_me: creator.about_me,
+      rating: creator.rating,
+      worked_with: creator.worked_with,
       date_of_joining: creator.created_at,
     };
 
