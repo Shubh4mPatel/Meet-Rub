@@ -2071,6 +2071,7 @@ const getCreatorById = async (req, res, next) => {
       `SELECT
         creator_id,
         first_name,
+        about_me,
         last_name,
         full_name,
         phone_number,
@@ -2133,6 +2134,7 @@ const getCreatorById = async (req, res, next) => {
       last_name: creator.last_name,
       phone_number: creator.phone_number,
       email: creator.email,
+      about_me: creator.about_me,
       profile_image_url: creator.profile_image_url,
       social_platform_type: creator.social_platform_type,
       social_links: creator.social_links,
@@ -2690,19 +2692,14 @@ const getFreeLancerByUserId = async (req, res, next) => {
       `SELECT
         freelancer_id,
         freelancer_full_name,
-        phone_number,
-        freelancer_email,
-        date_of_birth,
-        created_at as date_of_joining,
-        gov_id_type,
-        gov_id_number,
-        gov_id_url,
+        user_name,
         profile_image_url,
         niche,
         about_me,
         verification_status,
         rating,
-        worked_with
+        worked_with,
+        created_at as date_of_joining
       FROM freelancer
       WHERE user_id = $1`,
       [freelancer_id]
@@ -2741,32 +2738,6 @@ const getFreeLancerByUserId = async (req, res, next) => {
       }
     }
 
-    // Generate presigned URL for government ID proof if it exists
-    if (freelancer.gov_id_url) {
-      try {
-        const govIdPath = freelancer.gov_id_url;
-        const firstSlashIndex = govIdPath.indexOf("/");
-
-        if (firstSlashIndex !== -1) {
-          const bucketName = govIdPath.substring(0, firstSlashIndex);
-          const objectName = govIdPath.substring(firstSlashIndex + 1);
-
-          const signedUrl = await createPresignedUrl(
-            bucketName,
-            objectName,
-            expirySeconds
-          );
-          freelancer.gov_id_url = signedUrl;
-        } else {
-          logger.warn(`Invalid govt ID URL format: ${govIdPath}`);
-          freelancer.gov_id_url = null;
-        }
-      } catch (error) {
-        logger.error(`Error generating signed URL for govt ID: ${error}`);
-        freelancer.gov_id_url = null;
-      }
-    }
-
     // Fetch freelancer service names
     const { rows: services } = await query(
       `SELECT DISTINCT service_name FROM services WHERE freelancer_id = $1`,
@@ -2777,23 +2748,18 @@ const getFreeLancerByUserId = async (req, res, next) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Freelancer KYC details fetched successfully",
+      message: "Freelance fetched successfully",
       data: {
         freelancer_id: freelancer.freelancer_id,
         full_name: freelancer.freelancer_full_name,
-        phone_number: freelancer.phone_number,
-        email: freelancer.freelancer_email,
-        date_of_birth: freelancer.date_of_birth,
-        date_of_joining: freelancer.date_of_joining,
-        gov_id_type: freelancer.gov_id_type,
-        gov_id_number: freelancer.gov_id_number,
-        gov_id_url: freelancer.gov_id_url,
+        user_name: freelancer.user_name,
         profile_image_url: freelancer.profile_image_url,
         niches: freelancer.niche || [],
         about_me: freelancer.about_me,
         verification_status: freelancer.verification_status,
         rating: freelancer.rating,
         worked_with: freelancer.worked_with,
+        date_of_joining: freelancer.date_of_joining,
         services: services.map(s => s.service_name),
       },
     });
