@@ -2767,37 +2767,11 @@ const getFreeLancerByUserId = async (req, res, next) => {
       }
     }
 
-    // Fetch freelancer services
+    // Fetch freelancer service names
     const { rows: services } = await query(
-      `SELECT id, service_name, service_description, service_price,
-              min_delivery_days::text || '-' || max_delivery_days::text AS delivery_time,
-              plan_type, thumbnail_file
-       FROM services
-       WHERE freelancer_id = $1`,
+      `SELECT DISTINCT service_name FROM services WHERE freelancer_id = $1`,
       [freelancer.freelancer_id]
     );
-
-    // Generate presigned URLs for service thumbnails
-    for (const service of services) {
-      if (service.delivery_time) {
-        service.delivery_time = `${service.delivery_time} days`;
-      }
-      if (service.thumbnail_file) {
-        try {
-          const firstSlashIndex = service.thumbnail_file.indexOf("/");
-          if (firstSlashIndex !== -1) {
-            const bucketName = service.thumbnail_file.substring(0, firstSlashIndex);
-            const objectName = service.thumbnail_file.substring(firstSlashIndex + 1);
-            service.thumbnail_file = await createPresignedUrl(bucketName, objectName, expirySeconds);
-          } else {
-            service.thumbnail_file = null;
-          }
-        } catch (error) {
-          logger.error(`Error generating signed URL for service thumbnail: ${error}`);
-          service.thumbnail_file = null;
-        }
-      }
-    }
 
     logger.info(`Successfully fetched KYC details for freelancer ID: ${freelancer_id}`);
 
@@ -2820,7 +2794,7 @@ const getFreeLancerByUserId = async (req, res, next) => {
         verification_status: freelancer.verification_status,
         rating: freelancer.rating,
         worked_with: freelancer.worked_with,
-        services: services,
+        services: services.map(s => s.service_name),
       },
     });
   } catch (error) {
