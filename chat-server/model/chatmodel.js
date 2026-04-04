@@ -842,13 +842,31 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         AND cp.status = 'accepted'
       WHERE f.user_id = $1
         AND cr.user_id = $2
-        AND p.status IN ('CREATED', 'IN_PROGRESS', 'DISPUTE')
-        AND p.end_date IS NOT NULL
+        AND p.status IN ('IN_PROGRESS', 'DISPUTE')
         AND p.end_date > NOW()
       ORDER BY p.created_at DESC
     `;
     try {
+      console.log(`[getFreelancerProjects] freelancerUserId=${freelancerUserId} creatorUserId=${creatorUserId}`);
+
+      // Debug: check if the freelancer and creator user_ids resolve to valid rows
+      const freelancerCheck = await pool.query(`SELECT freelancer_id FROM freelancer WHERE user_id = $1`, [freelancerUserId]);
+      const creatorCheck = await pool.query(`SELECT creator_id FROM creators WHERE user_id = $1`, [creatorUserId]);
+      console.log(`[getFreelancerProjects] freelancer row:`, freelancerCheck.rows[0] ?? 'NOT FOUND');
+      console.log(`[getFreelancerProjects] creator row:`, creatorCheck.rows[0] ?? 'NOT FOUND');
+
+      // Debug: check projects without end_date/status filters
+      const rawProjects = await pool.query(
+        `SELECT p.id, p.status, p.end_date FROM projects p
+         JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+         JOIN creators cr ON p.creator_id = cr.creator_id
+         WHERE f.user_id = $1 AND cr.user_id = $2`,
+        [freelancerUserId, creatorUserId]
+      );
+      console.log(`[getFreelancerProjects] all projects (no filters):`, rawProjects.rows);
+
       const result = await pool.query(query, [freelancerUserId, creatorUserId]);
+      console.log(`[getFreelancerProjects] filtered result count=${result.rows.length}`, result.rows);
       return result.rows;
     } catch (error) {
       console.error("Error getting freelancer projects:", error);
