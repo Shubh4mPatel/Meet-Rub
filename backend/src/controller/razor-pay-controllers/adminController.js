@@ -368,11 +368,11 @@ const suspendFreelancerByAdmin = async (req, res, next) =>  {
 
 
 const addFeaturedFreelancer = async (req, res, next) => {
-  const { service_option_id, freelancer_id } = req.body;
+  const { service_name, freelancer_id } = req.body;
   const admin_id = req.user.roleWiseId;
 
-  if (!service_option_id || !freelancer_id) {
-    return next(new AppError('service_option_id and freelancer_id are required', 400));
+  if (!service_name || !freelancer_id) {
+    return next(new AppError('service_name and freelancer_id are required', 400));
   }
 
   try {
@@ -385,14 +385,15 @@ const addFeaturedFreelancer = async (req, res, next) => {
       return next(new AppError('Freelancer not found', 404));
     }
 
-    // Verify service option exists
+    // Resolve service_name to service_option_id (case-insensitive)
     const { rows: serviceRows } = await query(
-      'SELECT id FROM service_options WHERE id = $1',
-      [service_option_id]
+      'SELECT id FROM service_options WHERE LOWER(service_name) = LOWER($1)',
+      [service_name]
     );
     if (serviceRows.length === 0) {
       return next(new AppError('Service option not found', 404));
     }
+    const service_option_id = serviceRows[0].id;
 
     // Check if already featured (active) for this service
     const { rows: alreadyFeatured } = await query(
@@ -458,53 +459,67 @@ const addFeaturedFreelancer = async (req, res, next) => {
 };
 
 const removeFeaturedFreelancer = async (req, res, next) => {
-  const { service_option_id, freelancer_id } = req.body;
+  const { service_name, freelancer_id } = req.body;
   const admin_id = req.user.roleWiseId;
 
-  if (!service_option_id || !freelancer_id) {
-    return next(new AppError('service_option_id and freelancer_id are required', 400));
+  if (!service_name || !freelancer_id) {
+    return next(new AppError('service_name and freelancer_id are required', 400));
   }
 
-  const client = await db.connect();
   try {
-    await client.query('BEGIN');
-
-    // Deactivate the featured freelancer and return the old priority
-    const { rows: removed } = await client.query(
-      `UPDATE featured_freelancers
-       SET is_active = false, priority = NULL, unfeatured_at = NOW(), unfeatured_by = $3
-       WHERE freelancer_id = $2 AND service_option_id = $1 AND is_active = true
-       RETURNING priority AS old_priority`,
-      [service_option_id, freelancer_id, admin_id]
+    // Resolve service_name to service_option_id (case-insensitive)
+    const { rows: serviceRows } = await query(
+      'SELECT id FROM service_options WHERE LOWER(service_name) = LOWER($1)',
+      [service_name]
     );
-
-    if (removed.length === 0) {
-      await client.query('ROLLBACK');
-      return next(new AppError('Freelancer not featured for this service', 404));
+    if (serviceRows.length === 0) {
+      return next(new AppError('Service option not found', 404));
     }
+    const service_option_id = serviceRows[0].id;
 
-    const old_priority = removed[0].old_priority;
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
 
-    // Shift down all active freelancers with priority greater than the removed one
-    await client.query(
-      `UPDATE featured_freelancers
-       SET priority = priority - 1
-       WHERE service_option_id = $1 AND is_active = true AND priority > $2`,
-      [service_option_id, old_priority]
-    );
+      // Deactivate the featured freelancer and return the old priority
+      const { rows: removed } = await client.query(
+        `UPDATE featured_freelancers
+         SET is_active = false, priority = NULL, unfeatured_at = NOW(), unfeatured_by = $3
+         WHERE freelancer_id = $2 AND service_option_id = $1 AND is_active = true
+         RETURNING priority AS old_priority`,
+        [service_option_id, freelancer_id, admin_id]
+      );
 
-    await client.query('COMMIT');
+      if (removed.length === 0) {
+        await client.query('ROLLBACK');
+        return next(new AppError('Freelancer not featured for this service', 404));
+      }
 
-    return res.status(200).json({
-      status: 'success',
-      message: 'Freelancer removed from featured list'
-    });
+      const old_priority = removed[0].old_priority;
+
+      // Shift down all active freelancers with priority greater than the removed one
+      await client.query(
+        `UPDATE featured_freelancers
+         SET priority = priority - 1
+         WHERE service_option_id = $1 AND is_active = true AND priority > $2`,
+        [service_option_id, old_priority]
+      );
+
+      await client.query('COMMIT');
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Freelancer removed from featured list'
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Remove featured freelancer error:', error);
     return next(new AppError('Failed to remove freelancer from featured list', 500));
-  } finally {
-    client.release();
   }
 };
 
