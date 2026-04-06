@@ -9,13 +9,16 @@ class PaymentService {
   calculateCommission(amount) {
     const commissionPercentage = parseFloat(process.env.PLATFORM_COMMISSION_PERCENTAGE || 20);
     const commission = (amount * commissionPercentage) / 100;
+    const gst = parseFloat(((commission * 18) / 100).toFixed(2));
     const freelancerAmount = amount - commission;
-    
+    const totalAmount = parseFloat((amount + gst).toFixed(2));
+
     return {
-      totalAmount: parseFloat(amount),
+      totalAmount,
       platformCommission: parseFloat(commission.toFixed(2)),
       platformCommissionPercentage: commissionPercentage,
-      freelancerAmount: parseFloat(freelancerAmount.toFixed(2))
+      freelancerAmount: parseFloat(freelancerAmount.toFixed(2)),
+      gst
     };
   }
 
@@ -171,10 +174,10 @@ class PaymentService {
 
       // Create transaction record
       const [result] = await connection.query(
-        `INSERT INTO transactions 
-        (project_id, creator_id freelancer_id, total_amount, platform_commission, 
-        platform_commission_percentage, freelancer_amount, payment_source, status, held_at) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'WALLET', 'HELD', NOW())`,
+        `INSERT INTO transactions
+        (project_id, creator_id, freelancer_id, total_amount, platform_commission,
+        platform_commission_percentage, freelancer_amount, gst, payment_source, status, held_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'WALLET', 'HELD', NOW())`,
         [
           projectId,
           clientId,
@@ -182,7 +185,8 @@ class PaymentService {
           amounts.totalAmount,
           amounts.platformCommission,
           amounts.platformCommissionPercentage,
-          amounts.freelancerAmount
+          amounts.freelancerAmount,
+          amounts.gst
         ]
       );
 
@@ -223,10 +227,10 @@ class PaymentService {
 
       // Create transaction record
       const [result] = await connection.query(
-        `INSERT INTO transactions 
-        (project_id, creator_id, freelancer_id, total_amount, platform_commission, 
-        platform_commission_percentage, freelancer_amount, payment_source, status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'RAZORPAY', 'INITIATED')`,
+        `INSERT INTO transactions
+        (project_id, creator_id, freelancer_id, total_amount, platform_commission,
+        platform_commission_percentage, freelancer_amount, gst, payment_source, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'RAZORPAY', 'INITIATED')`,
         [
           projectId,
           clientId,
@@ -234,7 +238,8 @@ class PaymentService {
           amounts.totalAmount,
           amounts.platformCommission,
           amounts.platformCommissionPercentage,
-          amounts.freelancerAmount
+          amounts.freelancerAmount,
+          amounts.gst
         ]
       );
 
