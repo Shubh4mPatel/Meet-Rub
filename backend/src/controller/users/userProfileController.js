@@ -839,6 +839,17 @@ const getAllFreelancers = async (req, res, next) => {
       deliverySubqueryFilter = `AND s2.min_delivery_days <= ${maxDays}`;
     }
 
+    // Featured join — inlined subquery to resolve service_name → service_option_id (no extra round trip)
+    const featuredSelect = serviceTypes.length > 0 ? `, MIN(ff.priority) AS featured_priority` : ``;
+    const featuredJoin = serviceTypes.length > 0
+      ? `LEFT JOIN featured_freelancers ff
+           ON ff.freelancer_id = f.freelancer_id
+          AND ff.service_option_id IN (
+            SELECT id FROM service_options WHERE service_name = ANY($1::text[])
+          )
+          AND ff.is_active = true`
+      : ``;
+
     let queryText = `
       SELECT
         f.freelancer_id,
@@ -853,8 +864,10 @@ const getAllFreelancers = async (req, res, next) => {
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
         (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
         (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
+        ${featuredSelect}
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      ${featuredJoin}
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
     `;
 
@@ -873,9 +886,8 @@ const getAllFreelancers = async (req, res, next) => {
       queryText += ` AND s.service_name = ANY($1::text[])`;
     }
 
-    // Add price range filter
-    queryText += ` AND (s.service_price >= $${paramCount} AND s.service_price <= $${paramCount + 1
-      })`;
+    // Add price range filter — COALESCE handles NULL prices so they aren't silently dropped
+    queryText += ` AND (COALESCE(s.service_price, 0) >= $${paramCount} AND COALESCE(s.service_price, 0) <= $${paramCount + 1})`;
     queryParams.push(minPrice, maxPrice);
     paramCount += 2;
 
@@ -898,17 +910,18 @@ const getAllFreelancers = async (req, res, next) => {
     // Add GROUP BY clause
     queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with`;
 
-    // Add sorting based on sortBy parameter
+    // Add sorting — featured freelancers (priority 1-5) always come first, then rest
+    const featuredOrderBy = serviceTypes.length > 0 ? `MIN(ff.priority) ASC NULLS LAST, ` : ``;
     let orderByClause = "";
     switch (sortBy) {
       case "toprated":
         orderByClause =
-          " ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name";
+          ` ORDER BY ${featuredOrderBy}f.rating DESC NULLS LAST, f.freelancer_full_name`;
         break;
       case "newest":
       default:
         orderByClause =
-          " ORDER BY MAX(s.created_at) DESC NULLS LAST, f.freelancer_full_name";
+          ` ORDER BY ${featuredOrderBy}MAX(s.created_at) DESC NULLS LAST, f.freelancer_full_name`;
         break;
     }
 
@@ -3228,7 +3241,8 @@ function buildFreelancerFilters(startIdx, { search, serviceTypes, minPrice, maxP
   }
 
   // service_price filter — always applied (defaults ensure minPrice=0, maxPrice=99999999.99)
-  conditions.push(`s.service_price >= $${idx} AND s.service_price <= $${idx + 1}`);
+  // COALESCE handles NULL prices so they aren't silently dropped by the comparison
+  conditions.push(`COALESCE(s.service_price, 0) >= $${idx} AND COALESCE(s.service_price, 0) <= $${idx + 1}`);
   params.push(minPrice, maxPrice);
   idx += 2;
 
@@ -3277,6 +3291,11 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     const minDays = req.query.minDays ? parseInt(req.query.minDays) : null;
     const maxDays = req.query.maxDays ? parseInt(req.query.maxDays) : null;
 
+    logger.info("[getAllFreelancers] Parsed params", {
+      creator_id, page, limit, offset, search,
+      serviceTypes, sortBy, minPrice, maxPrice, minDays, maxDays,
+    });
+
     // --- Build shared filters (starts at $2 since $1 = creator_id) ---
     const filters = buildFreelancerFilters(2, {
       search,
@@ -3285,6 +3304,12 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       maxPrice,
       minDays,
       maxDays,
+    });
+
+    logger.info("[getAllFreelancers] Built filters", {
+      whereClause: filters.whereClause,
+      params: filters.params,
+      nextIdx: filters.nextIdx,
     });
 
     // --- Build sort clause ---
@@ -3304,8 +3329,26 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       ? `AND s2.service_name = ANY($${filters.params.indexOf(serviceTypes) + 2}::text[])`
       : "";
 
-    // --- Main query ---
+    // --- Featured join & select (inlined subquery — no extra round trip) ---
+    const hasFeatured = serviceTypes.length > 0;
     const paginationIdx = filters.nextIdx;
+
+    const featuredJoin = hasFeatured
+      ? `LEFT JOIN featured_freelancers ff
+           ON ff.freelancer_id = f.freelancer_id
+          AND ff.service_option_id IN (
+            SELECT id FROM service_options
+            WHERE service_name = ANY($${filters.params.indexOf(serviceTypes) + 2}::text[])
+          )
+          AND ff.is_active = true`
+      : "";
+
+    const featuredSelect  = hasFeatured ? ", MIN(ff.priority) AS featured_priority" : "";
+    const featuredOrderBy = hasFeatured ? "MIN(ff.priority) ASC NULLS LAST, " : "";
+
+    logger.info("[getAllFreelancers] Featured join active?", { hasFeatured });
+
+    // --- Main query ---
     const mainQuery = `
       SELECT
         f.freelancer_id,
@@ -3322,6 +3365,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         ls.service_name AS matched_service_title,
         ls.min_delivery_days,
         ls.max_delivery_days
+        ${featuredSelect}
       FROM freelancer f
       JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
@@ -3333,6 +3377,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         ORDER BY s2.created_at DESC
         LIMIT 1
       ) ls ON true
+      ${featuredJoin}
       WHERE f.verification_status = 'VERIFIED'
         AND f.is_active = true
         ${filters.whereClause}
@@ -3341,11 +3386,16 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         f.profile_image_url, f.freelancer_thumbnail_image, f.rating,
         f.worked_with, w.freelancer_id,
         ls.thumbnail_file, ls.service_name, ls.min_delivery_days, ls.max_delivery_days
-      ORDER BY (w.freelancer_id IS NOT NULL) DESC, ${orderByClause}
+      ORDER BY ${featuredOrderBy}(w.freelancer_id IS NOT NULL) DESC, ${orderByClause}
       LIMIT $${paginationIdx} OFFSET $${paginationIdx + 1}
     `;
 
     const mainParams = [creator_id, ...filters.params, limit, offset];
+
+    logger.info("[getAllFreelancers] Executing main query", {
+      query: mainQuery,
+      params: mainParams,
+    });
 
     // --- Count query (reuses same filters, no creator_id needed) ---
     // Rebuild filters starting at $1 since count query doesn't have creator_id
@@ -3367,6 +3417,11 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         ${countFilters.whereClause}
     `;
 
+    logger.info("[getAllFreelancers] Executing count query", {
+      query: countQuery,
+      params: countFilters.params,
+    });
+
     // --- Execute both in parallel ---
     const [results, countResult] = await Promise.all([
       query(mainQuery, mainParams),
@@ -3375,6 +3430,15 @@ const getAllfreelancersForcreator = async (req, res, next) => {
 
     const totalCount = parseInt(countResult.rows[0].count);
     const totalPages = Math.ceil(totalCount / limit);
+
+    logger.info("[getAllFreelancers] Query results", {
+      totalCount,
+      totalPages,
+      returnedRows: results.rows.length,
+      featuredRows: hasFeatured
+        ? results.rows.filter((r) => r.featured_priority != null).length
+        : 0,
+    });
 
     // --- Generate presigned URLs in parallel ---
     const freelancers = await Promise.all(
@@ -3403,7 +3467,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       })
     );
 
-    logger.info(`Found ${totalCount} freelancers matching criteria`);
+    logger.info(`[getAllFreelancers] Responding with ${freelancers.length} freelancers (page ${page}/${totalPages})`);
     return res.status(200).json({
       status: "success",
       data: {
@@ -3417,7 +3481,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       },
     });
   } catch (error) {
-    logger.error("Error fetching freelancers:", error);
+    logger.error("[getAllFreelancers] Failed to fetch freelancers", { message: error.message, stack: error.stack, query: error.query || null });
     return next(new AppError("Failed to fetch freelancers", 500));
   }
 };

@@ -16,7 +16,11 @@
       "Bash(curl -s 'https://data.finedgeapi.com/api/v1/ratios/ITC?statement_type=s&ratio_type=pr&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')",
       "Bash(curl -s 'https://data.finedgeapi.com/api/v1/annual-price-ratios/ITC?statement_type=s&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')",
       "Bash(curl -s 'https://data.finedgeapi.com/api/v1/quote?symbol=ITC&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')",
-      "Bash(curl -s 'https://data.finedgeapi.com/api/v1/financials/ITC?statement_type=s&statement_code=pl&period=annual&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')"
+      "Bash(curl -s 'https://data.finedgeapi.com/api/v1/financials/ITC?statement_type=s&statement_code=pl&period=annual&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')",
+      "Bash(sed -i '919s|          \" ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name\";|          ` ORDER BY ${featuredOrderBy}f.rating DESC NULLS LAST, f.freelancer_full_name`;|' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)",
+      "Bash(sed -i '923s|          \" ORDER BY MAX\\(s.created_at\\) DESC NULLS LAST, f.freelancer_full_name\";|          ` ORDER BY ${featuredOrderBy}MAX\\(s.created_at\\) DESC NULLS LAST, f.freelancer_full_name`;|' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)",
+      "Bash(sed -i '848s|WHERE LOWER\\(service_name\\) = ANY\\(\\\\$1::text\\\\[\\\\]\\)|WHERE service_name = ANY\\(\\\\$1::text[]\\)|' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)",
+      "Bash(sed -i '3341s|WHERE LOWER\\(service_name\\) = ANY|WHERE service_name = ANY|' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)"
     ]
   },
   "hooks": {

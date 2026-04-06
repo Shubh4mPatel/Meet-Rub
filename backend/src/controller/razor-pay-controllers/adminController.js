@@ -509,7 +509,13 @@ const removeFeaturedFreelancer = async (req, res, next) => {
 
       return res.status(200).json({
         status: 'success',
-        message: 'Freelancer removed from featured list'
+        message: 'Freelancer removed from featured list',
+        data: {
+          freelancer_id: parseInt(freelancer_id, 10),
+          service_name,
+          service_option_id,
+          unfeatured_at: new Date()
+        }
       });
     } catch (err) {
       await client.query('ROLLBACK');
