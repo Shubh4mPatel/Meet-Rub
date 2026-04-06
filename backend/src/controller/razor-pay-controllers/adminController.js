@@ -106,10 +106,11 @@ const getAllPayouts = async (req, res, next) => {
     let query = `
         SELECT p.*,
           t.project_id, t.total_amount, t.platform_commission,
-          f.freelancer_full_name as freelancer_name, f.email as freelancer_email
+          fl.freelancer_full_name as freelancer_name, fl.freelancer_email
         FROM payouts p
-        JOIN transactions t ON p.transaction_id = t.id
-        JOIN users f ON p.freelancer_id = f.id
+        LEFT JOIN transactions t ON p.transaction_id = t.id
+        JOIN users u ON p.freelancer_id = u.id
+        JOIN freelancer fl ON fl.user_id = u.id
       `;
 
     const params = [];
