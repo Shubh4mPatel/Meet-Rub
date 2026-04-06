@@ -39,12 +39,13 @@ const createPaymentOrder = async (req, res, next) => {
   try {
     const { project_id } = req.body;
     const clientId = req.user.roleWiseId;
+    const userId = req.user.user_id;
 
     if (!project_id) {
       return next(new AppError('Project ID is required', 400));
     }
 
-    const result = await paymentService.createServicePaymentOrder(clientId, project_id);
+    const result = await paymentService.createServicePaymentOrder(clientId, project_id, userId);
 
     res.json({
       message: 'Payment order created',

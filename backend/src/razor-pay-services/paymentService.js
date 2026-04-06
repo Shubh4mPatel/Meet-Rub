@@ -198,7 +198,7 @@ class PaymentService {
   }
 
   // Create Razorpay order for direct service payment
-  async createServicePaymentOrder(clientId, projectId) {
+  async createServicePaymentOrder(clientId, projectId, userId) {
     const client = await db.connect();
     try {
       await client.query('BEGIN');
@@ -258,7 +258,7 @@ class PaymentService {
         `INSERT INTO razorpay_orders
         (user_id, order_type, razorpay_order_id, amount, currency, receipt, reference_id, status)
         VALUES ($1, 'SERVICE_PAYMENT', $2, $3, $4, $5, $6, 'CREATED')`,
-        [clientId, razorpayOrder.id, amounts.totalAmount, razorpayOrder.currency, receiptId, transactionId]
+        [userId, razorpayOrder.id, amounts.totalAmount, razorpayOrder.currency, receiptId, transactionId]
       );
 
       await client.query('COMMIT');
