@@ -13,8 +13,8 @@ const payFromWallet = async (req, res, next) => {
     }
 
     // Verify project belongs to client
-    const [projects] = await db.query(
-      'SELECT * FROM projects WHERE id = ? AND creator_id = ?',
+    const { rows: projects } = await db.query(
+      'SELECT * FROM projects WHERE id = $1 AND creator_id = $2',
       [project_id, clientId]
     );
 
@@ -126,14 +126,14 @@ const getMyTransactions = async (req, res, next) => {
 
     let query;
     if (userType === 'CLIENT') {
-      query = 'SELECT * FROM transactions WHERE creator_id = ? ORDER BY created_at DESC';
+      query = 'SELECT * FROM transactions WHERE creator_id = $1 ORDER BY created_at DESC';
     } else if (userType === 'FREELANCER') {
-      query = 'SELECT * FROM transactions WHERE freelancer_id = ? ORDER BY created_at DESC';
+      query = 'SELECT * FROM transactions WHERE freelancer_id = $1 ORDER BY created_at DESC';
     } else {
       return next(new AppError('Invalid user type', 400));
     }
 
-    const [transactions] = await db.query(query, [userId]);
+    const { rows: transactions } = await db.query(query, [userId]);
 
     res.json(transactions);
   } catch (error) {

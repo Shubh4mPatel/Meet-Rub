@@ -18,38 +18,36 @@ const addBankAccount = async (req, res, next) => {
       return next(new AppError('Bank account name, number, and IFSC code are required', 400));
     }
 
-    // Check if account already exists
-    const [existing] = await db.query(
-      'SELECT id FROM freelancer_accounts WHERE user_id = ?',
+    const { rows: existing } = await db.query(
+      'SELECT id FROM freelancer_accounts WHERE user_id = $1',
       [freelancerId]
     );
 
     let result;
     if (existing.length > 0) {
-      // Update existing account
       await db.query(
         `UPDATE freelancer_accounts
-        SET bank_account_name = ?, bank_account_number = ?,
-            bank_ifsc_code = ?, bank_name = ?, upi_id = ?,
+        SET bank_account_name = $1, bank_account_number = $2,
+            bank_ifsc_code = $3, bank_name = $4, upi_id = $5,
             verification_status = 'PENDING', updated_at = NOW()
-        WHERE user_id = ?`,
+        WHERE user_id = $6`,
         [bank_account_name, bank_account_number, bank_ifsc_code,
          bank_name, upi_id, freelancerId]
       );
       result = { message: 'Bank account updated successfully' };
     } else {
-      // Insert new account
-      const [insertResult] = await db.query(
+      const { rows: insertResult } = await db.query(
         `INSERT INTO freelancer_accounts
         (user_id, bank_account_name, bank_account_number, bank_ifsc_code,
          bank_name, upi_id, verification_status)
-        VALUES (?, ?, ?, ?, ?, ?, 'PENDING')`,
+        VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
+        RETURNING id`,
         [freelancerId, bank_account_name, bank_account_number,
          bank_ifsc_code, bank_name, upi_id]
       );
       result = {
         message: 'Bank account added successfully',
-        account_id: insertResult.insertId
+        account_id: insertResult[0].id
       };
     }
 
@@ -65,11 +63,11 @@ const getBankAccount = async (req, res, next) => {
   try {
     const freelancerId = req.user.id;
 
-    const [accounts] = await db.query(
+    const { rows: accounts } = await db.query(
       `SELECT id, bank_account_name, bank_account_number, bank_ifsc_code,
               bank_name, upi_id, verification_status, is_active, created_at
        FROM freelancer_accounts
-       WHERE user_id = ?`,
+       WHERE user_id = $1`,
       [freelancerId]
     );
 
@@ -113,27 +111,24 @@ const getEarningsSummary = async (req, res, next) => {
   try {
     const freelancerId = req.user.id;
 
-    // Total earnings (completed transactions)
-    const [completed] = await db.query(
+    const { rows: completed } = await db.query(
       `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
        FROM transactions
-       WHERE freelancer_id = ? AND status = 'COMPLETED'`,
+       WHERE freelancer_id = $1 AND status = 'COMPLETED'`,
       [freelancerId]
     );
 
-    // Pending release
-    const [pending] = await db.query(
+    const { rows: pending } = await db.query(
       `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
        FROM transactions
-       WHERE freelancer_id = ? AND status = 'HELD'`,
+       WHERE freelancer_id = $1 AND status = 'HELD'`,
       [freelancerId]
     );
 
-    // Released but processing
-    const [processing] = await db.query(
+    const { rows: processing } = await db.query(
       `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
        FROM transactions
-       WHERE freelancer_id = ? AND status = 'RELEASED'`,
+       WHERE freelancer_id = $1 AND status = 'RELEASED'`,
       [freelancerId]
     );
 

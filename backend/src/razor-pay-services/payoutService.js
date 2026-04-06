@@ -5,8 +5,8 @@ class PayoutService {
   // Create fund account for freelancer
   async createFundAccount(freelancerAccountId) {
     try {
-      const [accounts] = await db.query(
-        'SELECT * FROM freelancer_accounts WHERE id = ?',
+      const { rows: accounts } = await db.query(
+        'SELECT * FROM freelancer_accounts WHERE id = $1',
         [freelancerAccountId]
       );
 
@@ -16,11 +16,10 @@ class PayoutService {
 
       const account = accounts[0];
 
-      // Create contact in Razorpay
       const contact = await razorpay.contacts.create({
         name: account.bank_account_name,
-        email: '', // Add email if available
-        contact: '', // Add phone if available
+        email: '',
+        contact: '',
         type: 'vendor',
         reference_id: `freelancer_${account.user_id}`,
         notes: {
@@ -28,7 +27,6 @@ class PayoutService {
         }
       });
 
-      // Create fund account
       const fundAccount = await razorpay.fundAccount.create({
         contact_id: contact.id,
         account_type: 'bank_account',
@@ -47,13 +45,12 @@ class PayoutService {
 
   // Release payment to freelancer (Admin action)
   async releasePayment(transactionId, adminId) {
-    const connection = await db.getConnection();
+    const client = await db.connect();
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
 
-      // Get transaction details
-      const [transactions] = await connection.query(
-        'SELECT * FROM transactions WHERE id = ? FOR UPDATE',
+      const { rows: transactions } = await client.query(
+        'SELECT * FROM transactions WHERE id = $1 FOR UPDATE',
         [transactionId]
       );
 
@@ -67,9 +64,8 @@ class PayoutService {
         throw new Error(`Transaction cannot be released. Current status: ${transaction.status}`);
       }
 
-      // Get freelancer account details
-      const [freelancerAccounts] = await connection.query(
-        'SELECT * FROM freelancer_accounts WHERE user_id = ? AND is_active = TRUE',
+      const { rows: freelancerAccounts } = await client.query(
+        'SELECT * FROM freelancer_accounts WHERE user_id = $1 AND is_active = TRUE',
         [transaction.freelancer_id]
       );
 
@@ -83,19 +79,18 @@ class PayoutService {
         throw new Error('Freelancer account not verified');
       }
 
-      // Update transaction status
-      await connection.query(
-        `UPDATE transactions 
-        SET status = 'RELEASED', released_at = NOW(), released_by = ? 
-        WHERE id = ?`,
+      await client.query(
+        `UPDATE transactions
+        SET status = 'RELEASED', released_at = NOW(), released_by = $1
+        WHERE id = $2`,
         [adminId, transactionId]
       );
 
-      // Create payout record
-      const [payoutResult] = await connection.query(
-        `INSERT INTO payouts 
-        (transaction_id, freelancer_id, freelancer_account_id, amount, currency, status, reference_id) 
-        VALUES (?, ?, ?, ?, ?, 'QUEUED', ?)`,
+      const { rows: payoutResult } = await client.query(
+        `INSERT INTO payouts
+        (transaction_id, freelancer_id, freelancer_account_id, amount, currency, status, reference_id)
+        VALUES ($1, $2, $3, $4, $5, 'QUEUED', $6)
+        RETURNING id`,
         [
           transactionId,
           transaction.freelancer_id,
@@ -106,9 +101,9 @@ class PayoutService {
         ]
       );
 
-      const payoutId = payoutResult.insertId;
+      const payoutId = payoutResult[0].id;
 
-      await connection.commit();
+      await client.query('COMMIT');
 
       // Process payout asynchronously
       this.processPayout(payoutId).catch(error => {
@@ -122,25 +117,24 @@ class PayoutService {
         status: 'RELEASED'
       };
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
   }
 
   // Process payout via Razorpay
   async processPayout(payoutId) {
-    const connection = await db.getConnection();
+    const client = await db.connect();
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
 
-      // Get payout details
-      const [payouts] = await connection.query(
-        `SELECT p.*, fa.* 
+      const { rows: payouts } = await client.query(
+        `SELECT p.*, fa.*
         FROM payouts p
         JOIN freelancer_accounts fa ON p.freelancer_account_id = fa.id
-        WHERE p.id = ? FOR UPDATE`,
+        WHERE p.id = $1 FOR UPDATE`,
         [payoutId]
       );
 
@@ -154,32 +148,30 @@ class PayoutService {
         throw new Error('Payout already processed');
       }
 
-      // Update status to pending
-      await connection.query(
-        'UPDATE payouts SET status = "PENDING", initiated_at = NOW() WHERE id = ?',
+      await client.query(
+        `UPDATE payouts SET status = 'PENDING', initiated_at = NOW() WHERE id = $1`,
         [payoutId]
       );
 
-      await connection.commit();
+      await client.query('COMMIT');
 
       // Create fund account if not exists
       let fundAccountId = payout.razorpay_fund_account_id;
-      
+
       if (!fundAccountId) {
         const fundAccount = await this.createFundAccount(payout.freelancer_account_id);
         fundAccountId = fundAccount.id;
-        
+
         await db.query(
-          'UPDATE freelancer_accounts SET razorpay_account_id = ? WHERE id = ?',
+          'UPDATE freelancer_accounts SET razorpay_account_id = $1 WHERE id = $2',
           [fundAccountId, payout.freelancer_account_id]
         );
       }
 
-      // Create payout in Razorpay
       const razorpayPayout = await razorpay.payouts.create({
         account_number: process.env.RAZORPAY_ACCOUNT_NUMBER,
         fund_account_id: fundAccountId,
-        amount: Math.round(payout.amount * 100), // Convert to paise
+        amount: Math.round(payout.amount * 100),
         currency: payout.currency || 'INR',
         mode: 'IMPS',
         purpose: 'payout',
@@ -192,117 +184,114 @@ class PayoutService {
         }
       });
 
-      // Update payout with Razorpay details
       await db.query(
-        `UPDATE payouts 
-        SET razorpay_payout_id = ?, razorpay_fund_account_id = ?, 
-            status = 'PROCESSING', utr = ? 
-        WHERE id = ?`,
+        `UPDATE payouts
+        SET razorpay_payout_id = $1, razorpay_fund_account_id = $2,
+            status = 'PROCESSING', utr = $3
+        WHERE id = $4`,
         [razorpayPayout.id, fundAccountId, razorpayPayout.utr, payoutId]
       );
 
-      // Update transaction
       await db.query(
-        'UPDATE transactions SET payout_id = ?, payout_status = "PROCESSING" WHERE id = ?',
+        `UPDATE transactions SET payout_id = $1, payout_status = 'PROCESSING' WHERE id = $2`,
         [razorpayPayout.id, payout.transaction_id]
       );
 
       return razorpayPayout;
     } catch (error) {
-      await connection.rollback();
-      
-      // Update payout status to failed
+      await client.query('ROLLBACK');
+
       await db.query(
-        'UPDATE payouts SET status = "FAILED", failure_reason = ? WHERE id = ?',
+        `UPDATE payouts SET status = 'FAILED', failure_reason = $1 WHERE id = $2`,
         [error.message, payoutId]
       );
-      
+
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
   }
 
   // Get payout details
   async getPayout(payoutId) {
-    const [payouts] = await db.query(
-      `SELECT p.*, 
+    const { rows } = await db.query(
+      `SELECT p.*,
         t.project_id,
         f.freelancer_full_name as freelancer_name,
         fa.bank_account_number, fa.bank_ifsc_code
       FROM payouts p
       JOIN transactions t ON p.transaction_id = t.id
-      JOIN users f ON p.freelancer_id = f.id
+      JOIN freelancer f ON p.freelancer_id = f.freelancer_id
       JOIN freelancer_accounts fa ON p.freelancer_account_id = fa.id
-      WHERE p.id = ?`,
+      WHERE p.id = $1`,
       [payoutId]
     );
-    return payouts[0] || null;
+    return rows[0] || null;
   }
 
   // Get all payouts for a freelancer
   async getFreelancerPayouts(freelancerId) {
-    const [payouts] = await db.query(
+    const { rows } = await db.query(
       `SELECT p.*, t.project_id, t.total_amount, t.platform_commission
       FROM payouts p
       JOIN transactions t ON p.transaction_id = t.id
-      WHERE p.freelancer_id = ?
+      WHERE p.freelancer_id = $1
       ORDER BY p.created_at DESC`,
       [freelancerId]
     );
-    return payouts;
+    return rows;
   }
 
   // Update payout status (called by webhook)
   async updatePayoutStatus(razorpayPayoutId, status, utr = null) {
-    const connection = await db.getConnection();
+    const client = await db.connect();
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
 
-      const updateData = {
-        status: status.toUpperCase(),
-        updated_at: new Date()
-      };
+      const statusValue = status === 'processed' ? 'PROCESSED' : status.toUpperCase();
+      let setClause = 'status = $1, updated_at = NOW()';
+      const params = [statusValue];
+      let paramIdx = 2;
 
       if (utr) {
-        updateData.utr = utr;
+        setClause += `, utr = $${paramIdx++}`;
+        params.push(utr);
       }
 
       if (status === 'processed') {
-        updateData.processed_at = new Date();
-        updateData.status = 'PROCESSED';
+        setClause += `, processed_at = NOW()`;
       }
 
-      await connection.query(
-        'UPDATE payouts SET ?, updated_at = NOW() WHERE razorpay_payout_id = ?',
-        [updateData, razorpayPayoutId]
+      params.push(razorpayPayoutId);
+      await client.query(
+        `UPDATE payouts SET ${setClause} WHERE razorpay_payout_id = $${paramIdx}`,
+        params
       );
 
-      // Update transaction status
       if (status === 'processed') {
-        await connection.query(
-          `UPDATE transactions t
-          JOIN payouts p ON t.id = p.transaction_id
-          SET t.status = 'COMPLETED', t.payout_status = 'PROCESSED', t.payout_utr = ?
-          WHERE p.razorpay_payout_id = ?`,
+        await client.query(
+          `UPDATE transactions
+          SET status = 'COMPLETED', payout_status = 'PROCESSED', payout_utr = $1
+          FROM payouts p
+          WHERE transactions.id = p.transaction_id AND p.razorpay_payout_id = $2`,
           [utr, razorpayPayoutId]
         );
       } else if (status === 'failed' || status === 'reversed') {
-        await connection.query(
-          `UPDATE transactions t
-          JOIN payouts p ON t.id = p.transaction_id
-          SET t.payout_status = 'FAILED'
-          WHERE p.razorpay_payout_id = ?`,
+        await client.query(
+          `UPDATE transactions
+          SET payout_status = 'FAILED'
+          FROM payouts p
+          WHERE transactions.id = p.transaction_id AND p.razorpay_payout_id = $1`,
           [razorpayPayoutId]
         );
       }
 
-      await connection.commit();
+      await client.query('COMMIT');
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
   }
 }

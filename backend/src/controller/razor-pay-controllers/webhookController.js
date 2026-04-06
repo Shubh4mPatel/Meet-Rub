@@ -22,7 +22,7 @@ const handlePaymentCaptured = async (payload) => {
 
   // Update order status if needed
   await db.query(
-    'UPDATE razorpay_orders SET status = "PAID" WHERE razorpay_order_id = ?',
+    `UPDATE razorpay_orders SET status = 'PAID' WHERE razorpay_order_id = $1`,
     [orderId]
   );
 
@@ -38,13 +38,13 @@ const handlePaymentFailed = async (payload) => {
 
   // Update order status
   await db.query(
-    'UPDATE razorpay_orders SET status = "FAILED" WHERE razorpay_order_id = ?',
+    `UPDATE razorpay_orders SET status = 'FAILED' WHERE razorpay_order_id = $1`,
     [orderId]
   );
 
   // Update transaction status if it's a service payment
   await db.query(
-    'UPDATE transactions SET status = "FAILED" WHERE razorpay_order_id = ?',
+    `UPDATE transactions SET status = 'FAILED' WHERE razorpay_order_id = $1`,
     [orderId]
   );
 }
@@ -64,28 +64,23 @@ const handlePayoutFailed = async (payload) => {
 
   console.log('Payout failed:', payout.id);
 
-  const connection = await db.getConnection();
+  const client = await db.connect();
   try {
-    await connection.beginTransaction();
+    await client.query('BEGIN');
 
-    // Update payout status
     await payoutService.updatePayoutStatus(payout.id, 'failed');
 
-    // Update failure reason
-    await connection.query(
-      'UPDATE payouts SET failure_reason = ? WHERE razorpay_payout_id = ?',
+    await client.query(
+      'UPDATE payouts SET failure_reason = $1 WHERE razorpay_payout_id = $2',
       [payout.status_details?.reason || 'Unknown error', payout.id]
     );
 
-    // Optionally: Refund to client wallet or mark for manual processing
-    // This depends on your business logic
-
-    await connection.commit();
+    await client.query('COMMIT');
   } catch (error) {
-    await connection.rollback();
+    await client.query('ROLLBACK');
     throw error;
   } finally {
-    connection.release();
+    client.release();
   }
 }
 
@@ -118,7 +113,7 @@ const handleWebhook = async (req, res, next) => {
     // Log webhook
     await db.query(
       `INSERT INTO webhook_logs (event_type, razorpay_event_id, payload)
-       VALUES (?, ?, ?)`,
+       VALUES ($1, $2, $3)`,
       [event, req.body.id || null, JSON.stringify(req.body)]
     );
 
@@ -150,7 +145,7 @@ const handleWebhook = async (req, res, next) => {
 
     // Update webhook log as processed
     await db.query(
-      'UPDATE webhook_logs SET processed = TRUE WHERE razorpay_event_id = ?',
+      'UPDATE webhook_logs SET processed = TRUE WHERE razorpay_event_id = $1',
       [req.body.id]
     );
 
@@ -160,7 +155,7 @@ const handleWebhook = async (req, res, next) => {
 
     // Log error
     await db.query(
-      'UPDATE webhook_logs SET error_message = ? WHERE razorpay_event_id = ?',
+      'UPDATE webhook_logs SET error_message = $1 WHERE razorpay_event_id = $2',
       [error.message, req.body.id]
     );
 

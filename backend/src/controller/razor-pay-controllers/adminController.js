@@ -39,8 +39,8 @@ const releasePayment = async (req, res, next) => {
     }
 
     // Check if project is completed
-    const [projects] = await db.query(
-      'SELECT status FROM projects WHERE id = ?',
+    const { rows: projects } = await db.query(
+      'SELECT status FROM projects WHERE id = $1',
       [transaction.project_id]
     );
 
@@ -82,13 +82,13 @@ const getAllPayouts = async (req, res, next) => {
     const params = [];
 
     if (status) {
-      query += ' WHERE p.status = ?';
+      query += ' WHERE p.status = $1';
       params.push(status);
     }
 
     query += ' ORDER BY p.created_at DESC';
 
-    const [payouts] = await db.query(query, params);
+    const { rows: payouts } = await db.query(query, params);
 
     res.json({
       count: payouts.length,
@@ -120,29 +120,24 @@ const getPayoutDetails = async (req, res, next) => {
 // Get platform statistics
 const getPlatformStats = async (req, res, next) => {
   try {
-    // Total transactions
-    const [totalTransactions] = await db.query(
+    const { rows: totalTransactions } = await db.query(
       'SELECT COUNT(*) as count FROM transactions'
     );
 
-    // Total revenue (commissions)
-    const [totalRevenue] = await db.query(
-      'SELECT SUM(platform_commission) as revenue FROM transactions WHERE status IN ("HELD", "RELEASED", "COMPLETED")'
+    const { rows: totalRevenue } = await db.query(
+      `SELECT SUM(platform_commission) as revenue FROM transactions WHERE status IN ('HELD', 'RELEASED', 'COMPLETED')`
     );
 
-    // Pending releases
-    const [pendingReleases] = await db.query(
-      'SELECT COUNT(*) as count, SUM(total_amount) as amount FROM transactions WHERE status = "HELD"'
+    const { rows: pendingReleases } = await db.query(
+      `SELECT COUNT(*) as count, SUM(total_amount) as amount FROM transactions WHERE status = 'HELD'`
     );
 
-    // Completed payouts
-    const [completedPayouts] = await db.query(
-      'SELECT COUNT(*) as count, SUM(amount) as amount FROM payouts WHERE status = "PROCESSED"'
+    const { rows: completedPayouts } = await db.query(
+      `SELECT COUNT(*) as count, SUM(amount) as amount FROM payouts WHERE status = 'PROCESSED'`
     );
 
-    // Pending payouts
-    const [pendingPayouts] = await db.query(
-      'SELECT COUNT(*) as count, SUM(amount) as amount FROM payouts WHERE status IN ("QUEUED", "PENDING", "PROCESSING")'
+    const { rows: pendingPayouts } = await db.query(
+      `SELECT COUNT(*) as count, SUM(amount) as amount FROM payouts WHERE status IN ('QUEUED', 'PENDING', 'PROCESSING')`
     );
 
     res.json({
@@ -179,7 +174,7 @@ const updateCommission = async (req, res, next) => {
     }
 
     await db.query(
-      'UPDATE platform_settings SET setting_value = ? WHERE setting_key = "commission_percentage"',
+      `UPDATE platform_settings SET setting_value = $1 WHERE setting_key = 'commission_percentage'`,
       [percentage]
     );
 

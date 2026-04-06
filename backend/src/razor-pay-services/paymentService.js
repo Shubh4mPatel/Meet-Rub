@@ -26,7 +26,7 @@ class PaymentService {
   async createWalletLoadOrder(userId, amount) {
     try {
       const receiptId = `wallet_${userId}_${Date.now()}`;
-      
+
       const orderOptions = {
         amount: Math.round(amount * 100), // Convert to paise
         currency: process.env.CURRENCY || 'INR',
@@ -39,11 +39,10 @@ class PaymentService {
 
       const razorpayOrder = await razorpay.orders.create(orderOptions);
 
-      // Save order in database
       await db.query(
-        `INSERT INTO razorpay_orders 
-        (user_id, order_type, razorpay_order_id, amount, currency, receipt, status) 
-        VALUES (?, 'WALLET_LOAD', ?, ?, ?, ?, 'CREATED')`,
+        `INSERT INTO razorpay_orders
+        (user_id, order_type, razorpay_order_id, amount, currency, receipt, status)
+        VALUES ($1, 'WALLET_LOAD', $2, $3, $4, $5, 'CREATED')`,
         [userId, razorpayOrder.id, amount, razorpayOrder.currency, receiptId]
       );
 
@@ -60,19 +59,18 @@ class PaymentService {
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(text)
       .digest('hex');
-    
+
     return expectedSignature === signature;
   }
 
   // Process wallet load after successful payment
   async processWalletLoad(orderId, paymentId, signature) {
-    const connection = await db.getConnection();
+    const client = await db.connect();
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
 
-      // Get order details
-      const [orders] = await connection.query(
-        'SELECT * FROM razorpay_orders WHERE razorpay_order_id = ? FOR UPDATE',
+      const { rows: orders } = await client.query(
+        'SELECT * FROM razorpay_orders WHERE razorpay_order_id = $1 FOR UPDATE',
         [orderId]
       );
 
@@ -86,20 +84,17 @@ class PaymentService {
         throw new Error('Order already processed');
       }
 
-      // Verify signature
       if (!this.verifyPaymentSignature(orderId, paymentId, signature)) {
         throw new Error('Invalid payment signature');
       }
 
-      // Update order status
-      await connection.query(
-        'UPDATE razorpay_orders SET status = "PAID", updated_at = NOW() WHERE id = ?',
-        [order.id]
+      await client.query(
+        'UPDATE razorpay_orders SET status = $1, updated_at = NOW() WHERE id = $2',
+        ['PAID', order.id]
       );
 
-      // Get user wallet
-      const [wallets] = await connection.query(
-        'SELECT id FROM wallets WHERE user_id = ?',
+      const { rows: wallets } = await client.query(
+        'SELECT id FROM wallets WHERE user_id = $1',
         [order.user_id]
       );
 
@@ -107,7 +102,6 @@ class PaymentService {
         throw new Error('Wallet not found');
       }
 
-      // Credit wallet
       await walletService.credit(
         wallets[0].id,
         order.amount,
@@ -116,25 +110,24 @@ class PaymentService {
         `Wallet loaded via Razorpay - ${paymentId}`
       );
 
-      await connection.commit();
+      await client.query('COMMIT');
       return { success: true, amount: order.amount };
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
   }
 
   // Create payment transaction for service (from wallet)
   async createWalletPayment(clientId, projectId) {
-    const connection = await db.getConnection();
+    const client = await db.connect();
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
 
-      // Get project details
-      const [projects] = await connection.query(
-        'SELECT * FROM projects WHERE id = ? AND creator_id = ?',
+      const { rows: projects } = await client.query(
+        'SELECT * FROM projects WHERE id = $1 AND creator_id = $2',
         [projectId, clientId]
       );
 
@@ -143,13 +136,10 @@ class PaymentService {
       }
 
       const project = projects[0];
-
-      // Calculate commission
       const amounts = this.calculateCommission(project.amount);
 
-      // Get client wallet
-      const [wallets] = await connection.query(
-        'SELECT id, balance FROM wallets WHERE creator_id = ? FOR UPDATE',
+      const { rows: wallets } = await client.query(
+        'SELECT id, balance FROM wallets WHERE creator_id = $1 FOR UPDATE',
         [clientId]
       );
 
@@ -163,7 +153,6 @@ class PaymentService {
         throw new Error('Insufficient wallet balance');
       }
 
-      // Debit from client wallet
       await walletService.debit(
         wallet.id,
         amounts.totalAmount,
@@ -172,12 +161,12 @@ class PaymentService {
         `Payment for project: ${project.title}`
       );
 
-      // Create transaction record
-      const [result] = await connection.query(
+      const { rows: result } = await client.query(
         `INSERT INTO transactions
         (project_id, creator_id, freelancer_id, total_amount, platform_commission,
         platform_commission_percentage, freelancer_amount, gst, payment_source, status, held_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'WALLET', 'HELD', NOW())`,
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'WALLET', 'HELD', NOW())
+        RETURNING id`,
         [
           projectId,
           clientId,
@@ -190,31 +179,30 @@ class PaymentService {
         ]
       );
 
-      const transactionId = result.insertId;
+      const transactionId = result[0].id;
 
-      await connection.commit();
+      await client.query('COMMIT');
       return {
         transactionId,
         ...amounts,
         status: 'HELD'
       };
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
   }
 
   // Create Razorpay order for direct service payment
   async createServicePaymentOrder(clientId, projectId) {
-    const connection = await db.getConnection();
+    const client = await db.connect();
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
 
-      // Get project details
-      const [projects] = await connection.query(
-        'SELECT * FROM projects WHERE id = ? AND creator_id = ?',
+      const { rows: projects } = await client.query(
+        'SELECT * FROM projects WHERE id = $1 AND creator_id = $2',
         [projectId, clientId]
       );
 
@@ -225,12 +213,12 @@ class PaymentService {
       const project = projects[0];
       const amounts = this.calculateCommission(project.amount);
 
-      // Create transaction record
-      const [result] = await connection.query(
+      const { rows: result } = await client.query(
         `INSERT INTO transactions
         (project_id, creator_id, freelancer_id, total_amount, platform_commission,
         platform_commission_percentage, freelancer_amount, gst, payment_source, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'RAZORPAY', 'INITIATED')`,
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'RAZORPAY', 'INITIATED')
+        RETURNING id`,
         [
           projectId,
           clientId,
@@ -243,9 +231,8 @@ class PaymentService {
         ]
       );
 
-      const transactionId = result.insertId;
+      const transactionId = result[0].id;
 
-      // Create Razorpay order
       const receiptId = `project_${projectId}_${Date.now()}`;
       const orderOptions = {
         amount: Math.round(amounts.totalAmount * 100),
@@ -260,48 +247,44 @@ class PaymentService {
 
       const razorpayOrder = await razorpay.orders.create(orderOptions);
 
-      // Update transaction with order ID
-      await connection.query(
-        'UPDATE transactions SET razorpay_order_id = ? WHERE id = ?',
+      await client.query(
+        'UPDATE transactions SET razorpay_order_id = $1 WHERE id = $2',
         [razorpayOrder.id, transactionId]
       );
 
-      // Save Razorpay order
-      await connection.query(
-        `INSERT INTO razorpay_orders 
-        (user_id, order_type, razorpay_order_id, amount, currency, receipt, reference_id, status) 
-        VALUES (?, 'SERVICE_PAYMENT', ?, ?, ?, ?, ?, 'CREATED')`,
+      await client.query(
+        `INSERT INTO razorpay_orders
+        (user_id, order_type, razorpay_order_id, amount, currency, receipt, reference_id, status)
+        VALUES ($1, 'SERVICE_PAYMENT', $2, $3, $4, $5, $6, 'CREATED')`,
         [clientId, razorpayOrder.id, amounts.totalAmount, razorpayOrder.currency, receiptId, transactionId]
       );
 
-      await connection.commit();
+      await client.query('COMMIT');
       return {
         transactionId,
         razorpayOrder,
         ...amounts
       };
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
   }
 
   // Process service payment after successful Razorpay payment
   async processServicePayment(orderId, paymentId, signature) {
-    const connection = await db.getConnection();
+    const client = await db.connect();
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
 
-      // Verify signature
       if (!this.verifyPaymentSignature(orderId, paymentId, signature)) {
         throw new Error('Invalid payment signature');
       }
 
-      // Get order details
-      const [orders] = await connection.query(
-        'SELECT * FROM razorpay_orders WHERE razorpay_order_id = ? FOR UPDATE',
+      const { rows: orders } = await client.query(
+        'SELECT * FROM razorpay_orders WHERE razorpay_order_id = $1 FOR UPDATE',
         [orderId]
       );
 
@@ -311,34 +294,32 @@ class PaymentService {
 
       const order = orders[0];
 
-      // Update order status
-      await connection.query(
-        'UPDATE razorpay_orders SET status = "PAID", updated_at = NOW() WHERE id = ?',
-        [order.id]
+      await client.query(
+        'UPDATE razorpay_orders SET status = $1, updated_at = NOW() WHERE id = $2',
+        ['PAID', order.id]
       );
 
-      // Update transaction status
-      await connection.query(
-        `UPDATE transactions 
-        SET status = 'HELD', razorpay_payment_id = ?, held_at = NOW() 
-        WHERE id = ?`,
+      await client.query(
+        `UPDATE transactions
+        SET status = 'HELD', razorpay_payment_id = $1, held_at = NOW()
+        WHERE id = $2`,
         [paymentId, order.reference_id]
       );
 
-      await connection.commit();
+      await client.query('COMMIT');
       return { success: true, transactionId: order.reference_id };
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
   }
 
   // Get transaction details
   async getTransaction(transactionId) {
-    const [transactions] = await db.query(
-      `SELECT t.*, 
+    const { rows } = await db.query(
+      `SELECT t.*,
         c.full_name as client_name, c.email as client_email,
         f.full_name as freelancer_name, f.email as freelancer_email,
         p.title as project_title
@@ -346,16 +327,16 @@ class PaymentService {
       JOIN users c ON t.creator_id = c.id
       JOIN users f ON t.freelancer_id = f.id
       JOIN projects p ON t.project_id = p.id
-      WHERE t.id = ?`,
+      WHERE t.id = $1`,
       [transactionId]
     );
-    return transactions[0] || null;
+    return rows[0] || null;
   }
 
   // Get all transactions in escrow (for admin)
   async getEscrowTransactions(status = 'HELD') {
-    const [transactions] = await db.query(
-      `SELECT t.*, 
+    const { rows } = await db.query(
+      `SELECT t.*,
         c.full_name as client_name,
         f.freelancer_full_name as freelancer_name,
         p.title as project_title,
@@ -364,11 +345,11 @@ class PaymentService {
       JOIN users c ON t.creator_id = c.id
       JOIN users f ON t.freelancer_id = f.id
       JOIN projects p ON t.project_id = p.id
-      WHERE t.status = ?
+      WHERE t.status = $1
       ORDER BY t.created_at DESC`,
       [status]
     );
-    return transactions;
+    return rows;
   }
 }
 
