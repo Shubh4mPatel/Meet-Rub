@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const{ createProject, getMyProjects, getProject, updateProjectStatus, deleteProject, getAllProjects, uploadDeliverable, sendHireRequest} = require('../controller/razor-pay-controllers/projectController');
+const{ createProject, getMyProjects, getProject, updateProjectStatus, deleteProject, getAllProjects, uploadDeliverable, sendHireRequest, approveProject, rejectProject} = require('../controller/razor-pay-controllers/projectController');
 
 
 router.post('/create-project',  createProject);
@@ -24,5 +24,11 @@ router.post('/upload-deliverable', uploadDeliverable);
 
 // POST /projects/hire-request  (creator or freelancer)
 router.post('/hire-request', sendHireRequest);
+
+// Creator approves completed project — credits freelancer earnings_balance
+router.post('/:id/approve', approveProject);
+
+// Creator rejects completed project — auto-creates dispute, funds stay in escrow
+router.post('/:id/reject', rejectProject);
 
 module.exports = router;

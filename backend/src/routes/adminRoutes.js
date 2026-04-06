@@ -1,6 +1,6 @@
 const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
-const adminController = require('../controller/razor-pay-controllers/adminController')
+const { getEscrowTransactions, approvePayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin } = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches, AssignFreelancerToRequest, getServicesForAdmin, editServiceForAdmin, deleteServiceForAdmin } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
 const upload = require('../../config/multer')
@@ -27,22 +27,17 @@ router.get('/service-requests', getUserServiceRequestsToAdmin)
 router.post('/add-niches',addNiches);
 
 
-router.get('/escrow', adminController.getEscrowTransactions);
+router.get('/escrow', getEscrowTransactions);
 
+router.get('/payouts', getAllPayouts);
 
-router.post('/escrow/:id/release', adminController.releasePayment);
+router.get('/payouts/:id', getPayoutDetails);
 
+router.post('/payouts/:id/approve', requireRole(['admin']), approvePayout);
 
-router.get('/payouts', adminController.getAllPayouts);
+router.get('/stats', getPlatformStats);
 
-
-router.get('/payouts/:id', adminController.getPayoutDetails);
-
-
-router.get('/stats', adminController.getPlatformStats);
-
-
-router.put('/commission', adminController.updateCommission);
+router.put('/commission', updateCommission);
 
 router.get('/niches', requireRole(['admin']), getNiches);
 

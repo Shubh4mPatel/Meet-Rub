@@ -21,47 +21,80 @@ const getEscrowTransactions = async (req, res, next) => {
   }
 }
 
-// Release payment to freelancer
-const releasePayment = async (req, res, next) => {
+// Approve payout request (admin) — triggers Razorpay payout
+const approvePayout = async (req, res, next) => {
+  const payoutId = req.params.id;
+  const adminId = req.user.roleWiseId;
+  const client = await db.connect();
   try {
-    const transactionId = req.params.id;
-    const adminId = req.user.id;
+    await client.query('BEGIN');
 
-    // Verify transaction exists and is in HELD status
-    const transaction = await paymentService.getTransaction(transactionId);
-
-    if (!transaction) {
-      return next(new AppError('Transaction not found', 404));
-    }
-
-    if (transaction.status !== 'HELD') {
-      return next(new AppError(`Cannot release payment. Transaction status: ${transaction.status}`, 400));
-    }
-
-    // Check if project is completed
-    const { rows: projects } = await db.query(
-      'SELECT status FROM projects WHERE id = $1',
-      [transaction.project_id]
+    const { rows: payouts } = await client.query(
+      `SELECT po.*, f.freelancer_id AS f_id
+       FROM payouts po
+       JOIN users u ON po.freelancer_id = u.id
+       JOIN freelancer f ON f.user_id = u.id
+       WHERE po.id = $1 FOR UPDATE`,
+      [payoutId]
     );
 
-    if (projects.length === 0) {
-      return next(new AppError('Project not found', 404));
+    if (payouts.length === 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError('Payout not found', 404));
     }
 
-    if (projects[0].status !== 'COMPLETED') {
-      return next(new AppError('Project must be completed before releasing payment', 400));
+    const payout = payouts[0];
+
+    if (payout.status !== 'REQUESTED') {
+      await client.query('ROLLBACK');
+      return next(new AppError(`Payout cannot be approved. Current status: ${payout.status}`, 400));
     }
 
-    // Release payment
-    const result = await payoutService.releasePayment(transactionId, adminId);
+    // Get freelancer's verified bank account
+    const { rows: accounts } = await client.query(
+      `SELECT id FROM freelancer WHERE freelancer_id = $1 AND verification_status = 'VERIFIED'`,
+      [payout.f_id]
+    );
 
-    res.json({
-      message: 'Payment released successfully. Payout initiated.',
-      ...result
+    if (accounts.length === 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError('Freelancer account not verified', 400));
+    }
+
+    // Update payout to QUEUED
+    await client.query(
+      `UPDATE payouts
+       SET status = 'QUEUED', freelancer_account_id = $1, approved_by = $2, approved_at = NOW(), updated_at = NOW()
+       WHERE id = $3`,
+      [payout.f_id, adminId, payoutId]
+    );
+
+    // Update linked transaction to RELEASED if exists
+    if (payout.transaction_id) {
+      await client.query(
+        `UPDATE transactions SET status = 'RELEASED', released_by = $1, released_at = NOW(), updated_at = NOW() WHERE id = $2`,
+        [adminId, payout.transaction_id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // Trigger Razorpay payout async
+    payoutService.processPayout(payoutId).catch((err) => {
+      console.error('processPayout error:', err);
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Payout approved. Processing initiated.',
+      data: { payout_id: payoutId }
     });
   } catch (error) {
-    console.error('Release payment error:', error);
+    await client.query('ROLLBACK');
+    console.error('approvePayout error:', error);
     return next(new AppError(error.message, 500));
+  } finally {
+    client.release();
   }
 }
 
@@ -335,7 +368,7 @@ const suspendFreelancerByAdmin = async (req, res, next) =>  {
 
 module.exports = {
   getEscrowTransactions,
-  releasePayment,
+  approvePayout,
   getAllPayouts,
   getPayoutDetails,
   getPlatformStats,

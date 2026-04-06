@@ -4,6 +4,7 @@ const { logger } = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
 const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail } = require('../../../utils/deliveryEmails');
+const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
 
 // Create a new project
 const createProject = async (req, res, next) => {
@@ -1040,6 +1041,184 @@ const rateCreator = async (req, res, next) => {
   }
 };
 
+// Approve project (creator) — credits freelancer earnings_balance
+const approveProject = async (req, res, next) => {
+  const creatorId = req.user.roleWiseId;
+  const projectId = req.params.id;
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: projects } = await client.query(
+      'SELECT * FROM projects WHERE id = $1 AND creator_id = $2 FOR UPDATE',
+      [projectId, creatorId]
+    );
+
+    if (projects.length === 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError('Project not found', 404));
+    }
+
+    if (projects[0].status !== 'COMPLETED') {
+      await client.query('ROLLBACK');
+      return next(new AppError('Project must be COMPLETED before approving', 400));
+    }
+
+    const { rows: transactions } = await client.query(
+      `SELECT * FROM transactions WHERE project_id = $1 AND status = 'HELD' FOR UPDATE`,
+      [projectId]
+    );
+
+    if (transactions.length === 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError('No held transaction found for this project', 400));
+    }
+
+    const transaction = transactions[0];
+
+    await client.query(
+      `UPDATE projects SET status = 'APPROVED', approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2`,
+      [creatorId, projectId]
+    );
+
+    await client.query(
+      `UPDATE transactions SET status = 'APPROVED', approved_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [transaction.id]
+    );
+
+    await client.query(
+      `UPDATE freelancer SET earnings_balance = earnings_balance + $1 WHERE freelancer_id = $2`,
+      [transaction.freelancer_amount, transaction.freelancer_id]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Project approved. Earnings credited to freelancer.',
+      data: {
+        project_id: projectId,
+        transaction_id: transaction.id,
+        freelancer_amount: transaction.freelancer_amount
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('approveProject error:', error);
+    return next(new AppError('Failed to approve project', 500));
+  } finally {
+    client.release();
+  }
+};
+
+// Reject project (creator) — auto-creates dispute, keeps funds in escrow
+const rejectProject = async (req, res, next) => {
+  const creatorId = req.user.roleWiseId;
+  const creatorUserId = req.user.user_id;
+  const projectId = req.params.id;
+  const { reason_of_dispute, description } = req.body;
+
+  if (!reason_of_dispute) {
+    return next(new AppError('reason_of_dispute is required', 400));
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: projects } = await client.query(
+      `SELECT p.*, f.user_id AS freelancer_user_id, f.freelancer_full_name, f.freelancer_email,
+              s.service_name, c.full_name AS creator_name, c.email AS creator_email
+       FROM projects p
+       JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+       JOIN creators c ON p.creator_id = c.creator_id
+       LEFT JOIN services s ON p.service_id = s.id
+       WHERE p.id = $1 AND p.creator_id = $2 FOR UPDATE`,
+      [projectId, creatorId]
+    );
+
+    if (projects.length === 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError('Project not found', 404));
+    }
+
+    const project = projects[0];
+
+    if (project.status !== 'COMPLETED') {
+      await client.query('ROLLBACK');
+      return next(new AppError('Project must be COMPLETED before rejecting', 400));
+    }
+
+    // Update project to DISPUTE
+    await client.query(
+      `UPDATE projects SET status = 'DISPUTE', updated_at = NOW() WHERE id = $1`,
+      [projectId]
+    );
+
+    // Create dispute
+    const { rows: disputeResult } = await client.query(
+      `INSERT INTO disputes (creator_id, freelancer_id, reason_of_dispute, description, raised_by, project_id)
+       VALUES ($1, $2, $3, $4, 'creator', $5)
+       RETURNING id`,
+      [creatorId, project.freelancer_id, reason_of_dispute, description || null, projectId]
+    );
+
+    await client.query('COMMIT');
+
+    const disputeId = disputeResult[0].id;
+
+    // Send admin email
+    sendAdminDisputeEmail({
+      disputeId,
+      projectId,
+      creatorName: project.creator_name,
+      creatorEmail: project.creator_email,
+      freelancerName: project.freelancer_full_name,
+      freelancerEmail: project.freelancer_email,
+      serviceTitle: project.service_name,
+      amount: project.amount,
+      disputeReason: reason_of_dispute === 'other' ? description : reason_of_dispute,
+    }).catch((err) => logger.error('Failed to send admin dispute email:', err));
+
+    // Notify freelancer
+    await Promise.all([
+      sendNotification({
+        recipientId: project.freelancer_user_id,
+        senderId: creatorUserId,
+        eventType: 'dispute_raised_against_you',
+        title: 'A dispute has been raised against you',
+        body: `${project.creator_name} has raised a dispute regarding project #${projectId}.`,
+        actionType: 'link',
+        actionRoute: disputeId,
+      }),
+      sendNotification({
+        recipientId: creatorUserId,
+        senderId: creatorUserId,
+        eventType: 'dispute_raised_by_you',
+        title: 'Dispute raised successfully',
+        body: `Your dispute for project #${projectId} has been submitted. Our team will review it.`,
+        actionType: 'link',
+        actionRoute: disputeId,
+      }),
+    ]);
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Project rejected. Dispute created. Funds held in escrow.',
+      data: {
+        project_id: projectId,
+        dispute_id: disputeId
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('rejectProject error:', error);
+    return next(new AppError('Failed to reject project', 500));
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   createProject,
   getProject,
@@ -1051,4 +1230,6 @@ module.exports = {
   sendHireRequest,
   rateFreelancer,
   rateCreator,
+  approveProject,
+  rejectProject,
 }

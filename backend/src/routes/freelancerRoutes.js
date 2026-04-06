@@ -1,6 +1,6 @@
 const express = require('express');
 const upload = require('../../config/multer');
-const {getMyPayouts,getEarningsSummary } = require('../controller/razor-pay-controllers/freelancerController');
+const {getMyPayouts, getEarningsSummary, getEarningsBalance, requestPayout } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
 const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
@@ -79,10 +79,13 @@ router.get('/freelancers/:id/impact', getFreelancerImpact);
 router.get('/freelancers/:id/overview', getFreelancerOverview);
 
 
-router.get('/payouts',authenticateUser,requireRole(['freelancer']), getMyPayouts);
+router.get('/payouts', authenticateUser, requireRole(['freelancer']), getMyPayouts);
 
+router.post('/payouts/request', authenticateUser, requireRole(['freelancer']), requestPayout);
 
-router.get('/earnings',authenticateUser,requireRole(['freelancer']), getEarningsSummary);
+router.get('/earnings', authenticateUser, requireRole(['freelancer']), getEarningsSummary);
+
+router.get('/earnings/balance', authenticateUser, requireRole(['freelancer']), getEarningsBalance);
 
 
 router.get('/profile-progress', authenticateUser, requireRole(['freelancer']), getUserProfileProgress);

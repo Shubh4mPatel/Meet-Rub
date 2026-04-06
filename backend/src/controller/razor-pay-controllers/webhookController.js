@@ -68,12 +68,29 @@ const handlePayoutFailed = async (payload) => {
   try {
     await client.query('BEGIN');
 
-    await payoutService.updatePayoutStatus(payout.id, 'failed');
+    // Get payout details to refund earnings_balance
+    const { rows: payouts } = await client.query(
+      `SELECT po.amount, f.freelancer_id AS f_id
+       FROM payouts po
+       JOIN users u ON po.freelancer_id = u.id
+       JOIN freelancer f ON f.user_id = u.id
+       WHERE po.razorpay_payout_id = $1`,
+      [payout.id]
+    );
 
+    // Update payout status and failure reason
     await client.query(
-      'UPDATE payouts SET failure_reason = $1 WHERE razorpay_payout_id = $2',
+      `UPDATE payouts SET status = 'FAILED', failure_reason = $1, updated_at = NOW() WHERE razorpay_payout_id = $2`,
       [payout.status_details?.reason || 'Unknown error', payout.id]
     );
+
+    // Refund earnings_balance
+    if (payouts.length > 0) {
+      await client.query(
+        `UPDATE freelancer SET earnings_balance = earnings_balance + $1 WHERE freelancer_id = $2`,
+        [payouts[0].amount, payouts[0].f_id]
+      );
+    }
 
     await client.query('COMMIT');
   } catch (error) {
