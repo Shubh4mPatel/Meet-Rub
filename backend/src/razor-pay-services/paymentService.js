@@ -7,7 +7,7 @@ const crypto = require('crypto');
 class PaymentService {
   // Calculate commission
   calculateCommission(amount) {
-    const commissionPercentage = parseFloat(process.env.PLATFORM_COMMISSION_PERCENTAGE || 10);
+    const commissionPercentage = parseFloat(process.env.PLATFORM_COMMISSION_PERCENTAGE || 20);
     const commission = (amount * commissionPercentage) / 100;
     const freelancerAmount = amount - commission;
     
