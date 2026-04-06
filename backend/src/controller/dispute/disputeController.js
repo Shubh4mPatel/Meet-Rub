@@ -1,6 +1,7 @@
 const { pool: db } = require('../../../config/dbConfig');
 const AppError = require('../../../utils/appError');
 const { logger } = require('../../../utils/logger');
+const razorpay = require('../../../config/razorpay');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
@@ -373,54 +374,128 @@ const getAllDisputes = async (req, res, next) => {
 };
 
 const resolveDispute = async (req, res, next) => {
+  const adminId = req.user.roleWiseId;
+  const { id } = req.params;
+  const { resolution_action, admin_note } = req.body;
+
+  if (!resolution_action || !['resolve', 'release', 'refund'].includes(resolution_action)) {
+    return next(new AppError('resolution_action is required and must be "resolve", "release" or "refund"', 400));
+  }
+
+  const client = await db.connect();
   try {
-    const adminId = req.user.roleWiseId;
-    const { id } = req.params;
-    const { resolution } = req.body;
+    await client.query('BEGIN');
 
-    if (!resolution || typeof resolution !== 'object') {
-      return next(new AppError('resolution is required and must be a JSON object', 400));
-    }
-
-    const existing = await db.query(
-      `SELECT id, status FROM disputes WHERE id = $1`,
+    // Get dispute + linked transaction
+    const { rows: disputes } = await client.query(
+      `SELECT d.*, t.id AS transaction_id, t.status AS transaction_status,
+              t.razorpay_payment_id, t.total_amount, t.freelancer_amount,
+              t.freelancer_id AS t_freelancer_id
+       FROM disputes d
+       JOIN transactions t ON t.project_id = d.project_id
+       WHERE d.id = $1
+       FOR UPDATE`,
       [id]
     );
 
-    if (existing.rows.length === 0) {
+    if (disputes.length === 0) {
+      await client.query('ROLLBACK');
       return next(new AppError('Dispute not found', 404));
     }
 
-    if (existing.rows[0].status === 'resolved') {
+    const dispute = disputes[0];
+
+    if (dispute.status === 'resolved') {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         status: 'error',
         message: 'Dispute is already resolved',
-        data: existing.rows[0],
       });
     }
 
-    const result = await db.query(
+    if (resolution_action !== 'resolve' && dispute.transaction_status !== 'HELD') {
+      await client.query('ROLLBACK');
+      return next(new AppError(`Cannot process payment action: transaction status is ${dispute.transaction_status}`, 400));
+    }
+
+    if (resolution_action === 'resolve') {
+      // Just mark as resolved — no money movement
+
+    } else if (resolution_action === 'release') {
+      // Release funds to freelancer — credit earnings_balance
+      await client.query(
+        `UPDATE transactions SET status = 'COMPLETED', released_by = $1, released_at = NOW(), updated_at = NOW() WHERE id = $2`,
+        [adminId, dispute.transaction_id]
+      );
+
+      await client.query(
+        `UPDATE freelancer SET earnings_balance = earnings_balance + $1 WHERE freelancer_id = $2`,
+        [dispute.freelancer_amount, dispute.t_freelancer_id]
+      );
+
+      await client.query(
+        `UPDATE projects SET status = 'APPROVED', updated_at = NOW() WHERE id = $1`,
+        [dispute.project_id]
+      );
+
+    } else {
+      // Refund full amount (including GST) to creator via Razorpay (including GST) to creator via Razorpay
+      if (!dispute.razorpay_payment_id) {
+        await client.query('ROLLBACK');
+        return next(new AppError('No Razorpay payment ID found for this transaction', 400));
+      }
+
+      const refundAmountPaise = Math.round(parseFloat(dispute.total_amount) * 100);
+
+      const refund = await razorpay.payments.refund(dispute.razorpay_payment_id, {
+        amount: refundAmountPaise,
+        notes: {
+          dispute_id: id,
+          reason: 'Dispute resolved in creator favour',
+        },
+      });
+
+      await client.query(
+        `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW() WHERE id = $1`,
+        [dispute.transaction_id]
+      );
+
+      await client.query(
+        `UPDATE projects SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
+        [dispute.project_id]
+      );
+
+      logger.info(`Razorpay refund triggered: refund_id=${refund.id} payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`);
+    }
+
+    // Mark dispute resolved
+    const { rows: resolved } = await client.query(
       `UPDATE disputes
        SET status = 'resolved', admin_note = $1::jsonb, admin_id = $2, updated_at = NOW()
        WHERE id = $3
        RETURNING id, status, admin_note, admin_id, updated_at`,
-      [JSON.stringify(resolution), adminId, id]
+      [JSON.stringify({ note: admin_note || '', action: resolution_action }), adminId, id]
     );
 
-    if (result.rows.length === 0) {
-      return next(new AppError('Dispute not found', 404));
-    }
+    await client.query('COMMIT');
 
-    logger.info(`Dispute ${id} resolved by admin ${adminId}`);
+    logger.info(`Dispute ${id} resolved by admin ${adminId} with action: ${resolution_action}`);
 
     return res.status(200).json({
       status: 'success',
-      message: 'Dispute resolved successfully',
-      data: result.rows[0],
+      message: resolution_action === 'release'
+        ? 'Dispute resolved. Funds released to freelancer.'
+        : resolution_action === 'refund'
+        ? 'Dispute resolved. Full refund initiated to creator.'
+        : 'Dispute marked as resolved.',
+      data: resolved[0],
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     logger.error('resolveDispute error:', error);
     return next(new AppError('Failed to resolve dispute', 500));
+  } finally {
+    client.release();
   }
 };
 
