@@ -57,6 +57,8 @@ const createPaymentOrder = async (req, res, next) => {
         key: process.env.RAZORPAY_KEY_ID
       },
       breakdown: {
+        service_amount: result.serviceAmount,
+        gst: result.gst,
         total: result.totalAmount,
         platform_commission: result.platformCommission,
         freelancer_amount: result.freelancerAmount
