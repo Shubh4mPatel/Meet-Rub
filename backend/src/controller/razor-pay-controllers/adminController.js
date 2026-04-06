@@ -366,10 +366,64 @@ const suspendFreelancerByAdmin = async (req, res, next) =>  {
 }
 
 
+// Get all payout requests (status = REQUESTED) for admin review
+const getPayoutRequests = async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+    const offset = (page - 1) * limit;
+
+    const { rows: payouts } = await db.query(
+      `SELECT
+        po.id              AS payout_id,
+        po.amount,
+        po.currency,
+        po.status,
+        po.requested_at,
+        po.created_at,
+        f.freelancer_id,
+        f.freelancer_full_name,
+        f.freelancer_email,
+        f.earnings_balance,
+        f.verification_status  AS account_status
+       FROM payouts po
+       JOIN users u ON po.freelancer_id = u.id
+       JOIN freelancer f ON f.user_id = u.id
+       WHERE po.status = 'REQUESTED'
+       ORDER BY po.requested_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    const { rows: countResult } = await db.query(
+      `SELECT COUNT(*) AS total FROM payouts WHERE status = 'REQUESTED'`
+    );
+
+    const total = parseInt(countResult[0].total);
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        payouts,
+        pagination: {
+          total,
+          totalPages: Math.ceil(total / limit),
+          currentPage: page,
+          limit
+        }
+      }
+    });
+  } catch (error) {
+    console.error('getPayoutRequests error:', error);
+    return next(new AppError('Failed to get payout requests', 500));
+  }
+};
+
 module.exports = {
   getEscrowTransactions,
   approvePayout,
   getAllPayouts,
+  getPayoutRequests,
   getPayoutDetails,
   getPlatformStats,
   updateCommission,

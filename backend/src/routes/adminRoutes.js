@@ -43,7 +43,7 @@ router.get('/niches', requireRole(['admin']), getNiches);
 
 router.post('/assignfreelancer-to-request', requireRole(['admin']), AssignFreelancerToRequest);
 
-router.post('/approve-kyc/:freelancer_id', requireRole(['admin']), adminController.approveKYCByAdmin);
+router.post('/approve-kyc/:freelancer_id', requireRole(['admin']), approveKYCByAdmin);
 
 router.get('/get-all-creators', requireRole(['admin']), getAllCreatorProfiles);
 
@@ -57,9 +57,9 @@ router.get('/get-freelancerby-id/:freelancer_id', requireRole(['admin']),getFree
 
 router.get('/get-freelancers-for-suggestion', requireRole(['admin']),getFreelancerForSuggestion);
 
-router.post('/reject-kyc/', requireRole(['admin']), adminController.rejectKYCByAdmin);
+router.post('/reject-kyc/', requireRole(['admin']), rejectKYCByAdmin);
 
-router.post('/suspend-freelancer', requireRole(['admin']), adminController.suspendFreelancerByAdmin)
+router.post('/suspend-freelancer', requireRole(['admin']), suspendFreelancerByAdmin)
 
 router.get('/disputes', requireRole(['admin']), getAllDisputes);
 
