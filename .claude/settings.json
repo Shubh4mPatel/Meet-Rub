@@ -6,7 +6,17 @@
       "Bash(grep -r \"delivery_time\" /home/shubh4m/projects/Meet-Rub/backend --include=\"*.js\" ! -path \"*/node_modules/*\")",
       "mcp__code-review-graph__build_or_update_graph_tool",
       "mcp__code-review-graph__semantic_search_nodes_tool",
-      "Read(//temp/readonly/**)"
+      "Read(//temp/readonly/**)",
+      "Bash(python3 -c ':*)",
+      "Bash(python3 -c \"import openpyxl; print\\('openpyxl available'\\)\")",
+      "Bash(pip install:*)",
+      "Bash(curl -s \"https://data.finedgeapi.com/api/v1/financials/ITC?statement_type=s&statement_code=bs&period=annual&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s 'https://data.finedgeapi.com/api/v1/financial-ratios/ITC?statement_type=s&period=annual&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')",
+      "Bash(curl -s 'https://data.finedgeapi.com/api/v1/ratios/ITC?statement_type=s&ratio_type=pr&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')",
+      "Bash(curl -s 'https://data.finedgeapi.com/api/v1/annual-price-ratios/ITC?statement_type=s&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')",
+      "Bash(curl -s 'https://data.finedgeapi.com/api/v1/quote?symbol=ITC&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')",
+      "Bash(curl -s 'https://data.finedgeapi.com/api/v1/financials/ITC?statement_type=s&statement_code=pl&period=annual&token=tjjxxztbodn3w6xdjyiedmmys3nlwzsne6etwnuuqlgp3vu7xpjo7ybhus2p6obkhizeqkldc73odpi74arjg')"
     ]
   },
   "hooks": {

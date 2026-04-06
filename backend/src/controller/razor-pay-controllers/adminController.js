@@ -367,6 +367,147 @@ const suspendFreelancerByAdmin = async (req, res, next) =>  {
 }
 
 
+const addFeaturedFreelancer = async (req, res, next) => {
+  const { service_option_id, freelancer_id } = req.body;
+  const admin_id = req.user.roleWiseId;
+
+  if (!service_option_id || !freelancer_id) {
+    return next(new AppError('service_option_id and freelancer_id are required', 400));
+  }
+
+  try {
+    // Verify freelancer exists
+    const { rows: freelancerRows } = await query(
+      'SELECT freelancer_id FROM freelancer WHERE freelancer_id = $1',
+      [freelancer_id]
+    );
+    if (freelancerRows.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    // Verify service option exists
+    const { rows: serviceRows } = await query(
+      'SELECT id FROM service_options WHERE id = $1',
+      [service_option_id]
+    );
+    if (serviceRows.length === 0) {
+      return next(new AppError('Service option not found', 404));
+    }
+
+    // Check if already featured (active) for this service
+    const { rows: alreadyFeatured } = await query(
+      'SELECT id FROM featured_freelancers WHERE freelancer_id = $1 AND service_option_id = $2 AND is_active = true',
+      [freelancer_id, service_option_id]
+    );
+    if (alreadyFeatured.length > 0) {
+      return next(new AppError('Already featured for this service', 409));
+    }
+
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Count current active featured freelancers for this service
+      const { rows: countRows } = await client.query(
+        'SELECT COUNT(*) AS count FROM featured_freelancers WHERE service_option_id = $1 AND is_active = true',
+        [service_option_id]
+      );
+      const currentCount = parseInt(countRows[0].count, 10);
+
+      // If at max (5), deactivate the one at priority 5
+      if (currentCount >= 5) {
+        await client.query(
+          `UPDATE featured_freelancers
+           SET is_active = false, priority = NULL, unfeatured_at = NOW(), unfeatured_by = $2
+           WHERE service_option_id = $1 AND is_active = true AND priority = 5`,
+          [service_option_id, admin_id]
+        );
+      }
+
+      // Shift all remaining active priorities up by 1
+      await client.query(
+        'UPDATE featured_freelancers SET priority = priority + 1 WHERE service_option_id = $1 AND is_active = true',
+        [service_option_id]
+      );
+
+      // Insert new freelancer at priority 1
+      const { rows: inserted } = await client.query(
+        `INSERT INTO featured_freelancers (freelancer_id, service_option_id, priority, is_active, featured_by)
+         VALUES ($1, $2, 1, true, $3)
+         RETURNING id, freelancer_id, service_option_id, priority, featured_at`,
+        [freelancer_id, service_option_id, admin_id]
+      );
+
+      await client.query('COMMIT');
+
+      return res.status(201).json({
+        status: 'success',
+        message: 'Freelancer added to featured list',
+        data: inserted[0]
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Add featured freelancer error:', error);
+    return next(new AppError('Failed to add freelancer to featured list', 500));
+  }
+};
+
+const removeFeaturedFreelancer = async (req, res, next) => {
+  const { service_option_id, freelancer_id } = req.body;
+  const admin_id = req.user.roleWiseId;
+
+  if (!service_option_id || !freelancer_id) {
+    return next(new AppError('service_option_id and freelancer_id are required', 400));
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Deactivate the featured freelancer and return the old priority
+    const { rows: removed } = await client.query(
+      `UPDATE featured_freelancers
+       SET is_active = false, priority = NULL, unfeatured_at = NOW(), unfeatured_by = $3
+       WHERE freelancer_id = $2 AND service_option_id = $1 AND is_active = true
+       RETURNING priority AS old_priority`,
+      [service_option_id, freelancer_id, admin_id]
+    );
+
+    if (removed.length === 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError('Freelancer not featured for this service', 404));
+    }
+
+    const old_priority = removed[0].old_priority;
+
+    // Shift down all active freelancers with priority greater than the removed one
+    await client.query(
+      `UPDATE featured_freelancers
+       SET priority = priority - 1
+       WHERE service_option_id = $1 AND is_active = true AND priority > $2`,
+      [service_option_id, old_priority]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Freelancer removed from featured list'
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Remove featured freelancer error:', error);
+    return next(new AppError('Failed to remove freelancer from featured list', 500));
+  } finally {
+    client.release();
+  }
+};
+
 // Get all payout requests (status = REQUESTED) for admin review
 const getPayoutRequests = async (req, res, next) => {
   try {
@@ -430,5 +571,7 @@ module.exports = {
   updateCommission,
   approveKYCByAdmin,
   rejectKYCByAdmin,
-  suspendFreelancerByAdmin
+  suspendFreelancerByAdmin,
+  addFeaturedFreelancer,
+  removeFeaturedFreelancer
 }

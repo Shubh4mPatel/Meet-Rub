@@ -1117,3 +1117,40 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.wishlist
     OWNER to postgres;
+
+CREATE TABLE IF NOT EXISTS public.featured_freelancers
+(
+    id SERIAL PRIMARY KEY,
+    freelancer_id INTEGER NOT NULL,
+    service_option_id INTEGER NOT NULL,
+    priority INTEGER,  -- 1-5 when active, NULL when inactive
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    featured_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    unfeatured_at TIMESTAMP WITHOUT TIME ZONE,  -- when removed/bumped
+    featured_by INTEGER,
+    unfeatured_by INTEGER,  -- admin who removed
+
+    CONSTRAINT fk_featured_freelancer FOREIGN KEY (freelancer_id)
+        REFERENCES public.freelancer (freelancer_id) ON DELETE CASCADE,
+    CONSTRAINT fk_featured_service_option FOREIGN KEY (service_option_id)
+        REFERENCES public.service_options (id) ON DELETE CASCADE,
+    CONSTRAINT fk_featured_by FOREIGN KEY (featured_by)
+        REFERENCES public.admin (id) ON DELETE SET NULL,
+    CONSTRAINT fk_unfeatured_by FOREIGN KEY (unfeatured_by)
+        REFERENCES public.admin (id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_priority CHECK (priority BETWEEN 1 AND 5)
+);
+
+-- Freelancer can only be ACTIVELY featured once per service
+CREATE UNIQUE INDEX uq_active_freelancer_per_service
+    ON featured_freelancers (freelancer_id, service_option_id)
+    WHERE is_active = true;
+
+-- Only one freelancer per priority slot per service (among active)
+CREATE UNIQUE INDEX uq_active_priority_per_service
+    ON featured_freelancers (service_option_id, priority)
+    WHERE is_active = true;
+
+CREATE INDEX idx_featured_active ON featured_freelancers (service_option_id, priority)
+    WHERE is_active = true;
