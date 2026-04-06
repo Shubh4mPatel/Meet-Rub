@@ -124,19 +124,19 @@ const getTransaction = async (req, res, next) => {
 // Get user's transactions
 const getMyTransactions = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const userType = req.user.user_type;
+    const roleWiseId = req.user.roleWiseId;
+    const role = req.user.role;
 
     let query;
-    if (userType === 'CLIENT') {
+    if (role === 'creator') {
       query = 'SELECT * FROM transactions WHERE creator_id = $1 ORDER BY created_at DESC';
-    } else if (userType === 'FREELANCER') {
+    } else if (role === 'freelancer') {
       query = 'SELECT * FROM transactions WHERE freelancer_id = $1 ORDER BY created_at DESC';
     } else {
       return next(new AppError('Invalid user type', 400));
     }
 
-    const { rows: transactions } = await db.query(query, [userId]);
+    const { rows: transactions } = await db.query(query, [roleWiseId]);
 
     res.json(transactions);
   } catch (error) {
