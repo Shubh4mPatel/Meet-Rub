@@ -8,12 +8,14 @@ class PaymentService {
   // Calculate commission
   calculateCommission(amount) {
     const commissionPercentage = parseFloat(process.env.PLATFORM_COMMISSION_PERCENTAGE || 20);
-    const commission = (amount * commissionPercentage) / 100;
+    const amountNum = parseFloat(amount);
+    const commission = (amountNum * commissionPercentage) / 100;
     const gst = parseFloat(((commission * 18) / 100).toFixed(2));
-    const freelancerAmount = amount - commission;
-    const totalAmount = parseFloat((amount + gst).toFixed(2));
+    const freelancerAmount = amountNum - commission;
+    const totalAmount = parseFloat((amountNum + gst).toFixed(2));
 
     return {
+      serviceAmount: amountNum,
       totalAmount,
       platformCommission: parseFloat(commission.toFixed(2)),
       platformCommissionPercentage: commissionPercentage,
