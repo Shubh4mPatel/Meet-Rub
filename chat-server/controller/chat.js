@@ -79,6 +79,14 @@ const chatController = (io) => {
         // Create or get chat room from database
         await chatModel.getOrCreateChatRoom(userId, recipientId);
 
+        // Leave all previously joined chat rooms before joining the new one.
+        // socket.rooms always contains the socket's own ID room — skip that.
+        for (const room of socket.rooms) {
+          if (room !== socket.id) {
+            socket.leave(room);
+          }
+        }
+
         socket.join(chatRoomId);
 
         // Store active chat room in Redis
