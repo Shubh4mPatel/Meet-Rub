@@ -1,38 +1,6 @@
 const paymentService = require('../../razor-pay-services/paymentService');
-const {pool:db} = require('../../../config/dbConfig');
+const { pool: db } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
-
-// Create payment from wallet
-const payFromWallet = async (req, res, next) => {
-  try {
-    const { project_id } = req.body;
-    const clientId = req.user.roleWiseId;
-
-    if (!project_id) {
-      return next(new AppError('Project ID is required', 400));
-    }
-
-    // Verify project belongs to client
-    const { rows: projects } = await db.query(
-      'SELECT * FROM projects WHERE id = $1 AND creator_id = $2',
-      [project_id, clientId]
-    );
-
-    if (projects.length === 0) {
-      return next(new AppError('Project not found', 404));
-    }
-
-    const result = await paymentService.createWalletPayment(clientId, project_id);
-
-    res.json({
-      message: 'Payment successful. Funds held in escrow.',
-      transaction: result
-    });
-  } catch (error) {
-    console.error('Pay from wallet error:', error);
-    return next(new AppError(error.message, 500));
-  }
-}
 
 // Create Razorpay order for service payment
 const createPaymentOrder = async (req, res, next) => {
@@ -109,8 +77,8 @@ const getTransaction = async (req, res, next) => {
 
     // Check if user is involved in transaction
     if (transaction.creator_id !== userId &&
-        transaction.freelancer_id !== userId &&
-        req.user.user_type !== 'ADMIN') {
+      transaction.freelancer_id !== userId &&
+      req.user.user_type !== 'ADMIN') {
       return next(new AppError('Access denied', 403));
     }
 
@@ -146,7 +114,6 @@ const getMyTransactions = async (req, res, next) => {
 }
 
 module.exports = {
-  payFromWallet,
   createPaymentOrder,
   verifyPayment,
   getTransaction,

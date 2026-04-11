@@ -6,7 +6,6 @@ const adminRoutes = require('./adminRoutes')
 const freelancerRoutes = require('./freelancerRoutes')
 const creatorRoutes = require('./creatorRoutes')
 const paymentRoutes = require('./paymentRoutes');
-const walletRoutes = require('./walletRoutes');
 const projectRoutes = require('./projectRoutes');
 const webhookRoutes = require('./webhookRoutes');
 const publicRoutes = require('./publicRoutes')
@@ -19,7 +18,6 @@ router.use('/admin', authenticateUser, requireRole(['admin']), adminRoutes)
 router.use('/freelancer', freelancerRoutes)
 router.use('/creator', creatorRoutes)
 router.use('/payments', authenticateUser, paymentRoutes);
-router.use('/wallet', authenticateUser, walletRoutes);
 router.use('/projects', authenticateUser, projectRoutes);
 router.use('/webhooks', webhookRoutes);
 router.use('/public', publicRoutes);
