@@ -1,13 +1,13 @@
 const crypto = require('crypto');
-const {pool:db} = require('../../../config/dbConfig');
+const { pool: db } = require('../../../config/dbConfig');
 const payoutService = require('../../razor-pay-services/payoutService');
 const AppError = require("../../../utils/appError");
 
 // Verify Razorpay webhook signature
-const verifyWebhookSignature = (body, signature) => {
+const verifyWebhookSignature = (rawBody, signature) => {
   const expectedSignature = crypto
     .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
-    .update(JSON.stringify(body))
+    .update(rawBody)
     .digest('hex');
 
   return expectedSignature === signature;
@@ -119,19 +119,23 @@ const handleWebhook = async (req, res, next) => {
       return next(new AppError('Missing signature', 400));
     }
 
-    // Verify signature
-    if (!verifyWebhookSignature(req.body, signature)) {
+    const rawBody = req.body; // Buffer from express.raw()
+
+    // Verify signature on raw bytes BEFORE parsing
+    if (!verifyWebhookSignature(rawBody, signature)) {
       return next(new AppError('Invalid signature', 400));
     }
 
-    const event = req.body.event;
-    const payload = req.body.payload;
+    // Parse body AFTER signature verification
+    const body = JSON.parse(rawBody.toString('utf8'));
+    const event = body.event;
+    const payload = body.payload;
 
     // Log webhook
     await db.query(
       `INSERT INTO webhook_logs (event_type, razorpay_event_id, payload)
        VALUES ($1, $2, $3)`,
-      [event, req.body.id || null, JSON.stringify(req.body)]
+      [event, body.id || null, rawBody.toString('utf8')]
     );
 
     // Handle different event types

@@ -133,17 +133,27 @@ class PaymentService {
 
       const order = orders[0];
 
+      // Idempotency check: if order is already PAID, return success
+      if (order.status === 'PAID') {
+        await client.query('COMMIT');
+        return { success: true, transactionId: order.reference_id };
+      }
+
       await client.query(
         'UPDATE razorpay_orders SET status = $1, updated_at = NOW() WHERE id = $2',
         ['PAID', order.id]
       );
 
-      await client.query(
+      const { rowCount } = await client.query(
         `UPDATE transactions
         SET status = 'HELD', razorpay_payment_id = $1, held_at = NOW()
-        WHERE id = $2`,
+        WHERE id = $2 AND status = 'INITIATED'`,
         [paymentId, order.reference_id]
       );
+
+      if (rowCount === 0) {
+        throw new Error('Transaction already processed or not in valid state');
+      }
 
       await client.query('COMMIT');
       return { success: true, transactionId: order.reference_id };

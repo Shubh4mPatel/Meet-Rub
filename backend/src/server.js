@@ -65,6 +65,11 @@ app.use(cors(corsOptions));
 // Make io and socket helpers available to routes
 // app.set("io", io);
 // app.set("socketHelpers", socketHelpers);
+
+// Mount webhook routes BEFORE express.json() to preserve raw body for HMAC verification
+const webhookRoutes = require('./routes/webhookRoutes');
+app.use('/api/v1/webhooks', express.raw({ type: 'application/json' }), webhookRoutes);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // app.use(helmet());
