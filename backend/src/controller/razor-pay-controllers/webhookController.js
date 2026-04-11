@@ -4,9 +4,16 @@ const payoutService = require('../../razor-pay-services/payoutService');
 const AppError = require("../../../utils/appError");
 
 // Verify Razorpay webhook signature
-const verifyWebhookSignature = (rawBody, signature) => {
+// Payout events come from Razorpay X and use RAZORPAY_X_WEBHOOK_SECRET
+const PAYOUT_EVENTS = new Set(['payout.processed', 'payout.failed', 'payout.reversed']);
+
+const verifyWebhookSignature = (rawBody, signature, event) => {
+  const secret = PAYOUT_EVENTS.has(event)
+    ? process.env.RAZORPAY_X_WEBHOOK_SECRET
+    : process.env.RAZORPAY_WEBHOOK_SECRET;
+
   const expectedSignature = crypto
-    .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+    .createHmac('sha256', secret)
     .update(rawBody)
     .digest('hex');
 
@@ -121,14 +128,16 @@ const handleWebhook = async (req, res, next) => {
 
     const rawBody = req.body; // Buffer from express.raw()
 
-    // Verify signature on raw bytes BEFORE parsing
-    if (!verifyWebhookSignature(rawBody, signature)) {
+    // Parse event type first (needed to pick the right webhook secret)
+    const parsedForEvent = JSON.parse(rawBody.toString('utf8'));
+    const event = parsedForEvent.event;
+
+    // Verify signature on raw bytes BEFORE any further processing
+    if (!verifyWebhookSignature(rawBody, signature, event)) {
       return next(new AppError('Invalid signature', 400));
     }
 
-    // Parse body AFTER signature verification
-    const body = JSON.parse(rawBody.toString('utf8'));
-    const event = body.event;
+    const body = parsedForEvent;
     const payload = body.payload;
 
     // Log webhook
