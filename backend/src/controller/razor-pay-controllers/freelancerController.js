@@ -1,4 +1,4 @@
-const {pool:db} = require('../../../config/dbConfig');
+const { pool: db } = require('../../../config/dbConfig');
 const payoutService = require('../../razor-pay-services/payoutService');
 const AppError = require("../../../utils/appError");
 
@@ -32,7 +32,7 @@ const addBankAccount = async (req, res, next) => {
             verification_status = 'PENDING', updated_at = NOW()
         WHERE user_id = $6`,
         [bank_account_name, bank_account_number, bank_ifsc_code,
-         bank_name, upi_id, freelancerId]
+          bank_name, upi_id, freelancerId]
       );
       result = { message: 'Bank account updated successfully' };
     } else {
@@ -43,7 +43,7 @@ const addBankAccount = async (req, res, next) => {
         VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
         RETURNING id`,
         [freelancerId, bank_account_name, bank_account_number,
-         bank_ifsc_code, bank_name, upi_id]
+          bank_ifsc_code, bank_name, upi_id]
       );
       result = {
         message: 'Bank account added successfully',
@@ -181,8 +181,7 @@ const getEarningsBalance = async (req, res, next) => {
 
 // Request payout (partial amount allowed)
 const requestPayout = async (req, res, next) => {
-  const freelancerId = req.user.roleWiseId;   // freelancer.freelancer_id
-  const freelancerUserId = req.user.user_id;  // users.id
+  const freelancerId = req.user.user_id; // Standardize on users.id for payouts.freelancer_id
   const { amount } = req.body;
 
   if (!amount || isNaN(amount)) {
@@ -201,7 +200,7 @@ const requestPayout = async (req, res, next) => {
 
     // Get freelancer with balance (locked)
     const { rows: freelancers } = await client.query(
-      `SELECT freelancer_id, earnings_balance, verification_status FROM freelancer WHERE freelancer_id = $1 FOR UPDATE`,
+      `SELECT user_id AS freelancer_id, earnings_balance, verification_status FROM freelancer WHERE user_id = $1 FOR UPDATE`,
       [freelancerId]
     );
 
@@ -225,7 +224,7 @@ const requestPayout = async (req, res, next) => {
     // Check no active payout request already exists
     const { rows: activePayout } = await client.query(
       `SELECT id FROM payouts WHERE freelancer_id = $1 AND status IN ('REQUESTED', 'QUEUED', 'PENDING', 'PROCESSING')`,
-      [freelancerUserId]
+      [freelancerId]
     );
 
     if (activePayout.length > 0) {
@@ -235,7 +234,7 @@ const requestPayout = async (req, res, next) => {
 
     // Deduct from earnings_balance
     await client.query(
-      `UPDATE freelancer SET earnings_balance = earnings_balance - $1 WHERE freelancer_id = $2`,
+      `UPDATE freelancer SET earnings_balance = earnings_balance - $1 WHERE user_id = $2`,
       [requestedAmount, freelancerId]
     );
 
@@ -244,7 +243,7 @@ const requestPayout = async (req, res, next) => {
       `INSERT INTO payouts (freelancer_id, amount, currency, status, requested_at)
        VALUES ($1, $2, $3, 'REQUESTED', NOW())
        RETURNING id`,
-      [freelancerUserId, requestedAmount, process.env.CURRENCY || 'INR']
+      [freelancerId, requestedAmount, process.env.CURRENCY || 'INR']
     );
 
     await client.query('COMMIT');

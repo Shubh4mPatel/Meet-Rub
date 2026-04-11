@@ -6,20 +6,20 @@ const crypto = require('crypto');
 class PaymentService {
   // Calculate commission
   calculateCommission(amount) {
-    const commissionPercentage = parseFloat(process.env.PLATFORM_COMMISSION_PERCENTAGE || 20);
-    const amountNum = parseFloat(amount);
-    const commission = (amountNum * commissionPercentage) / 100;
-    const gst = parseFloat(((commission * 18) / 100).toFixed(2));
-    const freelancerAmount = amountNum - commission;
-    const totalAmount = parseFloat((amountNum + gst).toFixed(2));
+    const commissionPercentage = parseInt(process.env.PLATFORM_COMMISSION_PERCENTAGE || 20, 10);
+    const amountInPaise = Math.round(parseFloat(amount) * 100);
+    const commission = Math.round((amountInPaise * commissionPercentage) / 100);
+    const gst = Math.round((commission * 18) / 100);
+    const freelancerAmount = amountInPaise - commission;
+    const totalAmount = amountInPaise + gst;
 
     return {
-      serviceAmount: amountNum,
-      totalAmount,
-      platformCommission: parseFloat(commission.toFixed(2)),
+      serviceAmount: amountInPaise / 100,
+      totalAmount: totalAmount / 100,
+      platformCommission: commission / 100,
       platformCommissionPercentage: commissionPercentage,
-      freelancerAmount: parseFloat(freelancerAmount.toFixed(2)),
-      gst
+      freelancerAmount: freelancerAmount / 100,
+      gst: gst / 100
     };
   }
 

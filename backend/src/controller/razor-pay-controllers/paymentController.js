@@ -78,7 +78,7 @@ const getTransaction = async (req, res, next) => {
     // Check if user is involved in transaction
     if (transaction.creator_id !== userId &&
       transaction.freelancer_id !== userId &&
-      req.user.user_type !== 'ADMIN') {
+      req.user.role !== 'admin') {
       return next(new AppError('Access denied', 403));
     }
 
