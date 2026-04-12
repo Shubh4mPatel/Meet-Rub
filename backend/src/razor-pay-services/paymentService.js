@@ -1,7 +1,8 @@
 const { pool: db } = require('../../config/dbConfig');
-
 const razorpay = require('../../config/razorpay');
 const crypto = require('crypto');
+const { getLogger } = require('../../utils/logger');
+const logger = getLogger('payment-service');
 
 class PaymentService {
   // Calculate commission
@@ -151,16 +152,34 @@ class PaymentService {
         ['PAID', order.id]
       );
 
+      logger.info(`[processServicePayment] Updating transaction id=${order.reference_id} to HELD`);
       const { rowCount } = await client.query(
         `UPDATE transactions
         SET status = 'HELD', razorpay_payment_id = $1, held_at = NOW()
         WHERE id = $2 AND status = 'INITIATED'`,
         [paymentId, order.reference_id]
       );
+      logger.info(`[processServicePayment] Transaction update rowCount=${rowCount}`);
 
       if (rowCount === 0) {
         throw new Error('Transaction already processed or not in valid state');
       }
+
+      // Mark the linked custom package as paid
+      logger.info(`[processServicePayment] Updating custom_packages to paid for transaction id=${order.reference_id}`);
+      const { rowCount: cpRowCount, rows: cpRows } = await client.query(
+        `UPDATE custom_packages cp
+         SET status = 'paid'
+         FROM transactions t
+         JOIN projects p ON t.project_id = p.id
+         WHERE t.id = $1
+           AND cp.creator_id = p.creator_id
+           AND cp.freelancer_id = p.freelancer_id
+           AND cp.status = 'accepted'
+         RETURNING cp.id, cp.status, cp.creator_id, cp.freelancer_id`,
+        [order.reference_id]
+      );
+      logger.info(`[processServicePayment] custom_packages update rowCount=${cpRowCount}, rows=${JSON.stringify(cpRows)}`);
 
       await client.query('COMMIT');
       return { success: true, transactionId: order.reference_id };
