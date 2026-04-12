@@ -153,7 +153,9 @@ const chatModel = {
     cp.service_type as cp_service_type,
     cp.initiator_role as cp_initiator_role,
     cp.expires_at as cp_expires_at,
-    cp.created_at as cp_created_at
+    cp.created_at as cp_created_at,
+    cp_proj.id AS cp_project_id,
+    cp_proj.status AS cp_project_status
 FROM messages m
 LEFT JOIN freelancer f ON m.sender_id = f.user_id
 LEFT JOIN creators c ON m.sender_id = c.user_id
@@ -161,6 +163,14 @@ LEFT JOIN deadline_extension_requested der ON m.deadline_extension_id = der.id
 LEFT JOIN projects dp ON der.project_id = dp.id
 LEFT JOIN services ds ON dp.service_id = ds.id
 LEFT JOIN custom_packages cp ON m.custom_package_id = cp.id
+LEFT JOIN LATERAL (
+  SELECT id, status
+  FROM projects
+  WHERE creator_id = cp.creator_id
+    AND freelancer_id = cp.freelancer_id
+  ORDER BY created_at DESC
+  LIMIT 1
+) cp_proj ON cp.id IS NOT NULL
 WHERE m.room_id = $1
 ORDER BY m.created_at DESC
 LIMIT $2 OFFSET $3;
@@ -229,6 +239,8 @@ LIMIT $2 OFFSET $3;
               initiator_role: row.cp_initiator_role,
               expires_at: row.cp_expires_at,
               created_at: row.cp_created_at,
+              project_id: row.cp_project_id || null,
+              project_status: row.cp_project_status || null,
             }
           : null,
       }));

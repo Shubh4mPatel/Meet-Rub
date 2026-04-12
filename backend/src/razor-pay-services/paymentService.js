@@ -41,7 +41,10 @@ class PaymentService {
       await client.query('BEGIN');
 
       const { rows: projects } = await client.query(
-        'SELECT * FROM projects WHERE id = $1 AND creator_id = $2',
+        `SELECT p.*, so.service_name
+         FROM projects p
+         LEFT JOIN service_options so ON p.service_id = so.id
+         WHERE p.id = $1 AND p.creator_id = $2`,
         [projectId, clientId]
       );
 
@@ -80,7 +83,11 @@ class PaymentService {
         notes: {
           transaction_id: transactionId,
           project_id: projectId,
-          client_id: clientId
+          client_id: clientId,
+          service_charge: String(Math.round(amounts.serviceAmount * 100)),
+          gst_amount: String(Math.round(amounts.gst * 100)),
+          gst_percentage: '18',
+          description: project.service_name ? `Payment for ${project.service_name}` : `Payment for project ${projectId}`
         }
       };
 
