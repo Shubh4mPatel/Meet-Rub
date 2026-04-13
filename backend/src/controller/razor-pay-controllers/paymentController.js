@@ -1,6 +1,8 @@
 const paymentService = require('../../razor-pay-services/paymentService');
 const { pool: db } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
+const { getLogger } = require('../../../utils/logger');
+const logger = getLogger('payment-controller');
 
 // Create Razorpay order for service payment
 const createPaymentOrder = async (req, res, next) => {
@@ -43,22 +45,27 @@ const verifyPayment = async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
+    logger.info(`[verifyPayment] Received verify request from user_id=${req.user.user_id} role=${req.user.role} order_id=${razorpay_order_id} payment_id=${razorpay_payment_id}`);
+
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      logger.warn(`[verifyPayment] Missing payment details - order_id=${razorpay_order_id} payment_id=${razorpay_payment_id} signature_present=${!!razorpay_signature}`);
       return next(new AppError('Missing payment details', 400));
     }
 
+    logger.info(`[verifyPayment] Calling processServicePayment for order_id=${razorpay_order_id}`);
     const result = await paymentService.processServicePayment(
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature
     );
+    logger.info(`[verifyPayment] Payment verified successfully - transaction_id=${result.transactionId} order_id=${razorpay_order_id} payment_id=${razorpay_payment_id}`);
 
     res.json({
       message: 'Payment verified. Funds held in escrow.',
       transaction_id: result.transactionId
     });
   } catch (error) {
-    console.error('Verify payment error:', error);
+    logger.error(`[verifyPayment] Failed - order_id=${req.body?.razorpay_order_id} payment_id=${req.body?.razorpay_payment_id} error=${error.message}`);
     return next(new AppError(error.message, 500));
   }
 }
