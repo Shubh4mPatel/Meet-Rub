@@ -41,6 +41,7 @@ class PaymentService {
     try {
       await client.query('BEGIN');
 
+      logger.info(`[createServicePaymentOrder] Looking up project_id=${projectId} creator_id(clientId)=${clientId}`);
       const { rows: projects } = await client.query(
         `SELECT p.*, so.service_name
          FROM projects p
@@ -48,6 +49,7 @@ class PaymentService {
          WHERE p.id = $1 AND p.creator_id = $2`,
         [projectId, clientId]
       );
+      logger.info(`[createServicePaymentOrder] Project query result: ${JSON.stringify(projects)}`);
 
       if (projects.length === 0) {
         throw new Error('Project not found');
