@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS public.custom_packages
     reason_for_rejection text COLLATE pg_catalog."default",
     delivery_days integer,
     delivery_time integer,
+    updated_at timestamp without time zone,
     CONSTRAINT custom_packages_pkey PRIMARY KEY (id),
     CONSTRAINT custom_packages_creator_fkey FOREIGN KEY (freelancer_id)
         REFERENCES public.freelancer (freelancer_id) MATCH SIMPLE
