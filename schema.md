@@ -369,6 +369,7 @@ CREATE TABLE IF NOT EXISTS public.freelancer
     reason_for_suspension text COLLATE pg_catalog."default",
     user_name character varying(255) COLLATE pg_catalog."default",
     worked_with integer DEFAULT 0,
+    earnings_balance numeric(15,2) DEFAULT 0.00, -- Pooled earnings from approved transactions, available for payout
     CONSTRAINT influencer_pkey PRIMARY KEY (freelancer_id),
     CONSTRAINT unique_freelancer_user_name UNIQUE (user_name),
     CONSTRAINT influencer_user_id_fkey FOREIGN KEY (user_id)
@@ -555,23 +556,29 @@ ALTER TABLE IF EXISTS public.otp_tokens
 
 -- DROP TABLE IF EXISTS public.payouts;
 
+-- Payouts Table: Supports Pooled Earnings Model
+-- Freelancers accumulate earnings_balance from multiple approved transactions
+-- They request partial/full payouts from their pooled balance
 CREATE TABLE IF NOT EXISTS public.payouts
 (
     id integer NOT NULL DEFAULT nextval('payouts_id_seq'::regclass),
-    transaction_id integer NOT NULL,
+    transaction_id integer, -- NULLABLE: Payout is from pooled earnings, not tied to single transaction
     freelancer_id integer NOT NULL,
-    freelancer_account_id integer NOT NULL,
+    freelancer_account_id integer, -- NULLABLE: Set during admin approval
     amount numeric(15,2) NOT NULL,
     currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
     razorpay_payout_id character varying(255) COLLATE pg_catalog."default",
     razorpay_fund_account_id character varying(255) COLLATE pg_catalog."default",
-    status character varying(20) COLLATE pg_catalog."default" DEFAULT 'QUEUED'::character varying,
+    status character varying(20) COLLATE pg_catalog."default" DEFAULT 'REQUESTED'::character varying,
     utr character varying(255) COLLATE pg_catalog."default",
     mode character varying(10) COLLATE pg_catalog."default" DEFAULT 'IMPS'::character varying,
     purpose character varying(255) COLLATE pg_catalog."default" DEFAULT 'payout'::character varying,
     reference_id character varying(255) COLLATE pg_catalog."default",
     narration character varying(255) COLLATE pg_catalog."default",
     failure_reason text COLLATE pg_catalog."default",
+    requested_at timestamp with time zone, -- When freelancer requested payout
+    approved_at timestamp with time zone, -- When admin approved payout
+    approved_by integer, -- Admin who approved
     initiated_at timestamp with time zone,
     processed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now(),
@@ -589,7 +596,7 @@ CREATE TABLE IF NOT EXISTS public.payouts
         REFERENCES public.transactions (id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION,
-    CONSTRAINT payouts_status_check CHECK (status::text = ANY (ARRAY['QUEUED'::character varying, 'PENDING'::character varying, 'PROCESSING'::character varying, 'PROCESSED'::character varying, 'REVERSED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying]::text[])),
+    CONSTRAINT payouts_status_check CHECK (status::text = ANY (ARRAY['REQUESTED'::character varying, 'QUEUED'::character varying, 'PENDING'::character varying, 'PROCESSING'::character varying, 'PROCESSED'::character varying, 'REVERSED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying]::text[])),
     CONSTRAINT payouts_mode_check CHECK (mode::text = ANY (ARRAY['IMPS'::character varying, 'NEFT'::character varying, 'RTGS'::character varying, 'UPI'::character varying]::text[]))
 )
 
