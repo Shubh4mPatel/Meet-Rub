@@ -6,6 +6,7 @@ const { logger } = require('../../../utils/logger');
 const { addApiToRedis } = require("../../../utils/queueSender");
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 function generateTokens(user, role, isMobile = false) {
   logger.info("Generating tokens for user:", user.email, "Is Mobile:", isMobile);
 
@@ -30,6 +31,7 @@ function generateTokens(user, role, isMobile = false) {
 
   return { accessToken, refreshToken };
 }
+
 const googleLoginUser = async (req, res, next) => {
   const clientRealIp = req.headers["custom-real-ip"] ||
     req.headers["x-forwarded-for"]?.split(",")[0] ||
@@ -131,6 +133,7 @@ const googleLoginUser = async (req, res, next) => {
     return next(new AppError("Invalid Google token", 401));
   }
 };
+
 async function getGeoLocationDetails(ipAddress) {
   let response = await fetch(`https://api.ip2location.io/?ip=${ipAddress}&key=${process.env.NEXT_IP_2_LOCATION_API_KEY}`);
   response = await response.json();

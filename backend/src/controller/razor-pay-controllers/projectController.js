@@ -277,7 +277,7 @@ const updateProjectStatus = async (req, res, next) => {
       return next(new AppError('Status is required', 400));
     }
 
-    const validStatuses = ['CREATED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+    const validStatuses = ['CREATED', 'IN_PROGRESS', 'COMPLETED'];
     if (!validStatuses.includes(status)) {
       return next(new AppError('Invalid status', 400));
     }
@@ -298,9 +298,6 @@ const updateProjectStatus = async (req, res, next) => {
     if (req.user.user_type !== 'ADMIN') {
       if (status === 'COMPLETED' && project.freelancer_id !== userId) {
         return next(new AppError('Only freelancer can mark project as completed', 403));
-      }
-      if (status === 'CANCELLED' && project.creator_id !== userId) {
-        return next(new AppError('Only client can cancel project', 403));
       }
     }
 
@@ -388,16 +385,33 @@ const getAllProjects = async (req, res, next) => {
     const endDate      = req.query.endDate?.trim()   || null;
     const service      = req.query.service?.trim()   || null;
 
-    const PROJECT_STATUSES = new Set(['CREATED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'DISPUTE']);
-    const isProjectStatus = statusFilter ? PROJECT_STATUSES.has(statusFilter.toUpperCase()) : false;
+    const PROJECT_STATUSES  = new Set(['CREATED', 'IN_PROGRESS', 'COMPLETED', 'DISPUTE']);
+    const PACKAGE_STATUSES  = new Set(['PENDING', 'REJECTED']);
+
+    let normalizedStatus = null;
+    let isProjectStatus  = false;
+    let isPackageStatus  = false;
+
+    if (statusFilter) {
+      const upper = statusFilter.toUpperCase();
+      if (PROJECT_STATUSES.has(upper)) {
+        normalizedStatus = upper;           // stored as UPPERCASE in projects table
+        isProjectStatus  = true;
+      } else if (PACKAGE_STATUSES.has(upper)) {
+        normalizedStatus = upper.toLowerCase(); // stored as lowercase in custom_packages table
+        isPackageStatus  = true;
+      } else {
+        return next(new AppError(`Invalid status. Allowed values: CREATED, IN_PROGRESS, COMPLETED, DISPUTE, PENDING, REJECTED`, 400));
+      }
+    }
 
     const params = [];
     let p = 1;
 
     // Status — routed to correct table only
-    const projectStatusWhere = (statusFilter && isProjectStatus)  ? `AND p.status = $${p++}`   : '';
-    const packageStatusWhere = (statusFilter && !isProjectStatus) ? `AND cp2.status = $${p++}` : '';
-    if (statusFilter) params.push(statusFilter);
+    const projectStatusWhere = isProjectStatus ? `AND p.status = $${p++}`   : '';
+    const packageStatusWhere = isPackageStatus ? `AND cp2.status = $${p++}` : '';
+    if (normalizedStatus) params.push(normalizedStatus);
 
     // Search — applied to both sides using same param index
     let projectSearchWhere = '', packageSearchWhere = '';

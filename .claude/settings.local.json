@@ -5,5 +5,9 @@
       "Bash(find:*)",
       "Bash(ls -la /c/Users/Shubh/Meet-Rub/backend/*.js)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "code-review-graph"
+  ],
+  "enableAllProjectMcpServers": true
 }
