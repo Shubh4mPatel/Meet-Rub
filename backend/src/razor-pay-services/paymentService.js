@@ -143,10 +143,22 @@ class PaymentService {
 
       const order = orders[0];
 
-      // Idempotency check: if order is already PAID, return success
+      // Idempotency check: if order is already PAID, verify transaction is also HELD
       if (order.status === 'PAID') {
-        await client.query('COMMIT');
-        return { success: true, transactionId: order.reference_id };
+        logger.info(`[processServicePayment] Order ${orderId} already PAID, checking transaction status`);
+        const { rows: txCheck } = await client.query(
+          'SELECT id, status FROM transactions WHERE id = $1',
+          [order.reference_id]
+        );
+
+        if (txCheck.length > 0 && txCheck[0].status === 'HELD') {
+          logger.info(`[processServicePayment] Transaction ${order.reference_id} already HELD, returning success`);
+          await client.query('COMMIT');
+          return { success: true, transactionId: order.reference_id };
+        }
+
+        // Order is PAID but transaction is not HELD - this shouldn't happen but let's fix it
+        logger.warn(`[processServicePayment] Order PAID but transaction ${order.reference_id} is ${txCheck[0]?.status || 'NOT FOUND'}, will attempt to update`);
       }
 
       await client.query(
@@ -157,14 +169,27 @@ class PaymentService {
       logger.info(`[processServicePayment] Updating transaction id=${order.reference_id} to HELD`);
       const { rowCount } = await client.query(
         `UPDATE transactions
-        SET status = 'HELD', razorpay_payment_id = $1, held_at = NOW()
+        SET status = 'HELD', razorpay_payment_id = $1, held_at = NOW(), updated_at = NOW()
         WHERE id = $2 AND status = 'INITIATED'`,
         [paymentId, order.reference_id]
       );
       logger.info(`[processServicePayment] Transaction update rowCount=${rowCount}`);
 
       if (rowCount === 0) {
-        throw new Error('Transaction already processed or not in valid state');
+        // Check what status the transaction actually has
+        const { rows: txStatus } = await client.query(
+          'SELECT id, status, razorpay_payment_id FROM transactions WHERE id = $1',
+          [order.reference_id]
+        );
+
+        if (txStatus.length === 0) {
+          logger.error(`[processServicePayment] Transaction ${order.reference_id} not found!`);
+          throw new Error(`Transaction ${order.reference_id} not found`);
+        }
+
+        const currentStatus = txStatus[0].status;
+        logger.error(`[processServicePayment] Transaction ${order.reference_id} is in ${currentStatus} status, expected INITIATED`);
+        throw new Error(`Transaction ${order.reference_id} already processed (current status: ${currentStatus})`);
       }
 
       // Mark the linked custom package as paid
