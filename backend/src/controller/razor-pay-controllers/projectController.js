@@ -385,24 +385,31 @@ const getAllProjects = async (req, res, next) => {
     const endDate      = req.query.endDate?.trim()   || null;
     const service      = req.query.service?.trim()   || null;
 
-    const PROJECT_STATUSES  = new Set(['CREATED', 'IN_PROGRESS', 'COMPLETED', 'DISPUTE']);
-    const PACKAGE_STATUSES  = new Set(['PENDING', 'REJECTED']);
+    // Maps frontend-friendly labels → DB values
+    const STATUS_MAP = {
+      working      : { db: 'IN_PROGRESS', table: 'project' },
+      dispute      : { db: 'DISPUTE',     table: 'project' },
+      complete     : { db: 'COMPLETED',   table: 'project' },
+      req_rejected : { db: 'rejected',    table: 'package' },
+      requested    : { db: 'pending',     table: 'package' },
+      req_expired  : { db: 'expired',     table: 'package' },
+    };
 
     let normalizedStatus = null;
     let isProjectStatus  = false;
     let isPackageStatus  = false;
 
     if (statusFilter) {
-      const upper = statusFilter.toUpperCase();
-      if (PROJECT_STATUSES.has(upper)) {
-        normalizedStatus = upper;           // stored as UPPERCASE in projects table
-        isProjectStatus  = true;
-      } else if (PACKAGE_STATUSES.has(upper)) {
-        normalizedStatus = upper.toLowerCase(); // stored as lowercase in custom_packages table
-        isPackageStatus  = true;
-      } else {
-        return next(new AppError(`Invalid status. Allowed values: CREATED, IN_PROGRESS, COMPLETED, DISPUTE, PENDING, REJECTED`, 400));
+      const mapped = STATUS_MAP[statusFilter.toLowerCase()];
+      if (!mapped) {
+        return next(new AppError(
+          `Invalid status. Allowed values: working, dispute, complete, req_rejected, requested, req_expired`,
+          400
+        ));
       }
+      normalizedStatus = mapped.db;
+      isProjectStatus  = mapped.table === 'project';
+      isPackageStatus  = mapped.table === 'package';
     }
 
     const params = [];
@@ -548,7 +555,7 @@ const getAllProjects = async (req, res, next) => {
       JOIN creators  c2  ON cp2.creator_id   = c2.creator_id
       JOIN freelancer f2  ON cp2.freelancer_id = f2.freelancer_id
       LEFT JOIN services  s2  ON cp2.service_id  = s2.id
-      WHERE cp2.status IN ('pending', 'rejected')
+      WHERE cp2.status IN ('pending', 'rejected', 'expired')
         ${packageStatusWhere}
         ${packageSearchWhere}
         ${packageStartWhere}
