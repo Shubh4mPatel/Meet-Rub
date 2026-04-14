@@ -84,7 +84,7 @@ const handlePaymentCaptured = async (payload) => {
          RETURNING cp.id`,
         [order.reference_id]
       );
-      
+
       if (cpRowCount > 0) {
         logger.info(`[handlePaymentCaptured] ${cpRowCount} custom package(s) marked as paid for transaction ${order.reference_id}, IDs: ${cpRows.map(r => r.id).join(', ')}`);
         if (cpRowCount > 1) {

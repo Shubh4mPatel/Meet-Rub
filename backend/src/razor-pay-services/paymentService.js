@@ -211,7 +211,7 @@ class PaymentService {
         [order.reference_id]
       );
       logger.info(`[processServicePayment] custom_packages update rowCount=${cpRowCount}, rows=${JSON.stringify(cpRows)}`);
-      
+
       if (cpRowCount === 0) {
         logger.warn(`[processServicePayment] No custom_package found matching project criteria for transaction ${order.reference_id} - this may be a direct project without a custom package`);
       } else if (cpRowCount > 1) {
