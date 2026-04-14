@@ -224,8 +224,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
             `INSERT INTO freelancer
             (user_id, profile_title, gov_id_type, gov_id_url, first_name, last_name,
              date_of_birth, phone_number, created_at, updated_at, freelancer_full_name,
-             freelancer_email, gov_id_number, niche, verification_status,user_name)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14 ,'PENDING',$15)
+             freelancer_email, gov_id_number, niche, verification_status, user_name, interested_service)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'PENDING', $15, $16)
             RETURNING *`,
             [
               newUserResMeetRub[0].id,
@@ -243,20 +243,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
               govId,
               parsedNiche,
               userName,
+              parsedServiceOffered,
             ]
           );
-
-          for (const service of parsedServiceOffered) {
-            await client.query(
-              "INSERT INTO services (freelancer_id, service_name, created_at, updated_at) VALUES ($1, $2, $3, $4)",
-              [
-                freelancer[0].freelancer_id,
-                service,
-                currentTimestamp,
-                currentTimestamp,
-              ]
-            );
-          }
 
           // Add username to Redis before committing — rollback PG if Redis fails
           await redisClient.sAdd(USERNAMES_SET_KEY, userName);
