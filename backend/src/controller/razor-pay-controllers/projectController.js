@@ -415,9 +415,9 @@ const getAllProjects = async (req, res, next) => {
     const params = [];
     let p = 1;
 
-    // Status — routed to correct table only
-    const projectStatusWhere = isProjectStatus ? `AND p.status = $${p++}`   : '';
-    const packageStatusWhere = isPackageStatus ? `AND cp2.status = $${p++}` : '';
+    // Status — routed to correct table only; suppress the other side of the UNION entirely
+    const projectStatusWhere = isProjectStatus ? `AND p.status = $${p++}`   : (isPackageStatus ? 'AND 1=0' : '');
+    const packageStatusWhere = isPackageStatus ? `AND cp2.status = $${p++}` : (isProjectStatus ? 'AND 1=0' : '');
     if (normalizedStatus) params.push(normalizedStatus);
 
     // Search — applied to both sides using same param index
