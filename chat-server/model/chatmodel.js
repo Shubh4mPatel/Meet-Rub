@@ -478,7 +478,6 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     const query = `
       UPDATE custom_packages
       SET status = 'accepted',
-          expires_at = null,
           responded_at = NOW()
       WHERE id = $1
       RETURNING *
