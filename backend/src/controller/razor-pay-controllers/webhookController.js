@@ -68,20 +68,30 @@ const handlePaymentCaptured = async (payload) => {
       logger.info(`[handlePaymentCaptured] Transaction ${order.reference_id} updated to HELD via webhook`);
 
       // Mark the linked custom package as paid
-      const { rowCount: cpRowCount } = await client.query(
+      // Match on creator, freelancer, service, price, and units to ensure we update only the correct package
+      const { rowCount: cpRowCount, rows: cpRows } = await client.query(
         `UPDATE custom_packages cp
-         SET status = 'paid'
+         SET status = 'paid', updated_at = NOW()
          FROM transactions t
          JOIN projects p ON t.project_id = p.id
          WHERE t.id = $1
            AND cp.creator_id = p.creator_id
            AND cp.freelancer_id = p.freelancer_id
-           AND cp.status = 'accepted'`,
+           AND cp.status = 'accepted'
+           AND (cp.service_id = p.service_id OR (cp.service_id IS NULL AND p.service_id IS NULL))
+           AND cp.price = p.amount
+           AND (cp.units = p.number_of_units OR (cp.units IS NULL AND p.number_of_units IS NULL))
+         RETURNING cp.id`,
         [order.reference_id]
       );
-
+      
       if (cpRowCount > 0) {
-        logger.info(`[handlePaymentCaptured] Custom package marked as paid for transaction ${order.reference_id}`);
+        logger.info(`[handlePaymentCaptured] ${cpRowCount} custom package(s) marked as paid for transaction ${order.reference_id}, IDs: ${cpRows.map(r => r.id).join(', ')}`);
+        if (cpRowCount > 1) {
+          logger.warn(`[handlePaymentCaptured] Multiple custom_packages updated - this may indicate duplicate packages`);
+        }
+      } else {
+        logger.info(`[handlePaymentCaptured] No custom_package found matching project criteria - this may be a direct project`);
       }
     } else {
       logger.info(`[handlePaymentCaptured] Transaction ${order.reference_id} already processed or not in INITIATED state`);

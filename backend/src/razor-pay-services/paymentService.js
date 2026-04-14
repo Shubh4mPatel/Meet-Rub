@@ -193,21 +193,30 @@ class PaymentService {
       }
 
       // Mark the linked custom package as paid
+      // Match on creator, freelancer, service, price, and units to ensure we update only the correct package
       logger.info(`[processServicePayment] Updating custom_packages to paid for transaction id=${order.reference_id}`);
       const { rowCount: cpRowCount, rows: cpRows } = await client.query(
         `UPDATE custom_packages cp
-         SET status = 'paid'
+         SET status = 'paid', updated_at = NOW()
          FROM transactions t
          JOIN projects p ON t.project_id = p.id
          WHERE t.id = $1
            AND cp.creator_id = p.creator_id
            AND cp.freelancer_id = p.freelancer_id
            AND cp.status = 'accepted'
-         RETURNING cp.id, cp.status, cp.creator_id, cp.freelancer_id`,
+           AND (cp.service_id = p.service_id OR (cp.service_id IS NULL AND p.service_id IS NULL))
+           AND cp.price = p.amount
+           AND (cp.units = p.number_of_units OR (cp.units IS NULL AND p.number_of_units IS NULL))
+         RETURNING cp.id, cp.status, cp.creator_id, cp.freelancer_id, cp.price`,
         [order.reference_id]
       );
       logger.info(`[processServicePayment] custom_packages update rowCount=${cpRowCount}, rows=${JSON.stringify(cpRows)}`);
-
+      
+      if (cpRowCount === 0) {
+        logger.warn(`[processServicePayment] No custom_package found matching project criteria for transaction ${order.reference_id} - this may be a direct project without a custom package`);
+      } else if (cpRowCount > 1) {
+        logger.warn(`[processServicePayment] Multiple custom_packages (${cpRowCount}) updated to paid for transaction ${order.reference_id} - this may indicate duplicate packages`);
+      }
       await client.query('COMMIT');
       return { success: true, transactionId: order.reference_id };
     } catch (error) {
