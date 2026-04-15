@@ -70,9 +70,10 @@ const getProject = async (req, res, next) => {
         p.created_at, p.updated_at, p.completed_at, p.end_date,
         p.creator_id, p.freelancer_id, p.service_id,
         s.service_name,
-        c.full_name        AS creator_name,
-        c.profile_image_url AS creator_avatar,
-        f.freelancer_full_name AS freelancer_name
+        c.full_name          AS creator_name,
+        c.profile_image_url  AS creator_avatar,
+        f.freelancer_full_name AS freelancer_name,
+        f.profile_image_url  AS freelancer_avatar
        FROM projects p
        JOIN creators c   ON p.creator_id   = c.creator_id
        JOIN freelancer f ON p.freelancer_id = f.freelancer_id
@@ -136,6 +137,14 @@ const getProject = async (req, res, next) => {
       const avatarBucket = avatarParts[0];
       const avatarObject = avatarParts.slice(1).join('/');
       project.creator_avatar = await createPresignedUrl(avatarBucket, avatarObject, 4 * 60 * 60).catch(() => project.creator_avatar);
+    }
+
+    // Generate presigned URL for freelancer avatar
+    if (project.freelancer_avatar) {
+      const avatarParts = project.freelancer_avatar.split('/');
+      const avatarBucket = avatarParts[0];
+      const avatarObject = avatarParts.slice(1).join('/');
+      project.freelancer_avatar = await createPresignedUrl(avatarBucket, avatarObject, 4 * 60 * 60).catch(() => project.freelancer_avatar);
     }
 
     res.status(200).json({

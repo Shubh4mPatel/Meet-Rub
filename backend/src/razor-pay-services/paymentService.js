@@ -217,6 +217,20 @@ class PaymentService {
       } else if (cpRowCount > 1) {
         logger.warn(`[processServicePayment] Multiple custom_packages (${cpRowCount}) updated to paid for transaction ${order.reference_id} - this may indicate duplicate packages`);
       }
+
+      // Update project status to IN_PROGRESS now that payment is held
+      const { rows: txRows } = await client.query(
+        'SELECT project_id FROM transactions WHERE id = $1',
+        [order.reference_id]
+      );
+      if (txRows.length > 0) {
+        await client.query(
+          `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
+          [txRows[0].project_id]
+        );
+        logger.info(`[processServicePayment] Project ${txRows[0].project_id} status updated to IN_PROGRESS`);
+      }
+
       await client.query('COMMIT');
       return { success: true, transactionId: order.reference_id };
     } catch (error) {
