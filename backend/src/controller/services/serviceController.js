@@ -179,7 +179,7 @@ const addServices = async (req, res, next) => {
   } catch (error) {
     // Clean up any uploaded files on failure
     for (const obj of uploadedObjects) {
-      await minioClient.removeObject(BUCKET_NAME, obj).catch(() => {});
+      await minioClient.removeObject(BUCKET_NAME, obj).catch(() => { });
     }
     logger.error("Failed to add services:", error);
     return next(new AppError("Failed to add services", 500));
@@ -350,7 +350,7 @@ const updateServiceByFreelancer = async (req, res, next) => {
   let uploadedObjectName = null;
 
   try {
-    const { service, price, description, serviceId, deliveryDuration, planType  } = req.body;
+    const { service, price, description, serviceId, deliveryDuration, planType } = req.body;
     const user = req.user;
     const freelancer_id = user?.roleWiseId;
 
@@ -751,11 +751,11 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
   try {
     const user = req.user;
     const requestId = req.params.requestId;
-    logger.info(`Request ID: ${requestId}`);  
+    logger.info(`Request ID: ${requestId}`);
     const creator_id = user?.roleWiseId;
 
     // Get the service request details including desired_service
-    const {rows : requestExists} = await query(
+    const { rows: requestExists } = await query(
       `SELECT request_id, desired_service FROM service_requests WHERE request_id = $1`,
       [requestId]
     );
@@ -775,7 +775,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
-    
+
     // Search and filter parameters
     const searchTerm = req.query.search?.trim() || '';
     const sortBy = req.query.sortBy || 'rating'; // rating, name
@@ -1010,7 +1010,8 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
     const { rows: serviceRequests } = await query(
       `SELECT
          sr.*,
-         c.full_name AS creator_name
+         c.full_name AS creator_name,
+         c.profile_image_url AS creator_profile_image
        FROM service_requests sr
        LEFT JOIN creators c ON sr.creator_id = c.creator_id
        ${whereClause}
@@ -1036,11 +1037,38 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
       });
     }
 
+    // Generate presigned URLs for creator profile images
+    const serviceRequestsWithSignedUrls = await Promise.all(
+      serviceRequests.map(async (request) => {
+        if (request.creator_profile_image) {
+          try {
+            const parts = request.creator_profile_image.split("/");
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join("/");
+
+            const signedUrl = await createPresignedUrl(
+              bucketName,
+              objectName,
+              expirySeconds
+            );
+            request.creator_profile_image = signedUrl;
+          } catch (error) {
+            logger.error(
+              `Error generating signed URL for creator ${request.creator_id}:`,
+              error
+            );
+            request.creator_profile_image = null;
+          }
+        }
+        return request;
+      })
+    );
+
     logger.info("Service requests fetched successfully");
     return res.status(200).json({
       status: "success",
       message: "Service requests fetched successfully",
-      data: serviceRequests,
+      data: serviceRequestsWithSignedUrls,
       pagination: {
         currentPage: page,
         totalPages: Math.ceil(totalCount / limit),
@@ -1104,7 +1132,7 @@ const AssignFreelancerToRequest = async (req, res, next) => {
          admin_notes = $3,
          updated_at = $6
        RETURNING *`,
-      [requestId, freelancerIds, adminNotes || null, adminId ,new Date().toISOString(), new Date().toISOString()]
+      [requestId, freelancerIds, adminNotes || null, adminId, new Date().toISOString(), new Date().toISOString()]
     );
 
     logger.info(`Freelancers assigned to request ${requestId} successfully`);
@@ -1122,8 +1150,8 @@ const AssignFreelancerToRequest = async (req, res, next) => {
 const getServicesForAdmin = async (req, res, next) => {
   logger.info("Admin fetching service options");
   try {
-    const page   = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;
     const search = req.query.search?.trim() || '';
 
@@ -1146,8 +1174,8 @@ const getServicesForAdmin = async (req, res, next) => {
         params
       ),
     ]);
-    logger.debug(`Admin service options query executed. Rows returned: ${dataResult.rows.length}`,dataResult.rows);
-    const total      = parseInt(countResult.rows[0].total);
+    logger.debug(`Admin service options query executed. Rows returned: ${dataResult.rows.length}`, dataResult.rows);
+    const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
 
     // Generate presigned URLs for each image in the images array
@@ -1168,8 +1196,8 @@ const getServicesForAdmin = async (req, res, next) => {
         return service;
       })
     );
-    
-    logger.info(`getServicesForAdmin: total=${total} page=${page}`,services);
+
+    logger.info(`getServicesForAdmin: total=${total} page=${page}`, services);
     return res.status(200).json({
       status: 'success',
       data: {
@@ -1229,7 +1257,7 @@ const editServiceForAdmin = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { serviceName, serviceTitle, serviceDescription, showOnHomePage } = req.body;
-    
+
     if (!id) return next(new AppError("Service ID is required", 400));
 
     const existing = await query(`SELECT * FROM service_options WHERE id = $1`, [id]);
@@ -1269,8 +1297,8 @@ const editServiceForAdmin = async (req, res, next) => {
        RETURNING *`,
       [
         serviceName?.trim() || null,
-        serviceTitle        || null,
-        serviceDescription  || null,
+        serviceTitle || null,
+        serviceDescription || null,
         showOnHomePage != null ? (showOnHomePage === true || showOnHomePage === 'true') : null,
         finalImages.filter(Boolean),
         id,
@@ -1279,7 +1307,7 @@ const editServiceForAdmin = async (req, res, next) => {
 
     // Delete old MinIO objects after successful DB update
     for (const obj of objectsToDelete) {
-      await minioClient.removeObject(BUCKET_NAME, obj).catch(() => {});
+      await minioClient.removeObject(BUCKET_NAME, obj).catch(() => { });
     }
 
     // Generate presigned URLs for response
@@ -1299,7 +1327,7 @@ const editServiceForAdmin = async (req, res, next) => {
   } catch (error) {
     // Clean up any newly uploaded files on failure
     for (const obj of uploadedObjects) {
-      await minioClient.removeObject(BUCKET_NAME, obj).catch(() => {});
+      await minioClient.removeObject(BUCKET_NAME, obj).catch(() => { });
     }
     logger.error('editServiceForAdmin error:', error);
     return next(new AppError('Failed to update service', 500));
