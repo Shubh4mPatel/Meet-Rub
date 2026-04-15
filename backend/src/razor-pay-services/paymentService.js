@@ -207,7 +207,7 @@ class PaymentService {
            AND (cp.service_id = p.service_id OR (cp.service_id IS NULL AND p.service_id IS NULL))
            AND cp.price = p.amount
            AND (cp.units = p.number_of_units OR (cp.units IS NULL AND p.number_of_units IS NULL))
-         RETURNING cp.id, cp.status, cp.creator_id, cp.freelancer_id, cp.price`,
+         RETURNING cp.id, cp.status, cp.creator_id, cp.freelancer_id, cp.price, cp.delivery_days, cp.delivery_time`,
         [order.reference_id]
       );
       logger.info(`[processServicePayment] custom_packages update rowCount=${cpRowCount}, rows=${JSON.stringify(cpRows)}`);
@@ -218,17 +218,36 @@ class PaymentService {
         logger.warn(`[processServicePayment] Multiple custom_packages (${cpRowCount}) updated to paid for transaction ${order.reference_id} - this may indicate duplicate packages`);
       }
 
+      // Compute end_date from custom package delivery_days + delivery_time (hours)
+      let endDate = null;
+      if (cpRowCount > 0 && cpRows[0]) {
+        const deliveryDays = parseInt(cpRows[0].delivery_days) || 0;
+        const deliveryHours = parseInt(cpRows[0].delivery_time) || 0;
+        endDate = new Date();
+        endDate.setDate(endDate.getDate() + deliveryDays);
+        endDate.setHours(endDate.getHours() + deliveryHours);
+        logger.info(`[processServicePayment] Computed end_date=${endDate.toISOString()} from delivery_days=${deliveryDays} delivery_hours=${deliveryHours}`);
+      }
+
       // Update project status to IN_PROGRESS now that payment is held
       const { rows: txRows } = await client.query(
         'SELECT project_id FROM transactions WHERE id = $1',
         [order.reference_id]
       );
       if (txRows.length > 0) {
-        await client.query(
-          `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
-          [txRows[0].project_id]
-        );
-        logger.info(`[processServicePayment] Project ${txRows[0].project_id} status updated to IN_PROGRESS`);
+        if (endDate) {
+          await client.query(
+            `UPDATE projects SET status = 'IN_PROGRESS', end_date = $2, updated_at = NOW() WHERE id = $1`,
+            [txRows[0].project_id, endDate]
+          );
+          logger.info(`[processServicePayment] Project ${txRows[0].project_id} status updated to IN_PROGRESS, end_date set to ${endDate.toISOString()}`);
+        } else {
+          await client.query(
+            `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
+            [txRows[0].project_id]
+          );
+          logger.info(`[processServicePayment] Project ${txRows[0].project_id} status updated to IN_PROGRESS`);
+        }
       }
 
       await client.query('COMMIT');
