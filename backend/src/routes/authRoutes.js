@@ -14,10 +14,8 @@ router.post("/verify-otp", upload.single('file'), verifyOtpAndProcess, setTokenC
 
   res.status(200).json({
     message: "Login successful ",
-    tokensCookieSet: true,
     userInfo: res.locals.user,
-    accessToken: res.locals.accessToken,
-    refreshToken: res.locals.refreshToken,
+   
   });
 
 });
@@ -27,12 +25,7 @@ router.post("/login", loginUser, setTokenCookies, (req, res) => {
 
   res.status(200).json({
     message: "Login successful",
-    tokensCookieSet: true,
-    userInfo: res.locals.user,
-    // Tokens also returned in body for Postman / non-browser clients
-    // Use as: Authorization: Bearer <accessToken>
-    accessToken: res.locals.accessToken,
-    refreshToken: res.locals.refreshToken,
+    userInfo: res.locals.user
   });
 
 });
