@@ -3346,7 +3346,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
           AND ff.is_active = true`
       : "";
 
-    const featuredSelect  = hasFeatured ? ", MIN(ff.priority) AS featured_priority" : "";
+    const featuredSelect = hasFeatured ? ", MIN(ff.priority) AS featured_priority" : "";
     const featuredOrderBy = hasFeatured ? "MIN(ff.priority) ASC NULLS LAST, " : "";
 
     logger.info("[getAllFreelancers] Featured join active?", { hasFeatured });
