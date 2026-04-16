@@ -1106,10 +1106,9 @@ const approveProject = async (req, res, next) => {
 
     const transaction = transactions[0];
 
-    // Project stays SUBMITTED — no status change needed after approval.
-    // 'APPROVED' is not a valid projects.status value; approved_by/approved_at columns don't exist.
+    // Change project status from SUBMITTED to COMPLETED after approval
     await client.query(
-      `UPDATE projects SET updated_at = NOW() WHERE id = $1`,
+      `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
       [projectId]
     );
 
