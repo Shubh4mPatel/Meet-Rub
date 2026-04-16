@@ -335,6 +335,10 @@ ALTER TABLE IF EXISTS public.disputes
 
 -- DROP TABLE IF EXISTS public.freelancer;
 
+-- Table: public.freelancer
+
+-- DROP TABLE IF EXISTS public.freelancer;
+
 CREATE TABLE IF NOT EXISTS public.freelancer
 (
     freelancer_id integer NOT NULL DEFAULT nextval('influencer_influencer_id_seq'::regclass),
@@ -369,7 +373,9 @@ CREATE TABLE IF NOT EXISTS public.freelancer
     reason_for_suspension text COLLATE pg_catalog."default",
     user_name character varying(255) COLLATE pg_catalog."default",
     worked_with integer DEFAULT 0,
-    earnings_balance numeric(15,2) DEFAULT 0.00, -- Pooled earnings from approved transactions, available for payout
+    earnings_balance numeric(15,2) DEFAULT 0.00,
+    interested_service character varying[] COLLATE pg_catalog."default",
+    available_blance numeric(15,2) DEFAULT 0.00,
     CONSTRAINT influencer_pkey PRIMARY KEY (freelancer_id),
     CONSTRAINT unique_freelancer_user_name UNIQUE (user_name),
     CONSTRAINT influencer_user_id_fkey FOREIGN KEY (user_id)
@@ -380,6 +386,18 @@ CREATE TABLE IF NOT EXISTS public.freelancer
 )
 
 TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.freelancer
+    OWNER to postgres;
+-- Index: idx_freelancer_verified_active
+
+-- DROP INDEX IF EXISTS public.idx_freelancer_verified_active;
+
+CREATE INDEX IF NOT EXISTS idx_freelancer_verified_active
+    ON public.freelancer USING btree
+    (verification_status COLLATE pg_catalog."default" ASC NULLS LAST, is_active ASC NULLS LAST)
+    WITH (fillfactor=100, deduplicate_items=True)
+    TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.freelancer
     OWNER to postgres;

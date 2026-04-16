@@ -266,11 +266,145 @@ const requestPayout = async (req, res, next) => {
   }
 };
 
+// Get wallet dashboard (combined summary + transactions)
+const getWalletDashboard = async (req, res, next) => {
+  try {
+    const freelancerId = req.user.roleWiseId; // freelancer_id from freelancer table
+    const userId = req.user.user_id; // user_id for payouts table
+    
+    // Parse pagination params
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
+
+    // 1. Get available balance (earnings_balance)
+    const { rows: balanceRows } = await db.query(
+      'SELECT earnings_balance FROM freelancer WHERE freelancer_id = $1',
+      [freelancerId]
+    );
+
+    if (balanceRows.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    const availableBalance = parseFloat(balanceRows[0].earnings_balance || 0);
+
+    // 2. Get pending earnings (sum of IN_PROGRESS projects)
+    const { rows: pendingRows } = await db.query(
+      `SELECT COALESCE(SUM(t.freelancer_amount), 0) as pending_total,
+              COUNT(*) as active_orders
+       FROM projects p
+       JOIN transactions t ON p.id = t.project_id
+       WHERE p.freelancer_id = $1 AND p.status = 'IN_PROGRESS' AND t.status = 'HELD'`,
+      [freelancerId]
+    );
+
+    const pendingEarnings = parseFloat(pendingRows[0].pending_total || 0);
+    const pendingOrdersCount = parseInt(pendingRows[0].active_orders || 0);
+
+    // 3. Get total lifetime earnings (sum of RELEASED/COMPLETED transactions)
+    const { rows: lifetimeRows } = await db.query(
+      `SELECT COALESCE(SUM(freelancer_amount), 0) as total_lifetime
+       FROM transactions
+       WHERE freelancer_id = $1 AND status IN ('RELEASED', 'COMPLETED')`,
+      [freelancerId]
+    );
+
+    const totalEarnings = parseFloat(lifetimeRows[0].total_lifetime || 0);
+
+    // 4. Get combined recent transactions (order payments + withdrawals)
+    const { rows: transactions } = await db.query(
+      `(
+        SELECT 
+          t.created_at as date_time,
+          'Order Payment' as type,
+          CONCAT('Payment received for order #', p.id) as description,
+          t.freelancer_amount as amount,
+          CASE 
+            WHEN t.status = 'RELEASED' THEN 'Completed'
+            WHEN t.status = 'COMPLETED' THEN 'Completed'
+            WHEN t.status = 'HELD' THEN 'Pending'
+            ELSE t.status
+          END as status
+        FROM transactions t
+        JOIN projects p ON t.project_id = p.id
+        WHERE t.freelancer_id = $1 AND t.status IN ('RELEASED', 'COMPLETED')
+      )
+      UNION ALL
+      (
+        SELECT
+          py.processed_at as date_time,
+          'Withdrawal' as type,
+          CONCAT('Bank Transfer to ', COALESCE(SUBSTRING(f.bank_name, 1, 4), 'Bank'), ' ****', RIGHT(COALESCE(f.bank_account_no, '000'), 3)) as description,
+          -py.amount as amount,
+          CASE 
+            WHEN py.status = 'PROCESSED' THEN 'Completed'
+            WHEN py.status = 'PENDING' THEN 'Processing'
+            WHEN py.status = 'QUEUED' THEN 'Processing'
+            WHEN py.status = 'PROCESSING' THEN 'Processing'
+            ELSE py.status
+          END as status
+        FROM payouts py
+        JOIN freelancer f ON py.freelancer_id = f.user_id
+        WHERE py.freelancer_id = $2 AND py.status = 'PROCESSED'
+      )
+      ORDER BY date_time DESC
+      LIMIT $3 OFFSET $4`,
+      [freelancerId, userId, limit, offset]
+    );
+
+    // Get total transaction count for pagination
+    const { rows: countRows } = await db.query(
+      `SELECT COUNT(*) as total FROM (
+        SELECT t.id FROM transactions t
+        WHERE t.freelancer_id = $1 AND t.status IN ('RELEASED', 'COMPLETED')
+        UNION ALL
+        SELECT py.id FROM payouts py
+        WHERE py.freelancer_id = $2 AND py.status = 'PROCESSED'
+      ) combined`,
+      [freelancerId, userId]
+    );
+
+    const totalTransactions = parseInt(countRows[0].total || 0);
+
+    // Format transactions
+    const formattedTransactions = transactions.map(tx => ({
+      date_time: tx.date_time,
+      type: tx.type,
+      description: tx.description,
+      amount: parseFloat(tx.amount),
+      status: tx.status
+    }));
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        wallet_summary: {
+          available_balance: availableBalance,
+          pending_earnings: pendingEarnings,
+          pending_orders_count: pendingOrdersCount,
+          total_earnings: totalEarnings,
+          currency: process.env.CURRENCY || 'INR'
+        },
+        recent_transactions: formattedTransactions,
+        pagination: {
+          limit,
+          offset,
+          total: totalTransactions
+        }
+      }
+    });
+  } catch (error) {
+    console.error('getWalletDashboard error:', error);
+    return next(new AppError('Failed to get wallet dashboard', 500));
+  }
+};
+
 module.exports = {
   addBankAccount,
   getBankAccount,
   getMyPayouts,
   getEarningsSummary,
   getEarningsBalance,
-  requestPayout
+  requestPayout,
+  getWalletDashboard
 }
