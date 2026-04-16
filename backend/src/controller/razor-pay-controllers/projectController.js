@@ -388,25 +388,25 @@ const getAllProjects = async (req, res, next) => {
     logger.info(`[getAllProjects] page=${page} limit=${limit} offset=${offset}`);
 
     // Optional filters
-    const statusFilter = req.query.status?.trim()    || null;
-    const search       = req.query.search?.trim()    || null;
-    const startDate    = req.query.startDate?.trim() || null;
-    const endDate      = req.query.endDate?.trim()   || null;
-    const service      = req.query.service?.trim()   || null;
+    const statusFilter = req.query.status?.trim() || null;
+    const search = req.query.search?.trim() || null;
+    const startDate = req.query.startDate?.trim() || null;
+    const endDate = req.query.endDate?.trim() || null;
+    const service = req.query.service?.trim() || null;
 
     // Maps frontend-friendly labels → DB values
     const STATUS_MAP = {
-      working      : { db: 'IN_PROGRESS', table: 'project' },
-      dispute      : { db: 'DISPUTE',     table: 'project' },
-      complete     : { db: 'COMPLETED',   table: 'project' },
-      req_rejected : { db: 'rejected',    table: 'package' },
-      requested    : { db: 'pending',     table: 'package' },
-      req_expired  : { db: 'expired',     table: 'package' },
+      working: { db: 'IN_PROGRESS', table: 'project' },
+      dispute: { db: 'DISPUTE', table: 'project' },
+      complete: { db: 'COMPLETED', table: 'project' },
+      req_rejected: { db: 'rejected', table: 'package' },
+      requested: { db: 'pending', table: 'package' },
+      req_expired: { db: 'expired', table: 'package' },
     };
 
     let normalizedStatus = null;
-    let isProjectStatus  = false;
-    let isPackageStatus  = false;
+    let isProjectStatus = false;
+    let isPackageStatus = false;
 
     if (statusFilter) {
       const mapped = STATUS_MAP[statusFilter.toLowerCase()];
@@ -417,15 +417,15 @@ const getAllProjects = async (req, res, next) => {
         ));
       }
       normalizedStatus = mapped.db;
-      isProjectStatus  = mapped.table === 'project';
-      isPackageStatus  = mapped.table === 'package';
+      isProjectStatus = mapped.table === 'project';
+      isPackageStatus = mapped.table === 'package';
     }
 
     const params = [];
     let p = 1;
 
     // Status — routed to correct table only; suppress the other side of the UNION entirely
-    const projectStatusWhere = isProjectStatus ? `AND p.status = $${p++}`   : (isPackageStatus ? 'AND 1=0' : '');
+    const projectStatusWhere = isProjectStatus ? `AND p.status = $${p++}` : (isPackageStatus ? 'AND 1=0' : '');
     const packageStatusWhere = isPackageStatus ? `AND cp2.status = $${p++}` : (isProjectStatus ? 'AND 1=0' : '');
     if (normalizedStatus) params.push(normalizedStatus);
 
