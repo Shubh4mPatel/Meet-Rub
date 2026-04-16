@@ -524,7 +524,7 @@ INITIATED → HELD → RELEASED → COMPLETED
         │
         └─ Mark project as completed
             PUT /projects/:id/status  { status: 'COMPLETED' }
-                → projects.status = 'COMPLETED'
+                → projects.status = 'SUBMITTED'
                 → projects.completed_at = NOW()
                 → Notification sent to creator & admin
 

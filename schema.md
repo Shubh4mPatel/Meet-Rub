@@ -702,7 +702,7 @@ CREATE TABLE IF NOT EXISTS public.projects
         REFERENCES public.freelancer (freelancer_id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION,
-    CONSTRAINT projects_status_check CHECK (status::text = ANY (ARRAY['CREATED'::text, 'IN_PROGRESS'::text, 'COMPLETED'::text, 'CANCELLED'::text, 'DISPUTE'::text]))
+    CONSTRAINT projects_status_check CHECK (status::text = ANY (ARRAY['CREATED'::text, 'IN_PROGRESS'::text, 'SUBMITTED'::text, 'COMPLETED'::text, 'CANCELLED'::text, 'DISPUTE'::text]))
 )
 
 TABLESPACE pg_default;

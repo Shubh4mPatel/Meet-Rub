@@ -703,7 +703,7 @@ const uploadDeliverable = async (req, res, next) => {
       );
 
       await client.query(
-        `UPDATE projects SET status = 'COMPLETED' WHERE id = $1`,
+        `UPDATE projects SET status = 'SUBMITTED' WHERE id = $1`,
         [project_id]
       );
 
@@ -716,7 +716,7 @@ const uploadDeliverable = async (req, res, next) => {
       client.release();
     }
 
-    logger.info(`Deliverable uploaded by freelancer=${freelancerId} project=${project_id} status set to COMPLETED`);
+    logger.info(`Deliverable uploaded by freelancer=${freelancerId} project=${project_id} status set to SUBMITTED`);
 
     const serviceLabel = project.service_name ? ` for ${project.service_name}` : '';
 
@@ -1089,9 +1089,9 @@ const approveProject = async (req, res, next) => {
       return next(new AppError('Project not found', 404));
     }
 
-    if (projects[0].status !== 'COMPLETED') {
+    if (projects[0].status !== 'SUBMITTED') {
       await client.query('ROLLBACK');
-      return next(new AppError('Project must be COMPLETED before approving', 400));
+      return next(new AppError('Project must be SUBMITTED before approving', 400));
     }
 
     const { rows: transactions } = await client.query(
@@ -1106,7 +1106,7 @@ const approveProject = async (req, res, next) => {
 
     const transaction = transactions[0];
 
-    // Project stays COMPLETED — no status change needed.
+    // Project stays SUBMITTED — no status change needed after approval.
     // 'APPROVED' is not a valid projects.status value; approved_by/approved_at columns don't exist.
     await client.query(
       `UPDATE projects SET updated_at = NOW() WHERE id = $1`,
@@ -1176,9 +1176,9 @@ const rejectProject = async (req, res, next) => {
 
     const project = projects[0];
 
-    if (project.status !== 'COMPLETED') {
+    if (project.status !== 'SUBMITTED') {
       await client.query('ROLLBACK');
-      return next(new AppError('Project must be COMPLETED before rejecting', 400));
+      return next(new AppError('Project must be SUBMITTED before rejecting', 400));
     }
 
     // Update project to DISPUTE
