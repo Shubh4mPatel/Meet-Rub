@@ -1,8 +1,8 @@
 const express = require('express');
 const upload = require('../../config/multer');
-const {getMyPayouts, getEarningsSummary, getEarningsBalance, requestPayout, getWalletDashboard } = require('../controller/razor-pay-controllers/freelancerController');
+const { getMyPayouts, getEarningsSummary, getEarningsBalance, requestPayout, getWalletDashboard } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
-const  { requireRole, authenticateUser } =  require('../middleware/authMiddleware');
+const { requireRole, authenticateUser } = require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
 const { getUserProfileProgress, getCreatorByUserId } = require('../controller/users/userProfileController');
@@ -14,7 +14,7 @@ const { rateFreelancer } = require('../controller/razor-pay-controllers/projectC
 const { getMyReviews } = require('../controller/users/freelancerReviewsController');
 
 
-router.post('/portfolio/upload-after-before',authenticateUser, requireRole(['freelancer']), upload.fields([
+router.post('/portfolio/upload-after-before', authenticateUser, requireRole(['freelancer']), upload.fields([
     {
         name: 'before',
         maxCount: 1
@@ -26,39 +26,39 @@ router.post('/portfolio/upload-after-before',authenticateUser, requireRole(['fre
 ]), uploadBeforeAfter)
 
 
-router.get('/portfolio/get-after-before',authenticateUser,  getBeforeAfter)
+router.get('/portfolio/get-after-before', authenticateUser, getBeforeAfter)
 
 
-router.delete('/portfolio/delete-after-before',authenticateUser, requireRole(['freelancer']), deleteBeforeAfter)
+router.delete('/portfolio/delete-after-before', authenticateUser, requireRole(['freelancer']), deleteBeforeAfter)
 
 
 router.put('/portfolio/update-after-before/:id', authenticateUser, requireRole(['freelancer']), upload.fields([
     { name: 'before', maxCount: 1 },
-    { name: 'after',  maxCount: 1 },
+    { name: 'after', maxCount: 1 },
 ]), updateBeforeAfter)
 
 
-router.post('/add-service',authenticateUser, requireRole(['freelancer']),upload.single('file'), addServicesByFreelancer)
+router.post('/add-service', authenticateUser, requireRole(['freelancer']), upload.single('file'), addServicesByFreelancer)
 
 
-router.get('/get-services',authenticateUser, requireRole(['freelancer']), getServicesByFreelaner)
+router.get('/get-services', authenticateUser, requireRole(['freelancer']), getServicesByFreelaner)
 
 router.get('/get-available-services', getServices);
 
 
-router.delete('/delete-services',authenticateUser, requireRole(['freelancer']), deleteServiceByFreelancer)
+router.delete('/delete-services', authenticateUser, requireRole(['freelancer']), deleteServiceByFreelancer)
 
 
-router.put('/update-service',authenticateUser, requireRole(['freelancer']), upload.single('file'), updateServiceByFreelancer)
+router.put('/update-service', authenticateUser, requireRole(['freelancer']), upload.single('file'), updateServiceByFreelancer)
 
 
-router.get('/portfolio/get-protfolio',authenticateUser, requireRole(['freelancer']), getPortfolioByFreelancerId)
+router.get('/portfolio/get-protfolio', authenticateUser, requireRole(['freelancer']), getPortfolioByFreelancerId)
 
 
-router.post('/portfolio/add-protfolio',authenticateUser, requireRole(['freelancer']), upload.array('files'), addFreelancerPortfolio)
+router.post('/portfolio/add-protfolio', authenticateUser, requireRole(['freelancer']), upload.array('files'), addFreelancerPortfolio)
 
 
-router.put('/portfolio/update-protfolio', authenticateUser, requireRole(['freelancer']),upload.single('file'), updateFreelancerPortfolio)
+router.put('/portfolio/update-protfolio', authenticateUser, requireRole(['freelancer']), upload.single('file'), updateFreelancerPortfolio)
 
 
 router.delete('/portfolio/delete-portfolio', authenticateUser, requireRole(['freelancer']), deleteFreelancerPortfolio)
@@ -92,7 +92,7 @@ router.get('/wallet/dashboard', authenticateUser, requireRole(['freelancer']), g
 
 router.get('/profile-progress', authenticateUser, requireRole(['freelancer']), getUserProfileProgress);
 
-router.delete("/portfolio/delete-portfolio-item",authenticateUser, requireRole(['freelancer']), deleteFreelancerProtfolioItem);
+router.delete("/portfolio/delete-portfolio-item", authenticateUser, requireRole(['freelancer']), deleteFreelancerProtfolioItem);
 
 router.get('/niches', getNiches);
 

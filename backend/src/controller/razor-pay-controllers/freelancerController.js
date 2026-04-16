@@ -271,7 +271,7 @@ const getWalletDashboard = async (req, res, next) => {
   try {
     const freelancerId = req.user.roleWiseId; // freelancer_id from freelancer table
     const userId = req.user.user_id; // user_id for payouts table
-    
+
     // Parse pagination params
     const limit = parseInt(req.query.limit) || 10;
     const offset = parseInt(req.query.offset) || 0;
