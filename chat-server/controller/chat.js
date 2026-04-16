@@ -131,6 +131,7 @@ const chatController = (io) => {
         // Send projects list to the freelancer
         if (userRole === 'freelancer') {
           const projects = await chatModel.getFreelancerProjects(userId, recipientId);
+          console.log(`[projects-list] Sending project data to freelancer - userId=${userId} recipientId=${recipientId} projectCount=${projects?.length || 0} projectIds=${projects?.map(p => p.id).join(',') || 'none'}`);
           socket.emit('projects-list', { projects });
         }
 
@@ -145,7 +146,7 @@ const chatController = (io) => {
       }
     });
 
-   
+
     // Leave a chat room
     socket.on("leave-chat", async ({ recipientId }) => {
       try {
@@ -209,21 +210,21 @@ const chatController = (io) => {
           if (freelancer) {
             await Promise.all([
               sendHireRequestEmail({
-                creatorEmail:    socket.user.email,
-                creatorName:     username,
-                freelancerName:  freelancer.user_name,
-                serviceTitle:    customPackage.service_type,
-                amount:          customPackage.price,
-                deliveryDays:    packageData.delivery_days,
+                creatorEmail: socket.user.email,
+                creatorName: username,
+                freelancerName: freelancer.user_name,
+                serviceTitle: customPackage.service_type,
+                amount: customPackage.price,
+                deliveryDays: packageData.delivery_days,
                 chatRoomId,
               }),
               sendHireRequestReceivedEmail({
                 freelancerEmail: freelancer.user_email,
-                freelancerName:  freelancer.user_name,
-                creatorName:     username,
-                serviceTitle:    customPackage.service_type,
-                amount:          customPackage.price,
-                deliveryDays:    packageData.delivery_days,
+                freelancerName: freelancer.user_name,
+                creatorName: username,
+                serviceTitle: customPackage.service_type,
+                amount: customPackage.price,
+                deliveryDays: packageData.delivery_days,
                 chatRoomId,
               }),
             ]);
@@ -240,20 +241,20 @@ const chatController = (io) => {
             await Promise.all([
               sendOfferSentEmail({
                 freelancerEmail: socket.user.email,
-                freelancerName:  username,
-                creatorName:     recipient.user_name,
-                serviceTitle:    customPackage.service_type,
-                amount:          customPackage.price,
-                deliveryDays:    packageData.delivery_days,
+                freelancerName: username,
+                creatorName: recipient.user_name,
+                serviceTitle: customPackage.service_type,
+                amount: customPackage.price,
+                deliveryDays: packageData.delivery_days,
                 chatRoomId,
               }),
               sendOfferReceivedEmail({
-                creatorEmail:    recipient.user_email,
-                creatorName:     recipient.user_name,
-                freelancerName:  username,
-                serviceTitle:    customPackage.service_type,
-                amount:          customPackage.price,
-                deliveryDays:    packageData.delivery_days,
+                creatorEmail: recipient.user_email,
+                creatorName: recipient.user_name,
+                freelancerName: username,
+                serviceTitle: customPackage.service_type,
+                amount: customPackage.price,
+                deliveryDays: packageData.delivery_days,
                 chatRoomId,
               }),
             ]);

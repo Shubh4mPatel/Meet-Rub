@@ -2,13 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const nodemailer = require('nodemailer');
 
-const TEMPLATES_DIR = path.join(__dirname, '../../../Email-Templates');
+const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
-const APP_URL         = process.env.APP_URL         || 'https://meetrub.com';
-const LOGO_URL        = process.env.LOGO_URL        || `${APP_URL}/logo.png`;
-const HELP_URL        = process.env.HELP_URL        || `${APP_URL}/help`;
-const PRIVACY_URL     = process.env.PRIVACY_URL     || `${APP_URL}/privacy`;
-const CURRENCY        = process.env.CURRENCY        || '₹';
+const APP_URL = process.env.APP_URL || 'https://meetrub.com';
+const LOGO_URL = process.env.LOGO_URL || `${APP_URL}/logo.png`;
+const HELP_URL = process.env.HELP_URL || `${APP_URL}/help`;
+const PRIVACY_URL = process.env.PRIVACY_URL || `${APP_URL}/privacy`;
+const CURRENCY = process.env.CURRENCY || '₹';
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_SERVER_HOST,
@@ -42,15 +42,15 @@ async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName
   );
   const filled = fillTemplate(html, {
     freelancer_username: freelancerName,
-    creator_username:    creatorName,
-    service_title:       serviceTitle || 'Custom Package',
-    currency:            CURRENCY,
-    amount:              amount != null ? Number(amount).toFixed(2) : '—',
-    delivery_days:       deliveryDays || '—',
-    chat_url:            `${APP_URL}/freelancer/chat/${chatRoomId}`,
-    logo_url:            LOGO_URL,
-    help_url:            HELP_URL,
-    privacy_url:         PRIVACY_URL,
+    creator_username: creatorName,
+    service_title: serviceTitle || 'Custom Package',
+    currency: CURRENCY,
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    delivery_days: deliveryDays || '—',
+    chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
   });
   await sendMail(freelancerEmail, `Offer sent to ${creatorName}`, filled);
 }
@@ -61,17 +61,17 @@ async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerNam
     'utf8'
   );
   const filled = fillTemplate(html, {
-    creator_username:    creatorName,
+    creator_username: creatorName,
     freelancer_username: freelancerName,
-    service_title:       serviceTitle || 'Custom Package',
-    currency:            CURRENCY,
-    amount:              amount != null ? Number(amount).toFixed(2) : '—',
-    delivery_days:       deliveryDays || '—',
-    offer_url:           `${APP_URL}/creator/chat/${chatRoomId}`,
-    chat_url:            `${APP_URL}/creator/chat/${chatRoomId}`,
-    logo_url:            LOGO_URL,
-    help_url:            HELP_URL,
-    privacy_url:         PRIVACY_URL,
+    service_title: serviceTitle || 'Custom Package',
+    currency: CURRENCY,
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    delivery_days: deliveryDays || '—',
+    offer_url: `${APP_URL}/creator/chat/${chatRoomId}`,
+    chat_url: `${APP_URL}/creator/chat/${chatRoomId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
   });
   await sendMail(creatorEmail, `New offer from ${freelancerName}`, filled);
 }
@@ -82,16 +82,16 @@ async function sendHireRequestEmail({ creatorEmail, creatorName, freelancerName,
     'utf8'
   );
   const filled = fillTemplate(html, {
-    creator_username:    creatorName,
+    creator_username: creatorName,
     freelancer_username: freelancerName,
-    service_title:       serviceTitle || 'Custom Package',
-    currency:            CURRENCY,
-    amount:              amount != null ? Number(amount).toFixed(2) : '—',
-    deadline:            deliveryDays ? `${deliveryDays} days` : '—',
-    chat_url:            `${APP_URL}/creator/chat/${chatRoomId}`,
-    logo_url:            LOGO_URL,
-    help_url:            HELP_URL,
-    privacy_url:         PRIVACY_URL,
+    service_title: serviceTitle || 'Custom Package',
+    currency: CURRENCY,
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    deadline: deliveryDays ? `${deliveryDays} days` : '—',
+    chat_url: `${APP_URL}/creator/chat/${chatRoomId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
   });
   await sendMail(creatorEmail, `Your hire request was sent to ${freelancerName}`, filled);
 }
@@ -103,15 +103,15 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
   );
   const filled = fillTemplate(html, {
     freelancer_username: freelancerName,
-    creator_username:    creatorName,
-    service_title:       serviceTitle || 'Custom Package',
-    currency:            CURRENCY,
-    amount:              amount != null ? Number(amount).toFixed(2) : '—',
-    deadline:            deliveryDays ? `${deliveryDays} days` : '—',
-    chat_url:            `${APP_URL}/freelancer/chat/${chatRoomId}`,
-    logo_url:            LOGO_URL,
-    help_url:            HELP_URL,
-    privacy_url:         PRIVACY_URL,
+    creator_username: creatorName,
+    service_title: serviceTitle || 'Custom Package',
+    currency: CURRENCY,
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    deadline: deliveryDays ? `${deliveryDays} days` : '—',
+    chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
   });
   await sendMail(freelancerEmail, `New hire request from ${creatorName}`, filled);
 }

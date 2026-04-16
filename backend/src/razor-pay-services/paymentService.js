@@ -163,7 +163,7 @@ class PaymentService {
         if (txCheck.length > 0 && txCheck[0].status === 'HELD') {
           // Check if the project was also updated; if not (partial failure), fix it now
           const { rows: projCheck } = await client.query(
-            `SELECT p.id, p.status, p.creator_id, p.freelancer_id
+            `SELECT p.id, p.status, p.custom_package_id
              FROM transactions t
              JOIN projects p ON t.project_id = p.id
              WHERE t.id = $1`,
@@ -179,45 +179,28 @@ class PaymentService {
           } else {
             logger.warn(`[processServicePayment] Project ${projCheck[0].id} still CREATED after HELD transaction — completing update now`);
 
-            // In a partial failure the custom_package is still 'accepted' (never got marked paid).
-            // Try 'accepted' first; fall back to 'paid' in case cp was updated but project wasn't.
-            const { rows: cpAccepted, rowCount: cpAcceptedCount } = await client.query(
-              `UPDATE custom_packages
-               SET status = 'paid', updated_at = NOW()
-               WHERE creator_id = $1
-                 AND freelancer_id = $2
-                 AND status = 'accepted'
-                 AND price::numeric = (SELECT amount::numeric FROM projects WHERE id = $3)
-               RETURNING id, delivery_days, delivery_time`,
-              [projCheck[0].creator_id, projCheck[0].freelancer_id, projCheck[0].id]
-            );
-
-            logger.info(`[processServicePayment] Idempotency recovery: custom_packages updated count=${cpAcceptedCount} rows=${JSON.stringify(cpAccepted)}`);
-
-            // If cp was already 'paid' (cp updated but project wasn't), just fetch it for delivery info
-            let cpData = cpAccepted[0] || null;
-            if (!cpData) {
-              const { rows: cpPaid } = await client.query(
-                `SELECT delivery_days, delivery_time FROM custom_packages
-                 WHERE creator_id = $1
-                   AND freelancer_id = $2
-                   AND status = 'paid'
-                 ORDER BY updated_at DESC
-                 LIMIT 1`,
-                [projCheck[0].creator_id, projCheck[0].freelancer_id]
-              );
-              cpData = cpPaid[0] || null;
-              logger.info(`[processServicePayment] Idempotency recovery: fallback cpPaid=${JSON.stringify(cpData)}`);
-            }
-
             let endDate = null;
-            if (cpData) {
-              const deliveryDays = parseInt(cpData.delivery_days) || 0;
-              const deliveryHours = parseInt(cpData.delivery_time) || 0;
-              endDate = new Date();
-              endDate.setDate(endDate.getDate() + deliveryDays);
-              endDate.setHours(endDate.getHours() + deliveryHours);
-              logger.info(`[processServicePayment] Idempotency recovery: computed end_date=${endDate.toISOString()}`);
+
+            // If project has a custom_package_id, update it and get delivery info
+            if (projCheck[0].custom_package_id) {
+              const { rows: cpRows } = await client.query(
+                `UPDATE custom_packages
+                 SET status = 'paid', updated_at = NOW()
+                 WHERE id = $1 AND status IN ('accepted', 'paid')
+                 RETURNING id, delivery_days, delivery_time`,
+                [projCheck[0].custom_package_id]
+              );
+
+              logger.info(`[processServicePayment] Idempotency recovery: custom_package updated=${JSON.stringify(cpRows[0])}`);
+
+              if (cpRows[0]) {
+                const deliveryDays = parseInt(cpRows[0].delivery_days) || 0;
+                const deliveryHours = parseInt(cpRows[0].delivery_time) || 0;
+                endDate = new Date();
+                endDate.setDate(endDate.getDate() + deliveryDays);
+                endDate.setHours(endDate.getHours() + deliveryHours);
+                logger.info(`[processServicePayment] Idempotency recovery: computed end_date=${endDate.toISOString()} from delivery_days=${deliveryDays} delivery_hours=${deliveryHours}`);
+              }
             }
 
             if (endDate) {
@@ -274,64 +257,72 @@ class PaymentService {
         throw new Error(`Transaction ${order.reference_id} already processed (current status: ${currentStatus})`);
       }
 
-      // Mark the linked custom package as paid.
-      // Use a subquery with LIMIT 1 (ORDER BY created_at DESC) so only the most-recent
-      // accepted package is updated even if price-matching duplicates exist.
-      logger.info(`[processServicePayment] Updating custom_packages to paid for transaction id=${order.reference_id}`);
-      const { rows: cpRows } = await client.query(
-        `UPDATE custom_packages
-         SET status = 'paid', updated_at = NOW()
-         WHERE id = (
-           SELECT cp2.id FROM custom_packages cp2
-           JOIN transactions t ON t.id = $1
-           JOIN projects p ON t.project_id = p.id
-           WHERE cp2.creator_id = p.creator_id
-             AND cp2.freelancer_id = p.freelancer_id
-             AND cp2.status = 'accepted'
-             AND cp2.price::numeric = p.amount::numeric
-           ORDER BY cp2.created_at DESC
-           LIMIT 1
-         )
-         RETURNING id, status, creator_id, freelancer_id, price, delivery_days, delivery_time`,
-        [order.reference_id]
-      );
-      const cpRowCount = cpRows.length;
-      logger.info(`[processServicePayment] custom_packages update rowCount=${cpRowCount}, rows=${JSON.stringify(cpRows)}`);
-
-      if (cpRowCount === 0) {
-        logger.warn(`[processServicePayment] No custom_package found matching project criteria for transaction ${order.reference_id} - this may be a direct project without a custom package`);
-      }
-
-      // Compute end_date from custom package delivery_days + delivery_time (hours)
-      let endDate = null;
-      if (cpRowCount > 0 && cpRows[0]) {
-        const deliveryDays = parseInt(cpRows[0].delivery_days) || 0;
-        const deliveryHours = parseInt(cpRows[0].delivery_time) || 0;
-        endDate = new Date();
-        endDate.setDate(endDate.getDate() + deliveryDays);
-        endDate.setHours(endDate.getHours() + deliveryHours);
-        logger.info(`[processServicePayment] Computed end_date=${endDate.toISOString()} from delivery_days=${deliveryDays} delivery_hours=${deliveryHours}`);
-      }
-
-      // Update project status to IN_PROGRESS now that payment is held
+      // Get project and custom_package_id from transaction
       const { rows: txRows } = await client.query(
-        'SELECT project_id FROM transactions WHERE id = $1',
+        `SELECT p.id as project_id, p.custom_package_id
+         FROM transactions t
+         JOIN projects p ON t.project_id = p.id
+         WHERE t.id = $1`,
         [order.reference_id]
       );
-      if (txRows.length > 0) {
-        if (endDate) {
-          await client.query(
-            `UPDATE projects SET status = 'IN_PROGRESS', end_date = $2, updated_at = NOW() WHERE id = $1`,
-            [txRows[0].project_id, endDate]
-          );
-          logger.info(`[processServicePayment] Project ${txRows[0].project_id} status updated to IN_PROGRESS, end_date set to ${endDate.toISOString()}`);
+
+      if (txRows.length === 0) {
+        logger.error(`[processServicePayment] No project found for transaction ${order.reference_id}`);
+        throw new Error(`Project not found for transaction ${order.reference_id}`);
+      }
+
+      const projectId = txRows[0].project_id;
+      const customPackageId = txRows[0].custom_package_id;
+
+      logger.info(`[processServicePayment] Processing payment for project_id=${projectId} custom_package_id=${customPackageId}`);
+
+      let endDate = null;
+
+      // If project has a custom_package_id, update it to 'paid' and get delivery info
+      if (customPackageId) {
+        const { rows: cpRows } = await client.query(
+          `UPDATE custom_packages
+           SET status = 'paid', updated_at = NOW()
+           WHERE id = $1
+           RETURNING id, delivery_days, delivery_time`,
+          [customPackageId]
+        );
+
+        if (cpRows.length > 0 && cpRows[0]) {
+          logger.info(`[processServicePayment] Custom package updated: ${JSON.stringify(cpRows[0])}`);
+
+          const deliveryDays = parseInt(cpRows[0].delivery_days) || 0;
+          const deliveryHours = parseInt(cpRows[0].delivery_time) || 0;
+
+          logger.info(`[processServicePayment] Delivery: days=${deliveryDays}, hours=${deliveryHours}`);
+
+          endDate = new Date();
+          endDate.setDate(endDate.getDate() + deliveryDays);
+          endDate.setHours(endDate.getHours() + deliveryHours);
+
+          logger.info(`[processServicePayment] Computed end_date=${endDate.toISOString()}`);
         } else {
-          await client.query(
-            `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
-            [txRows[0].project_id]
-          );
-          logger.info(`[processServicePayment] Project ${txRows[0].project_id} status updated to IN_PROGRESS`);
+          logger.warn(`[processServicePayment] Custom package ${customPackageId} not found or already updated`);
         }
+      } else {
+        logger.warn(`[processServicePayment] No custom_package_id for project ${projectId} - direct project without custom package`);
+      }
+
+      // Update project status to IN_PROGRESS with end_date
+      if (endDate) {
+        const updateResult = await client.query(
+          `UPDATE projects SET status = 'IN_PROGRESS', end_date = $2, updated_at = NOW() 
+           WHERE id = $1 
+           RETURNING id, status, end_date`,
+          [projectId, endDate]
+        );
+        logger.info(`[processServicePayment] Project updated: ${JSON.stringify(updateResult.rows[0])}`);
+      } else {
+        await client.query(
+          `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
+          [projectId]
+        );
+        logger.info(`[processServicePayment] Project ${projectId} updated to IN_PROGRESS (no end_date)`);
       }
 
       await client.query('COMMIT');

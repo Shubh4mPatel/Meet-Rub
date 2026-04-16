@@ -535,8 +535,8 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   // end_date is intentionally left NULL here — it will be set once the creator pays.
   async createProjectFromPackage(pkg) {
     const query = `
-      INSERT INTO projects (creator_id, freelancer_id, number_of_units, amount, status, end_date, service_id)
-      VALUES ($1, $2, $3, $4, 'CREATED', NULL, $5)
+      INSERT INTO projects (creator_id, freelancer_id, number_of_units, amount, status, end_date, service_id, custom_package_id)
+      VALUES ($1, $2, $3, $4, 'CREATED', NULL, $5, $6)
       RETURNING *
     `;
 
@@ -547,6 +547,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         pkg.units || null,
         pkg.price,
         pkg.service_id || null,
+        pkg.id
       ]);
       return result.rows[0];
     } catch (error) {
@@ -853,18 +854,13 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         AND cp.status = 'accepted'
       WHERE f.user_id = $1
         AND cr.user_id = $2
-        AND p.status IN ('IN_PROGRESS', 'DISPUTE')
+        AND p.status IN ('IN_PROGRESS')
         AND p.end_date > NOW()
       ORDER BY p.created_at DESC
     `;
     try {
       console.log(`[getFreelancerProjects] freelancerUserId=${freelancerUserId} creatorUserId=${creatorUserId}`);
 
-      // Debug: check if the freelancer and creator user_ids resolve to valid rows
-      const freelancerCheck = await pool.query(`SELECT freelancer_id FROM freelancer WHERE user_id = $1`, [freelancerUserId]);
-      const creatorCheck = await pool.query(`SELECT creator_id FROM creators WHERE user_id = $1`, [creatorUserId]);
-      console.log(`[getFreelancerProjects] freelancer row:`, freelancerCheck.rows[0] ?? 'NOT FOUND');
-      console.log(`[getFreelancerProjects] creator row:`, creatorCheck.rows[0] ?? 'NOT FOUND');
 
       // Debug: check projects without end_date/status filters
       const rawProjects = await pool.query(
