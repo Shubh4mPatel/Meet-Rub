@@ -3,11 +3,12 @@
     "allow": [
       "Bash(node -e:*)",
       "Bash(find:*)",
-      "Bash(ls -la /c/Users/Shubh/Meet-Rub/backend/*.js)"
+      "Bash(ls -la /c/Users/Shubh/Meet-Rub/backend/*.js)",
+      "Bash(grep -n \"google_id\\\\|provider\\\\|social\" c:/Users/baps/Desktop/Meet-Rub/backend/migrations/*.sql)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "code-review-graph"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }
