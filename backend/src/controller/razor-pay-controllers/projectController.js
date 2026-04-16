@@ -686,8 +686,8 @@ const uploadDeliverable = async (req, res, next) => {
 
     const project = projects[0];
 
-    if (project.status === 'CANCELLED') {
-      return next(new AppError('Cannot upload deliverable for a cancelled project', 400));
+    if (project.status !== 'IN_PROGRESS') {
+      return next(new AppError(`Cannot upload deliverable for a project in status ${project.status}. Project must be IN_PROGRESS.`, 400));
     }
 
     const client = await db.connect();
@@ -1106,13 +1106,15 @@ const approveProject = async (req, res, next) => {
 
     const transaction = transactions[0];
 
+    // Project stays COMPLETED — no status change needed.
+    // 'APPROVED' is not a valid projects.status value; approved_by/approved_at columns don't exist.
     await client.query(
-      `UPDATE projects SET status = 'APPROVED', approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2`,
-      [creatorId, projectId]
+      `UPDATE projects SET updated_at = NOW() WHERE id = $1`,
+      [projectId]
     );
 
     await client.query(
-      `UPDATE transactions SET status = 'APPROVED', approved_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      `UPDATE transactions SET status = 'RELEASED', released_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [transaction.id]
     );
 

@@ -34,11 +34,9 @@ const handlePaymentCaptured = async (payload) => {
   try {
     await client.query('BEGIN');
 
-    // Update order status
+    // Lock the order row first — same lock as /verify, eliminates the race condition
     const { rows: orders } = await client.query(
-      `UPDATE razorpay_orders SET status = 'PAID', updated_at = NOW() 
-       WHERE razorpay_order_id = $1 
-       RETURNING id, reference_id, status`,
+      'SELECT * FROM razorpay_orders WHERE razorpay_order_id = $1 FOR UPDATE',
       [orderId]
     );
 
@@ -49,52 +47,155 @@ const handlePaymentCaptured = async (payload) => {
     }
 
     const order = orders[0];
-    logger.info(`[handlePaymentCaptured] Order ${orderId} updated to PAID, reference_id: ${order.reference_id}`);
 
-    // Update transaction to HELD if it's still in INITIATED state
-    // This handles cases where the client didn't call /payments/verify
-    const { rows: transactions, rowCount } = await client.query(
-      `UPDATE transactions 
-       SET status = 'HELD', 
-           razorpay_payment_id = $1, 
-           held_at = NOW(), 
-           updated_at = NOW()
-       WHERE id = $2 AND status = 'INITIATED'
-       RETURNING id, status`,
-      [paymentId, order.reference_id]
-    );
+    // Idempotency: if /verify already ran and set the order to PAID, check whether
+    // the project update was also completed; fix it if not, then bail out.
+    if (order.status === 'PAID') {
+      logger.info(`[handlePaymentCaptured] Order ${orderId} already PAID — checking for partial-update recovery`);
 
-    if (rowCount > 0) {
-      logger.info(`[handlePaymentCaptured] Transaction ${order.reference_id} updated to HELD via webhook`);
-
-      // Mark the linked custom package as paid
-      // Match on creator, freelancer, service, price, and units to ensure we update only the correct package
-      const { rowCount: cpRowCount, rows: cpRows } = await client.query(
-        `UPDATE custom_packages cp
-         SET status = 'paid', updated_at = NOW()
+      const { rows: projCheck } = await client.query(
+        `SELECT p.id, p.status, p.creator_id, p.freelancer_id
          FROM transactions t
          JOIN projects p ON t.project_id = p.id
-         WHERE t.id = $1
-           AND cp.creator_id = p.creator_id
-           AND cp.freelancer_id = p.freelancer_id
-           AND cp.status = 'accepted'
-           AND (cp.service_id = p.service_id OR (cp.service_id IS NULL AND p.service_id IS NULL))
-           AND cp.price = p.amount
-           AND (cp.units = p.number_of_units OR (cp.units IS NULL AND p.number_of_units IS NULL))
-         RETURNING cp.id`,
+         WHERE t.id = $1`,
         [order.reference_id]
       );
 
-      if (cpRowCount > 0) {
-        logger.info(`[handlePaymentCaptured] ${cpRowCount} custom package(s) marked as paid for transaction ${order.reference_id}, IDs: ${cpRows.map(r => r.id).join(', ')}`);
-        if (cpRowCount > 1) {
-          logger.warn(`[handlePaymentCaptured] Multiple custom_packages updated - this may indicate duplicate packages`);
+      if (projCheck.length > 0 && projCheck[0].status === 'CREATED') {
+        logger.warn(`[handlePaymentCaptured] Idempotency recovery: project ${projCheck[0].id} still CREATED — completing update`);
+
+        const { rows: cpAccepted } = await client.query(
+          `UPDATE custom_packages
+           SET status = 'paid', updated_at = NOW()
+           WHERE id = (
+             SELECT cp2.id FROM custom_packages cp2
+             WHERE cp2.creator_id = $1
+               AND cp2.freelancer_id = $2
+               AND cp2.status = 'accepted'
+               AND cp2.price::numeric = (SELECT amount::numeric FROM projects WHERE id = $3)
+             ORDER BY cp2.created_at DESC
+             LIMIT 1
+           )
+           RETURNING id, delivery_days, delivery_time`,
+          [projCheck[0].creator_id, projCheck[0].freelancer_id, projCheck[0].id]
+        );
+
+        let cpData = cpAccepted[0] || null;
+        if (!cpData) {
+          const { rows: cpPaid } = await client.query(
+            `SELECT delivery_days, delivery_time FROM custom_packages
+             WHERE creator_id = $1 AND freelancer_id = $2 AND status = 'paid'
+             ORDER BY updated_at DESC LIMIT 1`,
+            [projCheck[0].creator_id, projCheck[0].freelancer_id]
+          );
+          cpData = cpPaid[0] || null;
         }
+
+        let endDate = null;
+        if (cpData) {
+          endDate = new Date();
+          endDate.setDate(endDate.getDate() + (parseInt(cpData.delivery_days) || 0));
+          endDate.setHours(endDate.getHours() + (parseInt(cpData.delivery_time) || 0));
+        }
+
+        if (endDate) {
+          await client.query(
+            `UPDATE projects SET status = 'IN_PROGRESS', end_date = $2, updated_at = NOW() WHERE id = $1`,
+            [projCheck[0].id, endDate]
+          );
+        } else {
+          await client.query(
+            `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
+            [projCheck[0].id]
+          );
+        }
+        logger.info(`[handlePaymentCaptured] Recovery: project ${projCheck[0].id} set to IN_PROGRESS`);
       } else {
-        logger.info(`[handlePaymentCaptured] No custom_package found matching project criteria - this may be a direct project`);
+        logger.info(`[handlePaymentCaptured] Order already fully processed — nothing to do`);
       }
+
+      await client.query('COMMIT');
+      return;
+    }
+
+    // First-time processing: mark order PAID
+    await client.query(
+      `UPDATE razorpay_orders SET status = 'PAID', updated_at = NOW() WHERE id = $1`,
+      [order.id]
+    );
+    logger.info(`[handlePaymentCaptured] Order ${orderId} marked PAID, reference_id: ${order.reference_id}`);
+
+    // Update transaction to HELD (only if still INITIATED — guard against /verify having won the race)
+    const { rowCount } = await client.query(
+      `UPDATE transactions
+       SET status = 'HELD', razorpay_payment_id = $1, held_at = NOW(), updated_at = NOW()
+       WHERE id = $2 AND status = 'INITIATED'`,
+      [paymentId, order.reference_id]
+    );
+
+    if (rowCount === 0) {
+      logger.info(`[handlePaymentCaptured] Transaction ${order.reference_id} already processed by /verify — skipping`);
+      await client.query('COMMIT');
+      return;
+    }
+
+    logger.info(`[handlePaymentCaptured] Transaction ${order.reference_id} updated to HELD via webhook`);
+
+    // Mark the linked custom package as paid.
+    // Use a subquery with LIMIT 1 (ORDER BY created_at DESC) so only the most-recent
+    // accepted package is updated even if duplicates exist.
+    const { rows: cpRows } = await client.query(
+      `UPDATE custom_packages
+       SET status = 'paid', updated_at = NOW()
+       WHERE id = (
+         SELECT cp2.id FROM custom_packages cp2
+         JOIN transactions t ON t.id = $1
+         JOIN projects p ON t.project_id = p.id
+         WHERE cp2.creator_id = p.creator_id
+           AND cp2.freelancer_id = p.freelancer_id
+           AND cp2.status = 'accepted'
+           AND cp2.price::numeric = p.amount::numeric
+         ORDER BY cp2.created_at DESC
+         LIMIT 1
+       )
+       RETURNING id, delivery_days, delivery_time`,
+      [order.reference_id]
+    );
+
+    if (cpRows.length === 0) {
+      logger.info(`[handlePaymentCaptured] No matching custom_package found — may be a direct project`);
     } else {
-      logger.info(`[handlePaymentCaptured] Transaction ${order.reference_id} already processed or not in INITIATED state`);
+      logger.info(`[handlePaymentCaptured] Custom package ${cpRows[0].id} marked as paid`);
+    }
+
+    // Compute end_date from delivery info and move project to IN_PROGRESS
+    const cpData = cpRows[0] || null;
+    let endDate = null;
+    if (cpData) {
+      endDate = new Date();
+      endDate.setDate(endDate.getDate() + (parseInt(cpData.delivery_days) || 0));
+      endDate.setHours(endDate.getHours() + (parseInt(cpData.delivery_time) || 0));
+    }
+
+    const { rows: txRows } = await client.query(
+      'SELECT project_id FROM transactions WHERE id = $1',
+      [order.reference_id]
+    );
+
+    if (txRows.length > 0) {
+      if (endDate) {
+        await client.query(
+          `UPDATE projects SET status = 'IN_PROGRESS', end_date = $2, updated_at = NOW() WHERE id = $1`,
+          [txRows[0].project_id, endDate]
+        );
+        logger.info(`[handlePaymentCaptured] Project ${txRows[0].project_id} → IN_PROGRESS, end_date=${endDate.toISOString()}`);
+      } else {
+        await client.query(
+          `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
+          [txRows[0].project_id]
+        );
+        logger.info(`[handlePaymentCaptured] Project ${txRows[0].project_id} → IN_PROGRESS`);
+      }
     }
 
     await client.query('COMMIT');

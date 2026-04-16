@@ -41,6 +41,15 @@ class PaymentService {
     try {
       await client.query('BEGIN');
 
+      // Guard: reject if an active (INITIATED or HELD) transaction already exists for this project
+      const { rows: activeTx } = await client.query(
+        `SELECT id, status FROM transactions WHERE project_id = $1 AND status IN ('INITIATED', 'HELD') LIMIT 1`,
+        [projectId]
+      );
+      if (activeTx.length > 0) {
+        throw new Error(`Payment already exists for project ${projectId} (transaction ${activeTx[0].id} is ${activeTx[0].status})`);
+      }
+
       logger.info(`[createServicePaymentOrder] Looking up project_id=${projectId} creator_id(clientId)=${clientId}`);
       const { rows: projects } = await client.query(
         `SELECT p.*, so.service_name
@@ -152,8 +161,81 @@ class PaymentService {
         );
 
         if (txCheck.length > 0 && txCheck[0].status === 'HELD') {
-          logger.info(`[processServicePayment] Transaction ${order.reference_id} already HELD, returning success`);
+          // Check if the project was also updated; if not (partial failure), fix it now
+          const { rows: projCheck } = await client.query(
+            `SELECT p.id, p.status, p.creator_id, p.freelancer_id
+             FROM transactions t
+             JOIN projects p ON t.project_id = p.id
+             WHERE t.id = $1`,
+            [order.reference_id]
+          );
+
+          logger.info(`[processServicePayment] Idempotency projCheck result=${JSON.stringify(projCheck)}`);
+
+          if (projCheck.length === 0) {
+            logger.warn(`[processServicePayment] No project found for transaction ${order.reference_id}`);
+          } else if (projCheck[0].status !== 'CREATED') {
+            logger.info(`[processServicePayment] Project ${projCheck[0].id} already in status=${projCheck[0].status}, no recovery needed`);
+          } else {
+            logger.warn(`[processServicePayment] Project ${projCheck[0].id} still CREATED after HELD transaction — completing update now`);
+
+            // In a partial failure the custom_package is still 'accepted' (never got marked paid).
+            // Try 'accepted' first; fall back to 'paid' in case cp was updated but project wasn't.
+            const { rows: cpAccepted, rowCount: cpAcceptedCount } = await client.query(
+              `UPDATE custom_packages
+               SET status = 'paid', updated_at = NOW()
+               WHERE creator_id = $1
+                 AND freelancer_id = $2
+                 AND status = 'accepted'
+                 AND price::numeric = (SELECT amount::numeric FROM projects WHERE id = $3)
+               RETURNING id, delivery_days, delivery_time`,
+              [projCheck[0].creator_id, projCheck[0].freelancer_id, projCheck[0].id]
+            );
+
+            logger.info(`[processServicePayment] Idempotency recovery: custom_packages updated count=${cpAcceptedCount} rows=${JSON.stringify(cpAccepted)}`);
+
+            // If cp was already 'paid' (cp updated but project wasn't), just fetch it for delivery info
+            let cpData = cpAccepted[0] || null;
+            if (!cpData) {
+              const { rows: cpPaid } = await client.query(
+                `SELECT delivery_days, delivery_time FROM custom_packages
+                 WHERE creator_id = $1
+                   AND freelancer_id = $2
+                   AND status = 'paid'
+                 ORDER BY updated_at DESC
+                 LIMIT 1`,
+                [projCheck[0].creator_id, projCheck[0].freelancer_id]
+              );
+              cpData = cpPaid[0] || null;
+              logger.info(`[processServicePayment] Idempotency recovery: fallback cpPaid=${JSON.stringify(cpData)}`);
+            }
+
+            let endDate = null;
+            if (cpData) {
+              const deliveryDays = parseInt(cpData.delivery_days) || 0;
+              const deliveryHours = parseInt(cpData.delivery_time) || 0;
+              endDate = new Date();
+              endDate.setDate(endDate.getDate() + deliveryDays);
+              endDate.setHours(endDate.getHours() + deliveryHours);
+              logger.info(`[processServicePayment] Idempotency recovery: computed end_date=${endDate.toISOString()}`);
+            }
+
+            if (endDate) {
+              await client.query(
+                `UPDATE projects SET status = 'IN_PROGRESS', end_date = $2, updated_at = NOW() WHERE id = $1`,
+                [projCheck[0].id, endDate]
+              );
+            } else {
+              await client.query(
+                `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
+                [projCheck[0].id]
+              );
+            }
+            logger.info(`[processServicePayment] Idempotency recovery: Project ${projCheck[0].id} updated to IN_PROGRESS`);
+          }
+
           await client.query('COMMIT');
+          logger.info(`[processServicePayment] Transaction ${order.reference_id} already HELD, returning success`);
           return { success: true, transactionId: order.reference_id };
         }
 
@@ -192,30 +274,32 @@ class PaymentService {
         throw new Error(`Transaction ${order.reference_id} already processed (current status: ${currentStatus})`);
       }
 
-      // Mark the linked custom package as paid
-      // Match on creator, freelancer, service, price, and units to ensure we update only the correct package
+      // Mark the linked custom package as paid.
+      // Use a subquery with LIMIT 1 (ORDER BY created_at DESC) so only the most-recent
+      // accepted package is updated even if price-matching duplicates exist.
       logger.info(`[processServicePayment] Updating custom_packages to paid for transaction id=${order.reference_id}`);
-      const { rowCount: cpRowCount, rows: cpRows } = await client.query(
-        `UPDATE custom_packages cp
+      const { rows: cpRows } = await client.query(
+        `UPDATE custom_packages
          SET status = 'paid', updated_at = NOW()
-         FROM transactions t
-         JOIN projects p ON t.project_id = p.id
-         WHERE t.id = $1
-           AND cp.creator_id = p.creator_id
-           AND cp.freelancer_id = p.freelancer_id
-           AND cp.status = 'accepted'
-           AND (cp.service_id = p.service_id OR (cp.service_id IS NULL AND p.service_id IS NULL))
-           AND cp.price = p.amount
-           AND (cp.units = p.number_of_units OR (cp.units IS NULL AND p.number_of_units IS NULL))
-         RETURNING cp.id, cp.status, cp.creator_id, cp.freelancer_id, cp.price, cp.delivery_days, cp.delivery_time`,
+         WHERE id = (
+           SELECT cp2.id FROM custom_packages cp2
+           JOIN transactions t ON t.id = $1
+           JOIN projects p ON t.project_id = p.id
+           WHERE cp2.creator_id = p.creator_id
+             AND cp2.freelancer_id = p.freelancer_id
+             AND cp2.status = 'accepted'
+             AND cp2.price::numeric = p.amount::numeric
+           ORDER BY cp2.created_at DESC
+           LIMIT 1
+         )
+         RETURNING id, status, creator_id, freelancer_id, price, delivery_days, delivery_time`,
         [order.reference_id]
       );
+      const cpRowCount = cpRows.length;
       logger.info(`[processServicePayment] custom_packages update rowCount=${cpRowCount}, rows=${JSON.stringify(cpRows)}`);
 
       if (cpRowCount === 0) {
         logger.warn(`[processServicePayment] No custom_package found matching project criteria for transaction ${order.reference_id} - this may be a direct project without a custom package`);
-      } else if (cpRowCount > 1) {
-        logger.warn(`[processServicePayment] Multiple custom_packages (${cpRowCount}) updated to paid for transaction ${order.reference_id} - this may indicate duplicate packages`);
       }
 
       // Compute end_date from custom package delivery_days + delivery_time (hours)
@@ -265,11 +349,11 @@ class PaymentService {
     const { rows } = await db.query(
       `SELECT t.*,
         c.full_name as client_name, c.email as client_email,
-        f.full_name as freelancer_name, f.email as freelancer_email,
-        p.title as project_title
+        f.freelancer_full_name as freelancer_name, f.freelancer_email as freelancer_email,
+        p.amount as project_amount
       FROM transactions t
-      JOIN users c ON t.creator_id = c.id
-      JOIN users f ON t.freelancer_id = f.id
+      JOIN creators c ON t.creator_id = c.creator_id
+      JOIN freelancer f ON t.freelancer_id = f.freelancer_id
       JOIN projects p ON t.project_id = p.id
       WHERE t.id = $1`,
       [transactionId]
@@ -283,11 +367,10 @@ class PaymentService {
       `SELECT t.*,
         c.full_name as client_name,
         f.freelancer_full_name as freelancer_name,
-        p.title as project_title,
         p.status as project_status
       FROM transactions t
-      JOIN users c ON t.creator_id = c.id
-      JOIN users f ON t.freelancer_id = f.id
+      JOIN creators c ON t.creator_id = c.creator_id
+      JOIN freelancer f ON t.freelancer_id = f.freelancer_id
       JOIN projects p ON t.project_id = p.id
       WHERE t.status = $1
       ORDER BY t.created_at DESC`,
