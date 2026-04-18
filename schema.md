@@ -594,9 +594,12 @@ CREATE TABLE IF NOT EXISTS public.payouts
     reference_id character varying(255) COLLATE pg_catalog."default",
     narration character varying(255) COLLATE pg_catalog."default",
     failure_reason text COLLATE pg_catalog."default",
+    rejection_reason text COLLATE pg_catalog."default", -- Reason provided by admin when rejecting payout
     requested_at timestamp with time zone, -- When freelancer requested payout
     approved_at timestamp with time zone, -- When admin approved payout
     approved_by integer, -- Admin who approved
+    rejected_at timestamp with time zone, -- When admin rejected payout
+    rejected_by integer, -- Admin who rejected
     initiated_at timestamp with time zone,
     processed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now(),
@@ -614,7 +617,11 @@ CREATE TABLE IF NOT EXISTS public.payouts
         REFERENCES public.transactions (id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION,
-    CONSTRAINT payouts_status_check CHECK (status::text = ANY (ARRAY['REQUESTED'::character varying, 'QUEUED'::character varying, 'PENDING'::character varying, 'PROCESSING'::character varying, 'PROCESSED'::character varying, 'REVERSED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying]::text[])),
+    CONSTRAINT payouts_rejected_by_fkey FOREIGN KEY (rejected_by)
+        REFERENCES public.admin (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT payouts_status_check CHECK (status::text = ANY (ARRAY['REQUESTED'::character varying, 'QUEUED'::character varying, 'PENDING'::character varying, 'PROCESSING'::character varying, 'PROCESSED'::character varying, 'REVERSED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying, 'REJECTED'::character varying]::text[])),
     CONSTRAINT payouts_mode_check CHECK (mode::text = ANY (ARRAY['IMPS'::character varying, 'NEFT'::character varying, 'RTGS'::character varying, 'UPI'::character varying]::text[]))
 )
 

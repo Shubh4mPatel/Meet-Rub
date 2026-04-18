@@ -582,9 +582,85 @@ const getPayoutRequests = async (req, res, next) => {
   }
 };
 
+// Reject payout request (admin)
+const rejectPayout = async (req, res, next) => {
+  const payoutId = req.params.id;
+  const adminId = req.user.roleWiseId;
+  const { rejection_reason } = req.body;
+
+  if (!rejection_reason || !rejection_reason.trim()) {
+    return next(new AppError('rejection_reason is required', 400));
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: payouts } = await client.query(
+      `SELECT po.*, f.user_id AS freelancer_user_id
+       FROM payouts po
+       JOIN users u ON po.freelancer_id = u.id
+       JOIN freelancer f ON f.user_id = u.id
+       WHERE po.id = $1 FOR UPDATE`,
+      [payoutId]
+    );
+
+    if (payouts.length === 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError('Payout not found', 404));
+    }
+
+    const payout = payouts[0];
+
+    if (payout.status !== 'REQUESTED') {
+      await client.query('ROLLBACK');
+      return next(new AppError(`Payout cannot be rejected. Current status: ${payout.status}`, 400));
+    }
+
+    // Mark payout as REJECTED
+    await client.query(
+      `UPDATE payouts
+       SET status = 'REJECTED', rejection_reason = $1, rejected_by = $2, rejected_at = NOW(), updated_at = NOW()
+       WHERE id = $3`,
+      [rejection_reason.trim(), adminId, payoutId]
+    );
+
+    // Credit the amount back to freelancer's earnings_balance
+    await client.query(
+      `UPDATE freelancer
+       SET earnings_balance = earnings_balance + $1, updated_at = NOW()
+       WHERE user_id = $2`,
+      [payout.amount, payout.freelancer_user_id]
+    );
+
+    // If linked to a transaction, revert it back to HELD
+    if (payout.transaction_id) {
+      await client.query(
+        `UPDATE transactions SET status = 'HELD', updated_at = NOW() WHERE id = $1`,
+        [payout.transaction_id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Payout rejected and amount credited back to freelancer balance.',
+      data: { payout_id: payoutId, rejection_reason: rejection_reason.trim() }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('rejectPayout error:', error);
+    return next(new AppError(error.message, 500));
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   getEscrowTransactions,
   approvePayout,
+  rejectPayout,
   getAllPayouts,
   getPayoutRequests,
   getPayoutDetails,

@@ -90,19 +90,36 @@ const getBankAccount = async (req, res, next) => {
   }
 }
 
-// Get freelancer's payouts
+// Get freelancer's withdrawal history with filters and pagination
 const getMyPayouts = async (req, res, next) => {
   try {
     const freelancerId = req.user.id;
-    const payouts = await payoutService.getFreelancerPayouts(freelancerId);
+    const { status, from_date, to_date, page = 1, limit = 10 } = req.query;
 
-    res.json({
-      count: payouts.length,
-      payouts
+    const parsedPage = parseInt(page);
+    const parsedLimit = parseInt(limit);
+    if (isNaN(parsedPage) || parsedPage < 1) {
+      return next(new AppError('Invalid page number', 400));
+    }
+    if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+      return next(new AppError('Invalid limit. Must be between 1 and 100', 400));
+    }
+
+    const result = await payoutService.getFreelancerPayouts(freelancerId, {
+      status,
+      from_date,
+      to_date,
+      page: parsedPage,
+      limit: parsedLimit
     });
+
+    res.json(result);
   } catch (error) {
+    if (error.message && error.message.startsWith('Invalid status')) {
+      return next(new AppError(error.message, 400));
+    }
     console.error('Get my payouts error:', error);
-    return next(new AppError('Failed to get payouts', 500));
+    return next(new AppError('Failed to get withdrawal history', 500));
   }
 }
 
