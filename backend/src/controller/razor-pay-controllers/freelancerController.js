@@ -109,7 +109,7 @@ const getMyPayouts = async (req, res, next) => {
 // Get earnings summary
 const getEarningsSummary = async (req, res, next) => {
   try {
-    const freelancerId = req.user.id;
+    const freelancerId = req.user.roleWiseId;
 
     const { rows: completed } = await db.query(
       `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
@@ -133,15 +133,11 @@ const getEarningsSummary = async (req, res, next) => {
     );
 
     res.json({
-      completed_earnings: {
-        count: completed[0].count,
-        total: parseFloat(completed[0].total || 0)
-      },
       pending_release: {
         count: pending[0].count,
         total: parseFloat(pending[0].total || 0)
       },
-      processing: {
+      available_balance: {
         count: processing[0].count,
         total: parseFloat(processing[0].total || 0)
       },
