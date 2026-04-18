@@ -123,6 +123,8 @@ List any parts of the feature you could NOT fully analyse (e.g. missing environm
 
 ## Phase 3 — Save the Review
 
+> **Model for this phase**: Use **GPT-4o** when writing the review file. It is sufficient for file creation and saves tokens compared to the analysis model.
+
 After producing the full review report, **you MUST save it as a markdown file** in `code-review-reports/`.
 
 ### File naming convention

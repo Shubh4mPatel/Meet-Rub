@@ -60,6 +60,8 @@ Before starting the bug fix, analyze the task complexity and select the appropri
 3. State your selection: "Selected **[MODEL]** for **[COMPLEXITY_LEVEL]** fix — [ONE-LINE REASON]"
 4. Proceed to Phase 1
 
+> **File Write Rule**: When applying edits in Phase 3 (writing/creating files), always use **GPT-4o** regardless of the model selected for analysis. Switch back to the analysis model for validation and reasoning steps. This minimises token cost on write operations.
+
 ### Phase 1 — Understand the Bug
 
 1. Parse the input: extract **root cause**, **affected files**, **key variables/config**, and **execution flow** from the bug report
