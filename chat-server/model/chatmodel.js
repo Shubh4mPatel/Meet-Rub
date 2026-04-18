@@ -1,5 +1,5 @@
 const pool = require("../config/dbConfig");
-const {logger} = require("../utils/logger");
+const { logger } = require("../utils/logger");
 
 // Converts a time string to UTC.
 // If the value already carries a UTC indicator (Z or +00:00) it is returned unchanged.
@@ -195,53 +195,53 @@ LIMIT $2 OFFSET $3;
         senderUsername: row.sender_username,
         deadlineExtension: row.deadline_extension_id
           ? {
-              id: row.deadline_extension_id,
-              project_id: row.der_project_id,
-              freelancer_id: row.der_freelancer_id,
-              creator_id: row.der_creator_id,
-              chat_room_id: row.der_chat_room_id,
-              new_delivery_date: row.der_new_delivery_date,
-              new_delivery_time: row.der_new_delivery_time,
-              status: row.der_status,
-              requested_at: row.der_requested_at,
-              approved_at: row.der_approved_at,
-              expires_at: row.der_expires_at,
-            }
+            id: row.deadline_extension_id,
+            project_id: row.der_project_id,
+            freelancer_id: row.der_freelancer_id,
+            creator_id: row.der_creator_id,
+            chat_room_id: row.der_chat_room_id,
+            new_delivery_date: row.der_new_delivery_date,
+            new_delivery_time: row.der_new_delivery_time,
+            status: row.der_status,
+            requested_at: row.der_requested_at,
+            approved_at: row.der_approved_at,
+            expires_at: row.der_expires_at,
+          }
           : null,
         project: row.deadline_extension_id
           ? {
-              id: row.der_project_id,
-              status: row.der_project_status,
-              amount: row.der_project_amount,
-              end_date: row.der_project_end_date,
-              service_name: row.der_service_name,
-              plan_type: row.der_plan_type,
-              delivery_time: row.der_delivery_time,
-            }
+            id: row.der_project_id,
+            status: row.der_project_status,
+            amount: row.der_project_amount,
+            end_date: row.der_project_end_date,
+            service_name: row.der_service_name,
+            plan_type: row.der_plan_type,
+            delivery_time: row.der_delivery_time,
+          }
           : null,
         customPackage: row.custom_package_id
           ? {
-              id: row.cp_id,
-              room_id: row.cp_room_id,
-              freelancer_id: row.cp_freelancer_id,
-              creator_id: row.cp_creator_id,
-              plan_type: row.cp_plan_type,
-              price: row.cp_price,
-              units: row.cp_units,
-              package_type: row.cp_package_type,
-              status: row.cp_status,
-              delivery_days: row.cp_delivery_days,
-              delivery_time: row.cp_delivery_time,
-              reason_for_revoke: row.cp_reason_for_revoke,
-              reason_for_rejection: row.cp_reason_for_rejection,
-              service_id: row.cp_service_id,
-              service_type: row.cp_service_type,
-              initiator_role: row.cp_initiator_role,
-              expires_at: row.cp_expires_at,
-              created_at: row.cp_created_at,
-              project_id: row.cp_project_id || null,
-              project_status: row.cp_project_status || null,
-            }
+            id: row.cp_id,
+            room_id: row.cp_room_id,
+            freelancer_id: row.cp_freelancer_id,
+            creator_id: row.cp_creator_id,
+            plan_type: row.cp_plan_type,
+            price: row.cp_price,
+            units: row.cp_units,
+            package_type: row.cp_package_type,
+            status: row.cp_status,
+            delivery_days: row.cp_delivery_days,
+            delivery_time: row.cp_delivery_time,
+            reason_for_revoke: row.cp_reason_for_revoke,
+            reason_for_rejection: row.cp_reason_for_rejection,
+            service_id: row.cp_service_id,
+            service_type: row.cp_service_type,
+            initiator_role: row.cp_initiator_role,
+            expires_at: row.cp_expires_at,
+            created_at: row.cp_created_at,
+            project_id: row.cp_project_id || null,
+            project_status: row.cp_project_status || null,
+          }
           : null,
       }));
     } catch (error) {
@@ -457,7 +457,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         units,
         package_type,
         status || "pending",
-        new Date(Date.now() + 24*7 * 60 * 60 * 1000).toISOString(),
+        new Date(Date.now() + 24 * 7 * 60 * 60 * 1000).toISOString(),
         new Date().toISOString(),
         delivery_days != null ? parseInt(delivery_days) : null,
         delivery_time != null ? parseInt(delivery_time) : null,
