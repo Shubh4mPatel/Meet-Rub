@@ -1,4 +1,4 @@
-const {pool:db} = require('../../config/dbConfig');
+const { pool: db } = require('../../config/dbConfig');
 const razorpay = require('../../config/razorpayX');
 
 class PayoutService {

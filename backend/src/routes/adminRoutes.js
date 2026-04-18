@@ -24,7 +24,7 @@ router.post('/addServices', upload.fields([
 
 router.get('/service-requests', getUserServiceRequestsToAdmin)
 
-router.post('/add-niches',addNiches);
+router.post('/add-niches', addNiches);
 
 
 router.get('/escrow', getEscrowTransactions);
@@ -51,13 +51,13 @@ router.get('/get-all-creators', requireRole(['admin']), getAllCreatorProfiles);
 
 router.get('/get-creatorby-id/:creator_id', requireRole(['admin']), getCreatorById);
 
-router.get('/freelancers-for-KYC-approval', requireRole(['admin']),getFreelancerForKYCApproval);
+router.get('/freelancers-for-KYC-approval', requireRole(['admin']), getFreelancerForKYCApproval);
 
-router.get('/get-all-freelancers', requireRole(['admin']),getFreelancerForAdmin);
+router.get('/get-all-freelancers', requireRole(['admin']), getFreelancerForAdmin);
 
-router.get('/get-freelancerby-id/:freelancer_id', requireRole(['admin']),getFreeLancerByIdForAdmin);
+router.get('/get-freelancerby-id/:freelancer_id', requireRole(['admin']), getFreeLancerByIdForAdmin);
 
-router.get('/get-freelancers-for-suggestion', requireRole(['admin']),getFreelancerForSuggestion);
+router.get('/get-freelancers-for-suggestion', requireRole(['admin']), getFreelancerForSuggestion);
 
 router.post('/reject-kyc/', requireRole(['admin']), rejectKYCByAdmin);
 

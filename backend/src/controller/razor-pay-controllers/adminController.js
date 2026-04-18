@@ -317,7 +317,7 @@ const rejectKYCByAdmin = async (req, res, next) => {
 }
 
 
-const suspendFreelancerByAdmin = async (req, res, next) =>  {
+const suspendFreelancerByAdmin = async (req, res, next) => {
   try {
     const { reason_for_suspension, freelancer_id } = req.body;
 
