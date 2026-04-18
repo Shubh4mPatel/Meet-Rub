@@ -135,13 +135,18 @@ const getCreatorPayments = async (req, res, next) => {
     // Extract query parameters
     const {
       search = '',
-      page = 1,
-      limit = 10
+      service = '',
+      start_date = '',
+      end_date = '',
+      page = '1',
+      limit = '10'
     } = req.query;
 
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
+    const offset = (pageNum - 1) * limitNum;
 
-    // Build dynamic query with search on freelancer name and service name
+    // Build dynamic query with search on freelancer name only
     const queryParams = [creatorId];
     let paramIndex = 2;
 
@@ -151,11 +156,31 @@ const getCreatorPayments = async (req, res, next) => {
         AND (
           LOWER(f.freelancer_full_name) LIKE LOWER($${paramIndex}) OR
           LOWER(f.first_name) LIKE LOWER($${paramIndex}) OR
-          LOWER(f.last_name) LIKE LOWER($${paramIndex}) OR
-          LOWER(s.service_name) LIKE LOWER($${paramIndex})
+          LOWER(f.last_name) LIKE LOWER($${paramIndex})
         )
       `;
       queryParams.push(`%${search.trim()}%`);
+      paramIndex++;
+    }
+
+    // Add service filter
+    let serviceCondition = '';
+    if (service && service.trim()) {
+      serviceCondition = `AND LOWER(s.service_name) = LOWER($${paramIndex})`;
+      queryParams.push(service.trim());
+      paramIndex++;
+    }
+
+    // Add date filter
+    let dateCondition = '';
+    if (start_date && start_date.trim()) {
+      dateCondition += `AND t.created_at >= $${paramIndex}::timestamp `;
+      queryParams.push(start_date.trim());
+      paramIndex++;
+    }
+    if (end_date && end_date.trim()) {
+      dateCondition += `AND t.created_at <= $${paramIndex}::timestamp `;
+      queryParams.push(end_date.trim());
       paramIndex++;
     }
 
@@ -168,6 +193,8 @@ const getCreatorPayments = async (req, res, next) => {
       LEFT JOIN freelancer f ON t.freelancer_id = f.freelancer_id
       WHERE t.creator_id = $1
       ${searchCondition}
+      ${serviceCondition}
+      ${dateCondition}
     `;
 
     const { rows: [{ total }] } = await db.query(countQuery, queryParams);
@@ -179,28 +206,24 @@ const getCreatorPayments = async (req, res, next) => {
         t.project_id,
         s.service_name as service,
         f.freelancer_full_name as freelancer_name,
-        f.first_name as freelancer_first_name,
-        f.last_name as freelancer_last_name,
+        f.user_name as freelancer_username,
         f.profile_image_url as freelancer_profile_image,
         t.total_amount,
-        t.platform_commission,
-        t.freelancer_amount,
-        t.status,
         t.razorpay_payment_id as transaction_id,
-        t.created_at as date_time,
-        t.payment_source,
-        t.currency
+        t.created_at as date_time
       FROM transactions t
       LEFT JOIN projects p ON t.project_id = p.id
       LEFT JOIN services s ON p.service_id = s.id
       LEFT JOIN freelancer f ON t.freelancer_id = f.freelancer_id
       WHERE t.creator_id = $1
       ${searchCondition}
+      ${serviceCondition}
+      ${dateCondition}
       ORDER BY t.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
-    queryParams.push(parseInt(limit), offset);
+    queryParams.push(limitNum, offset);
 
     const { rows: transactions } = await db.query(dataQuery, queryParams);
 
@@ -233,10 +256,10 @@ const getCreatorPayments = async (req, res, next) => {
       success: true,
       data: transactionsWithPresignedUrls,
       pagination: {
-        current_page: parseInt(page),
-        per_page: parseInt(limit),
+        current_page: pageNum,
+        per_page: limitNum,
         total_records: parseInt(total),
-        total_pages: Math.ceil(parseInt(total) / parseInt(limit))
+        total_pages: Math.ceil(parseInt(total) / limitNum)
       }
     });
   } catch (error) {

@@ -20,7 +20,8 @@
       "Bash(sed -i '919s|          \" ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name\";|          ` ORDER BY ${featuredOrderBy}f.rating DESC NULLS LAST, f.freelancer_full_name`;|' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)",
       "Bash(sed -i '923s|          \" ORDER BY MAX\\(s.created_at\\) DESC NULLS LAST, f.freelancer_full_name\";|          ` ORDER BY ${featuredOrderBy}MAX\\(s.created_at\\) DESC NULLS LAST, f.freelancer_full_name`;|' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)",
       "Bash(sed -i '848s|WHERE LOWER\\(service_name\\) = ANY\\(\\\\$1::text\\\\[\\\\]\\)|WHERE service_name = ANY\\(\\\\$1::text[]\\)|' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)",
-      "Bash(sed -i '3341s|WHERE LOWER\\(service_name\\) = ANY|WHERE service_name = ANY|' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)"
+      "Bash(sed -i '3341s|WHERE LOWER\\(service_name\\) = ANY|WHERE service_name = ANY|' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)",
+      "Bash(psql -U postgres -d meetrub -c \"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'freelancer' AND column_name LIKE '%username%';\")"
     ]
   },
   "hooks": {

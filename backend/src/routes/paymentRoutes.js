@@ -16,6 +16,6 @@ router.get('/transactions/:id', getTransaction);
 router.get('/my-transactions', getMyTransactions);
 
 
-router.get('/creator/payments', requireRole(['creator']), getCreatorPayments);
+router.get('/creator/payment-history', requireRole(['creator']), getCreatorPayments);
 
 module.exports = router;
