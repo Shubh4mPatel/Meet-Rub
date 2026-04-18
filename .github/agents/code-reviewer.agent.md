@@ -118,3 +118,32 @@ Severity levels:
 ### Coverage Gaps
 
 List any parts of the feature you could NOT fully analyse (e.g. missing environment variables, external service internals, frontend code) so the reader knows the review's limits.
+
+---
+
+## Phase 3 — Save the Review
+
+After producing the full review report, **you MUST save it as a markdown file** in `code-review-reports/`.
+
+### File naming convention
+
+- Use the feature/flow name in SCREAMING_SNAKE_CASE
+- Always append `_REVIEW.md`
+- Examples: `WITHDRAWAL_HISTORY_REVIEW.md`, `CHAT_JOIN_FLOW_REVIEW.md`, `CREATE_ORDER_REVIEW.md`
+
+### File content
+
+The saved file must contain the **complete review report** exactly as produced in Phase 2 — Feature Mapped table, all Findings, Summary table, Overall assessment, and Coverage Gaps — plus a header block:
+
+```
+# Code Review: <Feature Name>
+
+**Date**: <current date>
+**Scope**: <one-line description of what was reviewed>
+
+---
+```
+
+Use `create_file` to write the file to `code-review-reports/<FEATURE_NAME>_REVIEW.md`.
+
+> If a review file for this feature already exists (from a previous review), append `_v2`, `_v3`, etc. to avoid overwriting historical reviews.
