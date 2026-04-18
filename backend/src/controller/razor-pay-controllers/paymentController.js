@@ -127,10 +127,6 @@ const getCreatorPayments = async (req, res, next) => {
     const creatorId = req.user.roleWiseId;
     const role = req.user.role;
 
-    // Only creators can access this endpoint
-    // if (role !== 'creator') {
-    //   return next(new AppError('Access denied. Only creators can view this', 403));
-    // }
 
     // Extract query parameters
     const {
