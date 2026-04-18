@@ -881,6 +881,44 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     }
   },
 
+  async getCreatorProjects(creatorUserId, freelancerUserId) {
+    const query = `
+      SELECT
+        p.id AS project_id,
+        p.status,
+        p.amount,
+        p.number_of_units,
+        p.end_date,
+        p.service_id,
+        s.service_name,
+        cp.package_type,
+        EXISTS (
+          SELECT 1 FROM deadline_extension_requested der
+          WHERE der.project_id = p.id AND der.status = 'pending'
+        ) AS has_pending_extension
+      FROM projects p
+      JOIN creators cr ON p.creator_id = cr.creator_id
+      JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+      LEFT JOIN services s ON p.service_id = s.id
+      LEFT JOIN custom_packages cp ON cp.freelancer_id = p.freelancer_id
+        AND cp.creator_id = p.creator_id
+        AND cp.service_id = p.service_id
+        AND cp.status = 'accepted'
+      WHERE cr.user_id = $1
+        AND f.user_id = $2
+        AND p.status IN ('IN_PROGRESS')
+        AND p.end_date > NOW()
+      ORDER BY p.created_at DESC
+    `;
+    try {
+      const result = await pool.query(query, [creatorUserId, freelancerUserId]);
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting creator projects:', error);
+      throw error;
+    }
+  },
+
   // Save a notification to web_notifications using the current schema
   async saveWebNotification(recipientId, senderId, eventType, title, body, actionType = 'none', actionRoute = null) {
     const query = `

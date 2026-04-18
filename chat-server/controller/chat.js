@@ -135,6 +135,13 @@ const chatController = (io) => {
           socket.emit('projects-list', { projects });
         }
 
+        // Send projects list to the creator
+        if (userRole === 'creator') {
+          const projects = await chatModel.getCreatorProjects(userId, recipientId);
+          console.log(`[projects-list] Sending project data to creator - userId=${userId} recipientId=${recipientId} projectCount=${projects?.length || 0} projectIds=${projects?.map(p => p.id).join(',') || 'none'}`);
+          socket.emit('projects-list', { projects });
+        }
+
         // Refresh pending payments for creator — filtered to this freelancer
         if (userRole === 'creator' && roleWiseId) {
           const pendingPayments = await chatModel.getPendingPaymentPackages(roleWiseId, recipientId);
