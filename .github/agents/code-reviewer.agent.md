@@ -1,7 +1,7 @@
 ---
 description: "Use when: reviewing a feature, reviewing implemented code, checking for edge cases, scalability review, performance review, code quality check, 'review this feature', 'what could go wrong', 'is this production ready', 'find edge cases', 'performance concerns'. Identifies all APIs, functions, and related code for a feature, then produces a structured review covering correctness, edge cases, scalability, and performance."
 name: "Code Reviewer"
-tools: [read, search, todo]
+tools: [read, search, todo, create_file]
 argument-hint: "Describe the feature or name the file/route/event to review (e.g. 'the join-chat flow', 'POST /orders endpoint', 'payment webhook handler')"
 user-invocable: true
 ---
