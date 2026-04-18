@@ -2,6 +2,7 @@ const paymentService = require('../../razor-pay-services/paymentService');
 const { pool: db } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const { getLogger } = require('../../../utils/logger');
+const { createPresignedUrl, getObjectNameFromUrl } = require('../../../utils/helper');
 const logger = getLogger('payment-controller');
 
 // Create Razorpay order for service payment
@@ -120,9 +121,135 @@ const getMyTransactions = async (req, res, next) => {
   }
 }
 
+// Get creator's payment transactions with search and pagination
+const getCreatorPayments = async (req, res, next) => {
+  try {
+    const creatorId = req.user.roleWiseId;
+    const role = req.user.role;
+
+    // Only creators can access this endpoint
+    // if (role !== 'creator') {
+    //   return next(new AppError('Access denied. Only creators can view this', 403));
+    // }
+
+    // Extract query parameters
+    const {
+      search = '',
+      page = 1,
+      limit = 10
+    } = req.query;
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build dynamic query with search on freelancer name and service name
+    const queryParams = [creatorId];
+    let paramIndex = 2;
+
+    let searchCondition = '';
+    if (search && search.trim()) {
+      searchCondition = `
+        AND (
+          LOWER(f.freelancer_full_name) LIKE LOWER($${paramIndex}) OR
+          LOWER(f.first_name) LIKE LOWER($${paramIndex}) OR
+          LOWER(f.last_name) LIKE LOWER($${paramIndex}) OR
+          LOWER(s.service_name) LIKE LOWER($${paramIndex})
+        )
+      `;
+      queryParams.push(`%${search.trim()}%`);
+      paramIndex++;
+    }
+
+    // Count total records
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM transactions t
+      LEFT JOIN projects p ON t.project_id = p.id
+      LEFT JOIN services s ON p.service_id = s.id
+      LEFT JOIN freelancer f ON t.freelancer_id = f.freelancer_id
+      WHERE t.creator_id = $1
+      ${searchCondition}
+    `;
+
+    const { rows: [{ total }] } = await db.query(countQuery, queryParams);
+
+    // Fetch paginated transactions
+    const dataQuery = `
+      SELECT
+        t.id,
+        t.project_id,
+        s.service_name as service,
+        f.freelancer_full_name as freelancer_name,
+        f.first_name as freelancer_first_name,
+        f.last_name as freelancer_last_name,
+        f.profile_image_url as freelancer_profile_image,
+        t.total_amount,
+        t.platform_commission,
+        t.freelancer_amount,
+        t.status,
+        t.razorpay_payment_id as transaction_id,
+        t.created_at as date_time,
+        t.payment_source,
+        t.currency
+      FROM transactions t
+      LEFT JOIN projects p ON t.project_id = p.id
+      LEFT JOIN services s ON p.service_id = s.id
+      LEFT JOIN freelancer f ON t.freelancer_id = f.freelancer_id
+      WHERE t.creator_id = $1
+      ${searchCondition}
+      ORDER BY t.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    queryParams.push(parseInt(limit), offset);
+
+    const { rows: transactions } = await db.query(dataQuery, queryParams);
+
+    // Generate presigned URLs for freelancer profile images
+    const BUCKET_NAME = process.env.MINIO_BUCKET_NAME || 'meet-rub';
+    const URL_EXPIRY = 60 * 60 * 24 * 7; // 7 days
+
+    const transactionsWithPresignedUrls = await Promise.all(
+      transactions.map(async (transaction) => {
+        let presignedProfileImage = null;
+
+        if (transaction.freelancer_profile_image) {
+          try {
+            const objectName = getObjectNameFromUrl(transaction.freelancer_profile_image, BUCKET_NAME);
+            presignedProfileImage = await createPresignedUrl(BUCKET_NAME, objectName, URL_EXPIRY);
+          } catch (error) {
+            logger.error(`[getCreatorPayments] Failed to generate presigned URL for profile image: ${error.message}`);
+            presignedProfileImage = null;
+          }
+        }
+
+        return {
+          ...transaction,
+          freelancer_profile_image: presignedProfileImage
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: transactionsWithPresignedUrls,
+      pagination: {
+        current_page: parseInt(page),
+        per_page: parseInt(limit),
+        total_records: parseInt(total),
+        total_pages: Math.ceil(parseInt(total) / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Get creator payments error:', error);
+    logger.error(`[getCreatorPayments] Error: ${error.message}`);
+    return next(new AppError('Failed to get payment transactions', 500));
+  }
+}
+
 module.exports = {
   createPaymentOrder,
   verifyPayment,
   getTransaction,
-  getMyTransactions
+  getMyTransactions,
+  getCreatorPayments
 }

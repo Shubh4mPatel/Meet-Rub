@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireRole } = require('../middleware/authMiddleware');
-const { createPaymentOrder, verifyPayment, getTransaction, getMyTransactions } = require('../controller/razor-pay-controllers/paymentController');
+const { createPaymentOrder, verifyPayment, getTransaction, getMyTransactions, getCreatorPayments } = require('../controller/razor-pay-controllers/paymentController');
 
 
 router.post('/create-order', requireRole(['creator']), createPaymentOrder);
@@ -14,5 +14,8 @@ router.get('/transactions/:id', getTransaction);
 
 
 router.get('/my-transactions', getMyTransactions);
+
+
+router.get('/creator/payments', requireRole(['creator']), getCreatorPayments);
 
 module.exports = router;
