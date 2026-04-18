@@ -192,6 +192,7 @@ const getCreatorPayments = async (req, res, next) => {
       LEFT JOIN services s ON p.service_id = s.id
       LEFT JOIN freelancer f ON t.freelancer_id = f.freelancer_id
       WHERE t.creator_id = $1
+      AND t.status IN ('HELD', 'RELEASED', 'COMPLETED', 'REFUNDED')
       ${searchCondition}
       ${serviceCondition}
       ${dateCondition}
@@ -216,6 +217,7 @@ const getCreatorPayments = async (req, res, next) => {
       LEFT JOIN services s ON p.service_id = s.id
       LEFT JOIN freelancer f ON t.freelancer_id = f.freelancer_id
       WHERE t.creator_id = $1
+      AND t.status IN ('HELD', 'RELEASED', 'COMPLETED', 'REFUNDED')
       ${searchCondition}
       ${serviceCondition}
       ${dateCondition}
