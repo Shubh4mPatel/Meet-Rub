@@ -422,19 +422,19 @@ const resolveDispute = async (req, res, next) => {
       // Just mark as resolved — no money movement
 
     } else if (resolution_action === 'release') {
-      // Release funds to freelancer — credit earnings_balance
+      // Release funds to freelancer — credit both balances
       await client.query(
         `UPDATE transactions SET status = 'COMPLETED', released_by = $1, released_at = NOW(), updated_at = NOW() WHERE id = $2`,
         [adminId, dispute.transaction_id]
       );
 
       await client.query(
-        `UPDATE freelancer SET earnings_balance = earnings_balance + $1 WHERE freelancer_id = $2`,
+        `UPDATE freelancer SET earnings_balance = earnings_balance + $1, available_balance = available_balance + $1 WHERE freelancer_id = $2`,
         [dispute.freelancer_amount, dispute.t_freelancer_id]
       );
 
       await client.query(
-        `UPDATE projects SET status = 'APPROVED', updated_at = NOW() WHERE id = $1`,
+        `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
         [dispute.project_id]
       );
 

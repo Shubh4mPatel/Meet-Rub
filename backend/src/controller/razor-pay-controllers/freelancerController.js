@@ -159,7 +159,7 @@ const requestPayout = async (req, res, next) => {
 
     // Get freelancer with balance (locked)
     const { rows: freelancers } = await client.query(
-      `SELECT user_id AS freelancer_id, earnings_balance, verification_status FROM freelancer WHERE user_id = $1 FOR UPDATE`,
+      `SELECT user_id AS freelancer_id, available_balance, verification_status FROM freelancer WHERE user_id = $1 FOR UPDATE`,
       [freelancerId]
     );
 
@@ -175,9 +175,9 @@ const requestPayout = async (req, res, next) => {
       return next(new AppError('Your account must be verified before requesting a payout', 400));
     }
 
-    if (requestedAmount > parseFloat(freelancer.earnings_balance)) {
+    if (requestedAmount > parseFloat(freelancer.available_balance)) {
       await client.query('ROLLBACK');
-      return next(new AppError(`Insufficient balance. Available: ₹${freelancer.earnings_balance}`, 400));
+      return next(new AppError(`Insufficient balance. Available: ₹${freelancer.available_balance}`, 400));
     }
 
     // Check no active payout request already exists

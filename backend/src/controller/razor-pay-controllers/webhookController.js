@@ -282,10 +282,10 @@ const handlePayoutFailed = async (payload) => {
     );
     logger.info(`[handlePayoutFailed] Updated payout status to FAILED, reason: ${failureReason}`);
 
-    // Refund earnings_balance
+    // Refund to available_balance (requestPayout deducted from available_balance)
     if (payouts.length > 0) {
       await client.query(
-        `UPDATE freelancer SET earnings_balance = earnings_balance + $1 WHERE freelancer_id = $2`,
+        `UPDATE freelancer SET available_balance = available_balance + $1 WHERE freelancer_id = $2`,
         [payouts[0].amount, payouts[0].f_id]
       );
       logger.info(`[handlePayoutFailed] Refunded ${payouts[0].amount} to freelancer ${payouts[0].f_id}`);

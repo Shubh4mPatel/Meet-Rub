@@ -667,21 +667,13 @@ const rejectPayout = async (req, res, next) => {
       [rejection_reason.trim(), adminId, payoutId]
     );
 
-    // Credit the amount back to freelancer's earnings_balance
+    // Refund amount back to available_balance (requestPayout deducted from available_balance)
     await client.query(
       `UPDATE freelancer
-       SET earnings_balance = earnings_balance + $1, updated_at = NOW()
+       SET available_balance = available_balance + $1, updated_at = NOW()
        WHERE user_id = $2`,
       [payout.amount, payout.freelancer_user_id]
     );
-
-    // If linked to a transaction, revert it back to HELD
-    if (payout.transaction_id) {
-      await client.query(
-        `UPDATE transactions SET status = 'HELD', updated_at = NOW() WHERE id = $1`,
-        [payout.transaction_id]
-      );
-    }
 
     await client.query('COMMIT');
 
