@@ -123,49 +123,6 @@ const getMyPayouts = async (req, res, next) => {
   }
 }
 
-// Get earnings summary
-const getEarningsSummary = async (req, res, next) => {
-  try {
-    const freelancerId = req.user.roleWiseId;
-
-    const { rows: completed } = await db.query(
-      `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
-       FROM transactions
-       WHERE freelancer_id = $1 AND status = 'COMPLETED'`,
-      [freelancerId]
-    );
-
-    const { rows: pending } = await db.query(
-      `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
-       FROM transactions
-       WHERE freelancer_id = $1 AND status = 'HELD'`,
-      [freelancerId]
-    );
-
-    const { rows: processing } = await db.query(
-      `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
-       FROM transactions
-       WHERE freelancer_id = $1 AND status = 'RELEASED'`,
-      [freelancerId]
-    );
-
-    res.json({
-      pending_release: {
-        count: pending[0].count,
-        total: parseFloat(pending[0].total || 0)
-      },
-      available_balance: {
-        count: processing[0].count,
-        total: parseFloat(processing[0].total || 0)
-      },
-      total_lifetime_earnings: parseFloat(completed[0].total || 0)
-    });
-  } catch (error) {
-    console.error('Get earnings summary error:', error);
-    return next(new AppError('Failed to get earnings summary', 500));
-  }
-}
-
 // Get current earnings balance
 const getEarningsBalance = async (req, res, next) => {
   try {
@@ -289,40 +246,36 @@ const getWalletDashboard = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = parseInt(req.query.offset) || 0;
 
-    // 1. Get available balance (earnings_balance)
-    const { rows: balanceRows } = await db.query(
-      'SELECT earnings_balance FROM freelancer WHERE freelancer_id = $1',
-      [freelancerId]
-    );
-
-    if (balanceRows.length === 0) {
-      return next(new AppError('Freelancer not found', 404));
-    }
-
-    const availableBalance = parseFloat(balanceRows[0].earnings_balance || 0);
-
-    // 2. Get pending earnings (sum of IN_PROGRESS projects)
+    // 1. Get pending_release (HELD transactions)
     const { rows: pendingRows } = await db.query(
-      `SELECT COALESCE(SUM(t.freelancer_amount), 0) as pending_total,
-              COUNT(*) as active_orders
-       FROM projects p
-       JOIN transactions t ON p.id = t.project_id
-       WHERE p.freelancer_id = $1 AND p.status = 'IN_PROGRESS' AND t.status = 'HELD'`,
-      [freelancerId]
-    );
-
-    const pendingEarnings = parseFloat(pendingRows[0].pending_total || 0);
-    const pendingOrdersCount = parseInt(pendingRows[0].active_orders || 0);
-
-    // 3. Get total lifetime earnings (sum of RELEASED/COMPLETED transactions)
-    const { rows: lifetimeRows } = await db.query(
-      `SELECT COALESCE(SUM(freelancer_amount), 0) as total_lifetime
+      `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
        FROM transactions
-       WHERE freelancer_id = $1 AND status IN ('RELEASED', 'COMPLETED')`,
+       WHERE freelancer_id = $1 AND status = 'HELD'`,
       [freelancerId]
     );
 
-    const totalEarnings = parseFloat(lifetimeRows[0].total_lifetime || 0);
+    const pendingRelease = parseFloat(pendingRows[0].total || 0);
+    const pendingOrdersCount = parseInt(pendingRows[0].count || 0);
+
+    // 2. Get available_balance (RELEASED transactions)
+    const { rows: availableRows } = await db.query(
+      `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
+       FROM transactions
+       WHERE freelancer_id = $1 AND status = 'RELEASED'`,
+      [freelancerId]
+    );
+
+    const availableBalance = parseFloat(availableRows[0].total || 0);
+
+    // 3. Get total_lifetime_earnings (COMPLETED transactions)
+    const { rows: completedRows } = await db.query(
+      `SELECT SUM(freelancer_amount) as total
+       FROM transactions
+       WHERE freelancer_id = $1 AND status = 'COMPLETED'`,
+      [freelancerId]
+    );
+
+    const totalEarnings = parseFloat(completedRows[0].total || 0);
 
     // 4. Get combined recent transactions (order payments + withdrawals)
     const { rows: transactions } = await db.query(
@@ -392,8 +345,8 @@ const getWalletDashboard = async (req, res, next) => {
       status: 'success',
       data: {
         wallet_summary: {
+          pending_release: pendingRelease,
           available_balance: availableBalance,
-          pending_earnings: pendingEarnings,
           pending_orders_count: pendingOrdersCount,
           total_earnings: totalEarnings,
           currency: process.env.CURRENCY || 'INR'
@@ -416,7 +369,6 @@ module.exports = {
   addBankAccount,
   getBankAccount,
   getMyPayouts,
-  getEarningsSummary,
   getEarningsBalance,
   requestPayout,
   getWalletDashboard
