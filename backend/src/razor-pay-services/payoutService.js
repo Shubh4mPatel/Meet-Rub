@@ -157,11 +157,11 @@ class PayoutService {
     }
 
     if (from_date) {
-      conditions.push(`p.created_at >= $${idx++}`);
+      conditions.push(`p.requested_at >= $${idx++}`);
       params.push(from_date);
     }
     if (to_date) {
-      conditions.push(`p.created_at <= ($${idx++}::date + interval '1 day')`);
+      conditions.push(`p.requested_at <= ($${idx++}::date + interval '1 day')`);
       params.push(to_date);
     }
 
@@ -194,20 +194,16 @@ class PayoutService {
         p.currency,
         p.status,
         p.mode,
-        p.reference_id,
         p.utr,
         p.rejection_reason,
-        p.requested_at,
-        p.approved_at,
         p.rejected_at,
-        p.processed_at,
-        p.created_at,
+        p.requested_at,
         f.bank_account_no,
         f.bank_name
        FROM payouts p
        JOIN freelancer f ON f.user_id = p.freelancer_id
        WHERE ${whereClause}
-       ORDER BY p.created_at DESC
+       ORDER BY p.requested_at DESC
        LIMIT $${idx++} OFFSET $${idx++}`,
       dataParams
     );

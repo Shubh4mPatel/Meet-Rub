@@ -120,12 +120,12 @@ const getAllPayouts = async (req, res, next) => {
     }
 
     if (from_date) {
-      conditions.push(`p.created_at >= $${idx++}`);
+      conditions.push(`p.requested_at >= $${idx++}`);
       params.push(from_date);
     }
 
     if (to_date) {
-      conditions.push(`p.created_at <= ($${idx++}::date + interval '1 day')`);
+      conditions.push(`p.requested_at <= ($${idx++}::date + interval '1 day')`);
       params.push(to_date);
     }
 
@@ -150,7 +150,7 @@ const getAllPayouts = async (req, res, next) => {
           p.amount,
           p.status,
           p.id as payout_id,
-          p.created_at as payout_created_at,
+          p.requested_at as payout_created_at,
           fl.freelancer_full_name as freelancer_name,
           fl.freelancer_email,
           fl.user_name as freelancer_username
@@ -158,7 +158,7 @@ const getAllPayouts = async (req, res, next) => {
        JOIN users u ON p.freelancer_id = u.id
        JOIN freelancer fl ON fl.user_id = u.id
        ${whereClause}
-       ORDER BY p.created_at DESC
+       ORDER BY p.requested_at DESC
        LIMIT $${idx++} OFFSET $${idx++}`,
       [...params, parsedLimit, offset]
     );

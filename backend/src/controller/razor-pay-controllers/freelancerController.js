@@ -199,8 +199,8 @@ const requestPayout = async (req, res, next) => {
 
     // Create payout request
     const { rows: payoutResult } = await client.query(
-      `INSERT INTO payouts (freelancer_id, amount, currency, status, requested_at)
-       VALUES ($1, $2, $3, 'REQUESTED', NOW())
+      `INSERT INTO payouts (freelancer_id, amount, currency, status)
+       VALUES ($1, $2, $3, 'REQUESTED')
        RETURNING id`,
       [freelancerId, requestedAmount, process.env.CURRENCY || 'INR']
     );
@@ -225,132 +225,200 @@ const requestPayout = async (req, res, next) => {
   }
 };
 
-// Get wallet dashboard (combined summary + transactions)
+// Get wallet dashboard — summary + last 5 transactions
 const getWalletDashboard = async (req, res, next) => {
   try {
-    const freelancerId = req.user.roleWiseId; // freelancer_id from freelancer table
-    const userId = req.user.user_id; // user_id for payouts table
+    const freelancerId = req.user.roleWiseId;
+    const userId = req.user.user_id;
 
-    // Parse pagination params
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = parseInt(req.query.offset) || 0;
+    // All summary queries in parallel
+    const [pendingRows, balanceRows, completedRows] = await Promise.all([
+      // HELD transactions — pending release
+      db.query(
+        `SELECT COUNT(*) as count, COALESCE(SUM(freelancer_amount), 0) as total
+         FROM transactions WHERE freelancer_id = $1 AND status = 'HELD'`,
+        [freelancerId]
+      ),
+      // available_balance + earnings_balance directly from freelancer table
+      db.query(
+        `SELECT earnings_balance, available_balance FROM freelancer WHERE freelancer_id = $1`,
+        [freelancerId]
+      ),
+      // Total lifetime earnings from COMPLETED transactions
+      db.query(
+        `SELECT COALESCE(SUM(freelancer_amount), 0) as total
+         FROM transactions WHERE freelancer_id = $1 AND status = 'COMPLETED'`,
+        [freelancerId]
+      ),
+    ]);
 
-    // 1. Get pending_release (HELD transactions)
-    const { rows: pendingRows } = await db.query(
-      `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
-       FROM transactions
-       WHERE freelancer_id = $1 AND status = 'HELD'`,
-      [freelancerId]
-    );
-
-    const pendingRelease = parseFloat(pendingRows[0].total || 0);
-    const pendingOrdersCount = parseInt(pendingRows[0].count || 0);
-
-    // 2. Get available_balance (RELEASED transactions)
-    const { rows: availableRows } = await db.query(
-      `SELECT COUNT(*) as count, SUM(freelancer_amount) as total
-       FROM transactions
-       WHERE freelancer_id = $1 AND status = 'RELEASED'`,
-      [freelancerId]
-    );
-
-    const availableBalance = parseFloat(availableRows[0].total || 0);
-
-    // 3. Get total_lifetime_earnings (COMPLETED transactions)
-    const { rows: completedRows } = await db.query(
-      `SELECT SUM(freelancer_amount) as total
-       FROM transactions
-       WHERE freelancer_id = $1 AND status = 'COMPLETED'`,
-      [freelancerId]
-    );
-
-    const totalEarnings = parseFloat(completedRows[0].total || 0);
-
-    // 4. Get combined recent transactions (order payments + withdrawals)
-    const { rows: transactions } = await db.query(
-      `(
-        SELECT 
-          t.created_at as date_time,
-          'Order Payment' as type,
-          CONCAT('Payment received for order #', p.id) as description,
-          t.freelancer_amount as amount,
-          CASE 
-            WHEN t.status = 'RELEASED' THEN 'Completed'
-            WHEN t.status = 'COMPLETED' THEN 'Completed'
-            WHEN t.status = 'HELD' THEN 'Pending'
-            ELSE t.status
-          END as status
+    // Last 5 combined transactions (orders + withdrawals) ordered DESC
+    const { rows: recentTx } = await db.query(
+      `SELECT * FROM (
+        SELECT
+          t.id,
+          t.created_at                                         AS date_time,
+          'Order Payment'                                      AS type,
+          CONCAT('Payment received for order #', p.id)        AS description,
+          t.freelancer_amount                                  AS amount,
+          'Completed'                                          AS status
         FROM transactions t
         JOIN projects p ON t.project_id = p.id
-        WHERE t.freelancer_id = $1 AND t.status IN ('RELEASED', 'COMPLETED')
-      )
-      UNION ALL
-      (
-        SELECT
-          py.processed_at as date_time,
-          'Withdrawal' as type,
-          CONCAT('Bank Transfer to ', COALESCE(SUBSTRING(f.bank_name, 1, 4), 'Bank'), ' ****', RIGHT(COALESCE(f.bank_account_no, '000'), 3)) as description,
-          -py.amount as amount,
-          CASE 
-            WHEN py.status = 'PROCESSED' THEN 'Completed'
-            WHEN py.status = 'PENDING' THEN 'Processing'
-            WHEN py.status = 'QUEUED' THEN 'Processing'
-            WHEN py.status = 'PROCESSING' THEN 'Processing'
-            ELSE py.status
-          END as status
-        FROM payouts py
-        JOIN freelancer f ON py.freelancer_id = f.user_id
-        WHERE py.freelancer_id = $2 AND py.status = 'PROCESSED'
-      )
-      ORDER BY date_time DESC
-      LIMIT $3 OFFSET $4`,
-      [freelancerId, userId, limit, offset]
-    );
+        WHERE t.freelancer_id = $1 AND t.status = 'COMPLETED'
 
-    // Get total transaction count for pagination
-    const { rows: countRows } = await db.query(
-      `SELECT COUNT(*) as total FROM (
-        SELECT t.id FROM transactions t
-        WHERE t.freelancer_id = $1 AND t.status IN ('RELEASED', 'COMPLETED')
         UNION ALL
-        SELECT py.id FROM payouts py
-        WHERE py.freelancer_id = $2 AND py.status = 'PROCESSED'
-      ) combined`,
+
+        SELECT
+          py.id,
+          py.requested_at                                                                                            AS date_time,
+          'Withdrawal'                                                                                               AS type,
+          CONCAT('Bank Transfer to ', COALESCE(f.bank_name, 'Bank'), ' ****', RIGHT(COALESCE(f.bank_account_no, '0000'), 4)) AS description,
+          -py.amount                                                                                                 AS amount,
+          CASE
+            WHEN py.status = 'PROCESSED' THEN 'Completed'
+            WHEN py.status = 'REJECTED'  THEN 'Rejected'
+            WHEN py.status = 'FAILED'    THEN 'Failed'
+            ELSE 'Pending'
+          END                                                                                                        AS status
+        FROM payouts py
+        JOIN freelancer f ON f.user_id = py.freelancer_id
+        WHERE py.freelancer_id = $2
+      ) combined
+      ORDER BY date_time DESC
+      LIMIT 5`,
       [freelancerId, userId]
     );
-
-    const totalTransactions = parseInt(countRows[0].total || 0);
-
-    // Format transactions
-    const formattedTransactions = transactions.map(tx => ({
-      date_time: tx.date_time,
-      type: tx.type,
-      description: tx.description,
-      amount: parseFloat(tx.amount),
-      status: tx.status
-    }));
 
     return res.status(200).json({
       status: 'success',
       data: {
         wallet_summary: {
-          pending_release: pendingRelease,
-          available_balance: availableBalance,
-          pending_orders_count: pendingOrdersCount,
-          total_earnings: totalEarnings,
-          currency: process.env.CURRENCY || 'INR'
+          pending_release: parseFloat(pendingRows.rows[0].total),
+          pending_orders_count: parseInt(pendingRows.rows[0].count),
+          available_balance: parseFloat(balanceRows.rows[0]?.available_balance || 0),
+          earnings_balance: parseFloat(balanceRows.rows[0]?.earnings_balance || 0),
+          total_lifetime_earnings: parseFloat(completedRows.rows[0].total),
+          currency: process.env.CURRENCY || 'INR',
         },
-        recent_transactions: formattedTransactions,
-        pagination: {
-          limit,
-          offset,
-          total: totalTransactions
-        }
-      }
+        recent_transactions: recentTx.map(tx => ({
+          id: tx.id,
+          date_time: tx.date_time,
+          type: tx.type,
+          description: tx.description,
+          amount: parseFloat(tx.amount),
+          status: tx.status,
+        })),
+      },
     });
   } catch (error) {
     console.error('getWalletDashboard error:', error);
     return next(new AppError('Failed to get wallet dashboard', 500));
+  }
+};
+
+// Get combined transaction history (order payments + withdrawals) with filters
+const getTransactionHistory = async (req, res, next) => {
+  try {
+    const freelancerId = req.user.roleWiseId;
+    const userId = req.user.user_id;
+
+    const { type = 'all', start_date = '', end_date = '', page = '1', limit = '10' } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
+    const offset = (pageNum - 1) * limitNum;
+
+    const VALID_TYPES = ['all', 'order', 'withdrawal'];
+    if (!VALID_TYPES.includes(type)) {
+      return next(new AppError('Invalid type. Allowed: all, order, withdrawal', 400));
+    }
+
+    // Date conditions — same param indices used in both sides of UNION
+    let dateWhere = '';
+    const dateParams = [];
+    let dateIdx = 3; // $1 = freelancerId, $2 = userId
+
+    if (start_date && start_date.trim()) {
+      dateWhere += ` AND date_time >= $${dateIdx++}::date`;
+      dateParams.push(start_date.trim());
+    }
+    if (end_date && end_date.trim()) {
+      dateWhere += ` AND date_time < ($${dateIdx++}::date + interval '1 day')`;
+      dateParams.push(end_date.trim());
+    }
+
+    const orderQuery = `
+      SELECT
+        t.id,
+        t.created_at                                              AS date_time,
+        'Order Payment'                                           AS type,
+        CONCAT('Payment received for order #', p.id)             AS description,
+        t.freelancer_amount                                       AS amount,
+        'Completed'                                               AS status
+      FROM transactions t
+      JOIN projects p ON t.project_id = p.id
+      WHERE t.freelancer_id = $1 AND t.status = 'COMPLETED'
+    `;
+
+    const withdrawalQuery = `
+      SELECT
+        py.id,
+        py.requested_at                                                                                       AS date_time,
+        'Withdrawal'                                                                                          AS type,
+        CONCAT('Bank Transfer to ', COALESCE(f.bank_name, 'Bank'), ' ****', RIGHT(COALESCE(f.bank_account_no, '0000'), 4)) AS description,
+        -py.amount                                                                                            AS amount,
+        CASE
+          WHEN py.status = 'PROCESSED'  THEN 'Completed'
+          WHEN py.status = 'REJECTED'   THEN 'Rejected'
+          WHEN py.status = 'FAILED'     THEN 'Failed'
+          ELSE 'Pending'
+        END                                                                                                   AS status
+      FROM payouts py
+      JOIN freelancer f ON f.user_id = py.freelancer_id
+      WHERE py.freelancer_id = $2
+    `;
+
+    let unionQuery;
+    if (type === 'order') {
+      unionQuery = orderQuery;
+    } else if (type === 'withdrawal') {
+      unionQuery = withdrawalQuery;
+    } else {
+      unionQuery = `${orderQuery} UNION ALL ${withdrawalQuery}`;
+    }
+
+    const wrappedQuery = `SELECT * FROM (${unionQuery}) combined WHERE 1=1 ${dateWhere}`;
+    const queryParams = [freelancerId, userId, ...dateParams];
+
+    const [dataResult, countResult] = await Promise.all([
+      db.query(`${wrappedQuery} ORDER BY date_time DESC LIMIT $${dateIdx++} OFFSET $${dateIdx++}`, [...queryParams, limitNum, offset]),
+      db.query(`SELECT COUNT(*) as total FROM (${wrappedQuery}) counted`, queryParams),
+    ]);
+
+    const total = parseInt(countResult.rows[0].total);
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        transactions: dataResult.rows.map(tx => ({
+          id: tx.id,
+          date_time: tx.date_time,
+          type: tx.type,
+          description: tx.description,
+          amount: parseFloat(tx.amount),
+          status: tx.status,
+        })),
+        pagination: {
+          total,
+          total_pages: Math.ceil(total / limitNum),
+          current_page: pageNum,
+          limit: limitNum,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('getTransactionHistory error:', error);
+    return next(new AppError('Failed to get transaction history', 500));
   }
 };
 
@@ -360,5 +428,6 @@ module.exports = {
   getMyPayouts,
   getEarningsBalance,
   requestPayout,
-  getWalletDashboard
+  getWalletDashboard,
+  getTransactionHistory,
 }
