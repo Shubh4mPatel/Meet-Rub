@@ -84,6 +84,7 @@ const authenticateUser = async (req, res, next) => {
   // First try to verify access token
   let token = req.cookies?.AccessToken;
 
+  
   logger.info(`Auth middleware called for ${req.method} ${req.path}`);
 
   if (
