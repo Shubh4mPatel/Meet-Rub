@@ -64,18 +64,10 @@ const approvePayout = async (req, res, next) => {
     // Update payout to QUEUED
     await client.query(
       `UPDATE payouts
-       SET status = 'QUEUED', freelancer_account_id = $1, approved_by = $2, approved_at = NOW(), updated_at = NOW()
-       WHERE id = $3`,
-      [payout.f_id, adminId, payoutId]
+       SET status = 'QUEUED', approved_by = $1, approved_at = NOW(), updated_at = NOW()
+       WHERE id = $2`,
+      [adminId, payoutId]
     );
-
-    // Update linked transaction to RELEASED if exists
-    if (payout.transaction_id) {
-      await client.query(
-        `UPDATE transactions SET status = 'RELEASED', released_by = $1, released_at = NOW(), updated_at = NOW() WHERE id = $2`,
-        [adminId, payout.transaction_id]
-      );
-    }
 
     await client.query('COMMIT');
 

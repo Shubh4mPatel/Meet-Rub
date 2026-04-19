@@ -1113,7 +1113,7 @@ const approveProject = async (req, res, next) => {
     );
 
     await client.query(
-      `UPDATE transactions SET status = 'RELEASED', released_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      `UPDATE transactions SET status = 'COMPLETED', released_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [transaction.id]
     );
 

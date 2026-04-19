@@ -5,53 +5,40 @@ const AppError = require("../../../utils/appError");
 // Add/Update bank account details
 const addBankAccount = async (req, res, next) => {
   try {
-    const freelancerId = req.user.id;
+    const userId = req.user.user_id;
     const {
-      bank_account_name,
-      bank_account_number,
+      bank_account_holder_name,
+      bank_account_no,
       bank_ifsc_code,
       bank_name,
-      upi_id
+      bank_branch_name
     } = req.body;
 
-    if (!bank_account_name || !bank_account_number || !bank_ifsc_code) {
-      return next(new AppError('Bank account name, number, and IFSC code are required', 400));
+    if (!bank_account_holder_name || !bank_account_no || !bank_ifsc_code) {
+      return next(new AppError('bank_account_holder_name, bank_account_no, and bank_ifsc_code are required', 400));
     }
 
-    const { rows: existing } = await db.query(
-      'SELECT id FROM freelancer_accounts WHERE user_id = $1',
-      [freelancerId]
+    // freelancer row always exists — just update bank columns
+    // reset razorpay_account_id so a new fund account is created on next payout
+    const { rowCount } = await db.query(
+      `UPDATE freelancer
+       SET bank_account_holder_name = $1,
+           bank_account_no = $2,
+           bank_ifsc_code = $3,
+           bank_name = $4,
+           bank_branch_name = $5,
+           razorpay_account_id = NULL,
+           updated_at = NOW()
+       WHERE user_id = $6`,
+      [bank_account_holder_name, bank_account_no, bank_ifsc_code,
+        bank_name || null, bank_branch_name || null, userId]
     );
 
-    let result;
-    if (existing.length > 0) {
-      await db.query(
-        `UPDATE freelancer_accounts
-        SET bank_account_name = $1, bank_account_number = $2,
-            bank_ifsc_code = $3, bank_name = $4, upi_id = $5,
-            verification_status = 'PENDING', updated_at = NOW()
-        WHERE user_id = $6`,
-        [bank_account_name, bank_account_number, bank_ifsc_code,
-          bank_name, upi_id, freelancerId]
-      );
-      result = { message: 'Bank account updated successfully' };
-    } else {
-      const { rows: insertResult } = await db.query(
-        `INSERT INTO freelancer_accounts
-        (user_id, bank_account_name, bank_account_number, bank_ifsc_code,
-         bank_name, upi_id, verification_status)
-        VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
-        RETURNING id`,
-        [freelancerId, bank_account_name, bank_account_number,
-          bank_ifsc_code, bank_name, upi_id]
-      );
-      result = {
-        message: 'Bank account added successfully',
-        account_id: insertResult[0].id
-      };
+    if (rowCount === 0) {
+      return next(new AppError('Freelancer not found', 404));
     }
 
-    res.json(result);
+    return res.json({ message: 'Bank account updated successfully' });
   } catch (error) {
     console.error('Add bank account error:', error);
     return next(new AppError('Failed to add bank account', 500));
@@ -61,29 +48,31 @@ const addBankAccount = async (req, res, next) => {
 // Get bank account details
 const getBankAccount = async (req, res, next) => {
   try {
-    const freelancerId = req.user.id;
+    const userId = req.user.user_id;
 
-    const { rows: accounts } = await db.query(
-      `SELECT id, bank_account_name, bank_account_number, bank_ifsc_code,
-              bank_name, upi_id, verification_status, is_active, created_at
-       FROM freelancer_accounts
+    const { rows } = await db.query(
+      `SELECT bank_account_holder_name, bank_account_no, bank_ifsc_code,
+              bank_name, bank_branch_name
+       FROM freelancer
        WHERE user_id = $1`,
-      [freelancerId]
+      [userId]
     );
 
-    if (accounts.length === 0) {
-      return next(new AppError('Bank account not found', 404));
+    if (rows.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
     }
 
-    // Mask account number for security
-    const account = accounts[0];
-    if (account.bank_account_number) {
-      const accountNumber = account.bank_account_number;
-      account.bank_account_number =
-        'X'.repeat(accountNumber.length - 4) + accountNumber.slice(-4);
+    const account = rows[0];
+
+    if (!account.bank_account_no) {
+      return next(new AppError('No bank account added yet', 404));
     }
 
-    res.json(account);
+    // Mask account number
+    const acc = account.bank_account_no;
+    account.bank_account_no = '****' + acc.slice(-4);
+
+    return res.json(account);
   } catch (error) {
     console.error('Get bank account error:', error);
     return next(new AppError('Failed to get bank account', 500));

@@ -575,14 +575,13 @@ ALTER TABLE IF EXISTS public.otp_tokens
 -- DROP TABLE IF EXISTS public.payouts;
 
 -- Payouts Table: Supports Pooled Earnings Model
--- Freelancers accumulate earnings_balance from multiple approved transactions
--- They request partial/full payouts from their pooled balance
+-- Freelancers accumulate earnings_balance from multiple completed transactions
+-- They request partial/full payouts from their available_balance
+-- Payout is independent of any single transaction
 CREATE TABLE IF NOT EXISTS public.payouts
 (
     id integer NOT NULL DEFAULT nextval('payouts_id_seq'::regclass),
-    transaction_id integer, -- NULLABLE: Payout is from pooled earnings, not tied to single transaction
     freelancer_id integer NOT NULL,
-    freelancer_account_id integer, -- NULLABLE: Set during admin approval
     amount numeric(15,2) NOT NULL,
     currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
     razorpay_payout_id character varying(255) COLLATE pg_catalog."default",
@@ -590,31 +589,20 @@ CREATE TABLE IF NOT EXISTS public.payouts
     status character varying(20) COLLATE pg_catalog."default" DEFAULT 'REQUESTED'::character varying,
     utr character varying(255) COLLATE pg_catalog."default",
     mode character varying(10) COLLATE pg_catalog."default" DEFAULT 'IMPS'::character varying,
-    purpose character varying(255) COLLATE pg_catalog."default" DEFAULT 'payout'::character varying,
-    reference_id character varying(255) COLLATE pg_catalog."default",
-    narration character varying(255) COLLATE pg_catalog."default",
     failure_reason text COLLATE pg_catalog."default",
-    rejection_reason text COLLATE pg_catalog."default", -- Reason provided by admin when rejecting payout
-    requested_at timestamp with time zone, -- When freelancer requested payout
-    approved_at timestamp with time zone, -- When admin approved payout
-    approved_by integer, -- Admin who approved
-    rejected_at timestamp with time zone, -- When admin rejected payout
-    rejected_by integer, -- Admin who rejected
+    rejection_reason text COLLATE pg_catalog."default",
+    requested_at timestamp with time zone,
+    approved_at timestamp with time zone,
+    approved_by integer,
+    rejected_at timestamp with time zone,
+    rejected_by integer,
     initiated_at timestamp with time zone,
     processed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT payouts_pkey PRIMARY KEY (id),
-    CONSTRAINT payouts_freelancer_account_id_fkey FOREIGN KEY (freelancer_account_id)
-        REFERENCES public.freelancer (freelancer_id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE NO ACTION,
     CONSTRAINT payouts_freelancer_id_fkey FOREIGN KEY (freelancer_id)
         REFERENCES public.users (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE NO ACTION,
-    CONSTRAINT payouts_transaction_id_fkey FOREIGN KEY (transaction_id)
-        REFERENCES public.transactions (id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION,
     CONSTRAINT payouts_rejected_by_fkey FOREIGN KEY (rejected_by)
