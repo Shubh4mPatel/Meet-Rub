@@ -322,7 +322,17 @@ CREATE TABLE IF NOT EXISTS public.disputes
         REFERENCES public.freelancer (freelancer_id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE CASCADE,
-    CONSTRAINT disputes_raised_by_check CHECK (raised_by = ANY (ARRAY['creator'::text, 'freelancer'::text]))
+    CONSTRAINT disputes_raised_by_check CHECK (raised_by = ANY (ARRAY['creator'::text, 'freelancer'::text])),
+    CONSTRAINT disputes_reason_check CHECK (reason_of_dispute = ANY (ARRAY[
+        'Partial Work Done',
+        'Report Abuse',
+        'Work Not Submitted On Time',
+        'Asking For Extra Charges',
+        'The project was delivered, but more work is being requested',
+        'The creator is requesting work outside my service scope',
+        'Demanding Extra Revisions',
+        'Other'
+    ]))
 )
 
 TABLESPACE pg_default;
