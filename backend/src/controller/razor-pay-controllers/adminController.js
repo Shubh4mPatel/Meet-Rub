@@ -101,31 +101,81 @@ const approvePayout = async (req, res, next) => {
 // Get all payouts
 const getAllPayouts = async (req, res, next) => {
   try {
-    const status = req.query.status;
+    const { status, search, from_date, to_date, page = 1, limit = 10 } = req.query;
 
-    let query = `
-        SELECT p.*,
-          t.project_id, t.total_amount, t.platform_commission,
-          fl.freelancer_full_name as freelancer_name, fl.freelancer_email
-        FROM payouts p
-        LEFT JOIN transactions t ON p.transaction_id = t.id
-        JOIN users u ON p.freelancer_id = u.id
-        JOIN freelancer fl ON fl.user_id = u.id
-      `;
+    const parsedPage = parseInt(page);
+    const parsedLimit = parseInt(limit);
+    if (isNaN(parsedPage) || parsedPage < 1) {
+      return next(new AppError('Invalid page number', 400));
+    }
+    if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+      return next(new AppError('Invalid limit. Must be between 1 and 100', 400));
+    }
 
+    const offset = (parsedPage - 1) * parsedLimit;
+    const conditions = [];
     const params = [];
+    let idx = 1;
 
     if (status) {
-      query += ' WHERE p.status = $1';
+      conditions.push(`p.status = $${idx++}`);
       params.push(status);
     }
 
-    query += ' ORDER BY p.created_at DESC';
+    if (search) {
+      conditions.push(`fl.freelancer_full_name ILIKE $${idx++}`);
+      params.push(`%${search}%`);
+    }
 
-    const { rows: payouts } = await db.query(query, params);
+    if (from_date) {
+      conditions.push(`p.created_at >= $${idx++}`);
+      params.push(from_date);
+    }
+
+    if (to_date) {
+      conditions.push(`p.created_at <= ($${idx++}::date + interval '1 day')`);
+      params.push(to_date);
+    }
+
+    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    // Get total count
+    const { rows: countRows } = await db.query(
+      `SELECT COUNT(*) as total
+       FROM payouts p
+       JOIN users u ON p.freelancer_id = u.id
+       JOIN freelancer fl ON fl.user_id = u.id
+       ${whereClause}`,
+      params
+    );
+    const total = parseInt(countRows[0].total);
+
+    // Get paginated results
+    const { rows: payouts } = await db.query(
+      `SELECT
+          p.id,
+          p.freelancer_id,
+          p.amount,
+          p.status,
+          p.id as payout_id,
+          p.created_at as payout_created_at,
+          fl.freelancer_full_name as freelancer_name,
+          fl.freelancer_email,
+          fl.user_name as freelancer_username
+       FROM payouts p
+       JOIN users u ON p.freelancer_id = u.id
+       JOIN freelancer fl ON fl.user_id = u.id
+       ${whereClause}
+       ORDER BY p.created_at DESC
+       LIMIT $${idx++} OFFSET $${idx++}`,
+      [...params, parsedLimit, offset]
+    );
 
     res.json({
-      count: payouts.length,
+      count: total,
+      page: parsedPage,
+      limit: parsedLimit,
+      total_pages: Math.ceil(total / parsedLimit),
       payouts
     });
   } catch (error) {

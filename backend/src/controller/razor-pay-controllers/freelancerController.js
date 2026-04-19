@@ -202,9 +202,9 @@ const requestPayout = async (req, res, next) => {
       return next(new AppError('You already have a payout request in progress', 400));
     }
 
-    // Deduct from earnings_balance
+    // Deduct from available_balance
     await client.query(
-      `UPDATE freelancer SET earnings_balance = earnings_balance - $1 WHERE user_id = $2`,
+      `UPDATE freelancer SET available_balance = available_balance - $1 WHERE user_id = $2`,
       [requestedAmount, freelancerId]
     );
 
@@ -224,7 +224,7 @@ const requestPayout = async (req, res, next) => {
       data: {
         payout_id: payoutResult[0].id,
         amount: requestedAmount,
-        remaining_balance: parseFloat(freelancer.earnings_balance) - requestedAmount
+        remaining_balance: parseFloat(freelancer.available_balance) - requestedAmount
       }
     });
   } catch (error) {

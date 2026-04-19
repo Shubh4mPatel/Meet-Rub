@@ -1118,7 +1118,7 @@ const approveProject = async (req, res, next) => {
     );
 
     await client.query(
-      `UPDATE freelancer SET earnings_balance = earnings_balance + $1 WHERE freelancer_id = $2`,
+      `UPDATE freelancer SET earnings_balance = earnings_balance + $1 , available_balance = available_balance + $1 WHERE freelancer_id = $2`,
       [transaction.freelancer_amount, transaction.freelancer_id]
     );
 
