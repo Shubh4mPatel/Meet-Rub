@@ -8,6 +8,7 @@ const { getWishlistFreelancers, removeFreelancerFromWishlist, getAllfreelancersF
 const { getFreelancerOverview } = require('../controller/users/freelancerOverviewController');
 const { getFreelancerReviews } = require('../controller/users/freelancerReviewsController');
 const { rateFreelancer } = require('../controller/razor-pay-controllers/projectController');
+const { getMyTransactions } = require('../controller/razor-pay-controllers/paymentController');
 
 router.post('/service-request',authenticateUser, requireRole(['creator']), createSreviceRequest);
 
@@ -47,5 +48,7 @@ router.get('/freelancers/:id/portfolio', authenticateUser, requireRole(['creator
 router.get('/freelancers/:id/reviews', authenticateUser, requireRole(['creator']), getFreelancerReviews);
 
 router.post(`/rate-freelancer/:projectId`, authenticateUser, requireRole(['creator']),rateFreelancer);
+
+router.get('/my-transactions', authenticateUser, requireRole(['creator']), getMyTransactions);
 
 module.exports = router;

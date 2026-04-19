@@ -2,7 +2,6 @@ const paymentService = require('../../razor-pay-services/paymentService');
 const { pool: db } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const { getLogger } = require('../../../utils/logger');
-const { createPresignedUrl, getObjectNameFromUrl } = require('../../../utils/helper');
 const logger = getLogger('payment-controller');
 
 // Create Razorpay order for service payment
@@ -97,173 +96,99 @@ const getTransaction = async (req, res, next) => {
   }
 }
 
-// Get user's transactions
+// Get user's transactions with pagination, search by freelancer name, and service filter
 const getMyTransactions = async (req, res, next) => {
   try {
     const roleWiseId = req.user.roleWiseId;
     const role = req.user.role;
 
-    let query;
-    if (role === 'creator') {
-      query = 'SELECT * FROM transactions WHERE creator_id = $1 ORDER BY created_at DESC';
-    } else if (role === 'freelancer') {
-      query = 'SELECT * FROM transactions WHERE freelancer_id = $1 ORDER BY created_at DESC';
-    } else {
+    if (role !== 'creator' && role !== 'freelancer') {
       return next(new AppError('Invalid user type', 400));
     }
 
-    const { rows: transactions } = await db.query(query, [roleWiseId]);
-
-    res.json(transactions);
-  } catch (error) {
-    console.error('Get my transactions error:', error);
-    return next(new AppError('Failed to get transactions', 500));
-  }
-}
-
-// Get creator's payment transactions with search and pagination
-const getCreatorPayments = async (req, res, next) => {
-  try {
-    const creatorId = req.user.roleWiseId;
-    const role = req.user.role;
-
-
-    // Extract query parameters
-    const {
-      search = '',
-      service = '',
-      start_date = '',
-      end_date = '',
-      page = '1',
-      limit = '10'
-    } = req.query;
-
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 10;
+    const { search = '', service = '', page = '1', limit = '10' } = req.query;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
     const offset = (pageNum - 1) * limitNum;
 
-    // Build dynamic query with search on freelancer name only
-    const queryParams = [creatorId];
-    let paramIndex = 2;
+    const params = [roleWiseId];
+    let idx = 2;
+    const conditions = [role === 'creator' ? 't.creator_id = $1' : 't.freelancer_id = $1'];
 
-    let searchCondition = '';
     if (search && search.trim()) {
-      searchCondition = `
-        AND (
-          LOWER(f.freelancer_full_name) LIKE LOWER($${paramIndex}) OR
-          LOWER(f.first_name) LIKE LOWER($${paramIndex}) OR
-          LOWER(f.last_name) LIKE LOWER($${paramIndex})
-        )
-      `;
-      queryParams.push(`%${search.trim()}%`);
-      paramIndex++;
+      // creator searches by freelancer name, freelancer searches by creator name
+      if (role === 'creator') {
+        conditions.push(`f.freelancer_full_name ILIKE $${idx++}`);
+      } else {
+        conditions.push(`c.full_name ILIKE $${idx++}`);
+      }
+      params.push(`%${search.trim()}%`);
     }
 
-    // Add service filter
-    let serviceCondition = '';
     if (service && service.trim()) {
-      serviceCondition = `AND LOWER(s.service_name) = LOWER($${paramIndex})`;
-      queryParams.push(service.trim());
-      paramIndex++;
+      conditions.push(`LOWER(s.service_name) = LOWER($${idx++})`);
+      params.push(service.trim());
     }
 
-    // Add date filter
-    let dateCondition = '';
-    if (start_date && start_date.trim()) {
-      dateCondition += `AND t.created_at >= $${paramIndex}::timestamp `;
-      queryParams.push(start_date.trim());
-      paramIndex++;
-    }
-    if (end_date && end_date.trim()) {
-      dateCondition += `AND t.created_at <= $${paramIndex}::timestamp `;
-      queryParams.push(end_date.trim());
-      paramIndex++;
-    }
+    const whereClause = conditions.join(' AND ');
 
-    // Count total records
     const countQuery = `
       SELECT COUNT(*) as total
       FROM transactions t
       LEFT JOIN projects p ON t.project_id = p.id
       LEFT JOIN services s ON p.service_id = s.id
       LEFT JOIN freelancer f ON t.freelancer_id = f.freelancer_id
-      WHERE t.creator_id = $1
-      AND t.status IN ('HELD', 'RELEASED', 'COMPLETED', 'REFUNDED')
-      ${searchCondition}
-      ${serviceCondition}
-      ${dateCondition}
+      LEFT JOIN creators c ON t.creator_id = c.creator_id
+      WHERE ${whereClause}
     `;
 
-    const { rows: [{ total }] } = await db.query(countQuery, queryParams);
-
-    // Fetch paginated transactions
     const dataQuery = `
       SELECT
         t.id,
         t.project_id,
-        s.service_name as service,
+        t.status,
+        t.total_amount,
+        t.freelancer_amount,
+        t.platform_commission,
+        t.currency,
+        t.created_at,
+        s.service_name,
         f.freelancer_full_name as freelancer_name,
         f.user_name as freelancer_username,
-        f.profile_image_url as freelancer_profile_image,
-        t.total_amount,
-        t.razorpay_payment_id as transaction_id,
-        t.created_at as date_time
+        c.full_name as creator_name,
+        c.user_name as creator_username
       FROM transactions t
       LEFT JOIN projects p ON t.project_id = p.id
       LEFT JOIN services s ON p.service_id = s.id
       LEFT JOIN freelancer f ON t.freelancer_id = f.freelancer_id
-      WHERE t.creator_id = $1
-      AND t.status IN ('HELD', 'RELEASED', 'COMPLETED', 'REFUNDED')
-      ${searchCondition}
-      ${serviceCondition}
-      ${dateCondition}
+      LEFT JOIN creators c ON t.creator_id = c.creator_id
+      WHERE ${whereClause}
       ORDER BY t.created_at DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      LIMIT $${idx++} OFFSET $${idx++}
     `;
 
-    queryParams.push(limitNum, offset);
+    const [countResult, dataResult] = await Promise.all([
+      db.query(countQuery, params),
+      db.query(dataQuery, [...params, limitNum, offset]),
+    ]);
 
-    const { rows: transactions } = await db.query(dataQuery, queryParams);
+    const total = parseInt(countResult.rows[0].total);
 
-    // Generate presigned URLs for freelancer profile images
-    const BUCKET_NAME = process.env.MINIO_BUCKET_NAME || 'meet-rub';
-    const URL_EXPIRY = 60 * 60 * 24 * 7; // 7 days
-
-    const transactionsWithPresignedUrls = await Promise.all(
-      transactions.map(async (transaction) => {
-        let presignedProfileImage = null;
-
-        if (transaction.freelancer_profile_image) {
-          try {
-            const objectName = getObjectNameFromUrl(transaction.freelancer_profile_image, BUCKET_NAME);
-            presignedProfileImage = await createPresignedUrl(BUCKET_NAME, objectName, URL_EXPIRY);
-          } catch (error) {
-            logger.error(`[getCreatorPayments] Failed to generate presigned URL for profile image: ${error.message}`);
-            presignedProfileImage = null;
-          }
-        }
-
-        return {
-          ...transaction,
-          freelancer_profile_image: presignedProfileImage
-        };
-      })
-    );
-
-    res.json({
-      success: true,
-      data: transactionsWithPresignedUrls,
-      pagination: {
-        current_page: pageNum,
-        per_page: limitNum,
-        total_records: parseInt(total),
-        total_pages: Math.ceil(parseInt(total) / limitNum)
-      }
+    return res.json({
+      status: 'success',
+      data: {
+        transactions: dataResult.rows,
+        pagination: {
+          total,
+          total_pages: Math.ceil(total / limitNum),
+          current_page: pageNum,
+          limit: limitNum,
+        },
+      },
     });
   } catch (error) {
-    console.error('Get creator payments error:', error);
-    logger.error(`[getCreatorPayments] Error: ${error.message}`);
-    return next(new AppError('Failed to get payment transactions', 500));
+    console.error('Get my transactions error:', error);
+    return next(new AppError('Failed to get transactions', 500));
   }
 }
 
@@ -272,5 +197,4 @@ module.exports = {
   verifyPayment,
   getTransaction,
   getMyTransactions,
-  getCreatorPayments
 }
