@@ -113,30 +113,6 @@ const getMyPayouts = async (req, res, next) => {
 }
 
 // Get current earnings balance
-const getEarningsBalance = async (req, res, next) => {
-  try {
-    const freelancerId = req.user.roleWiseId;
-
-    const { rows } = await db.query(
-      'SELECT earnings_balance FROM freelancer WHERE freelancer_id = $1',
-      [freelancerId]
-    );
-
-    if (rows.length === 0) {
-      return next(new AppError('Freelancer not found', 404));
-    }
-
-    return res.status(200).json({
-      status: 'success',
-      data: {
-        earnings_balance: parseFloat(rows[0].earnings_balance)
-      }
-    });
-  } catch (error) {
-    console.error('getEarningsBalance error:', error);
-    return next(new AppError('Failed to get earnings balance', 500));
-  }
-};
 
 // Request payout (partial amount allowed)
 const requestPayout = async (req, res, next) => {
@@ -426,7 +402,6 @@ module.exports = {
   addBankAccount,
   getBankAccount,
   getMyPayouts,
-  getEarningsBalance,
   requestPayout,
   getWalletDashboard,
   getTransactionHistory,

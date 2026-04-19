@@ -1,6 +1,6 @@
 const express = require('express');
 const upload = require('../../config/multer');
-const { getMyPayouts, getEarningsBalance, requestPayout, getWalletDashboard, getTransactionHistory } = require('../controller/razor-pay-controllers/freelancerController');
+const { getMyPayouts, requestPayout, getWalletDashboard, getTransactionHistory } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
 const { requireRole, authenticateUser } = require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
@@ -83,7 +83,6 @@ router.get('/payouts', authenticateUser, requireRole(['freelancer']), getMyPayou
 
 router.post('/payouts/request', authenticateUser, requireRole(['freelancer']), requestPayout);
 
-router.get('/earnings/balance', authenticateUser, requireRole(['freelancer']), getEarningsBalance);
 
 router.get('/wallet/dashboard', authenticateUser, requireRole(['freelancer']), getWalletDashboard);
 
