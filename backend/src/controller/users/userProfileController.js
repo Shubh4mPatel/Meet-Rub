@@ -2477,6 +2477,9 @@ const getFreelancerForAdmin = async (req, res, next) => {
         f.worked_with,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
         (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
+        (SELECT COALESCE(array_agg(DISTINCT s3.service_name), ARRAY[]::text[])
+        FROM services s3 
+        WHERE s3.freelancer_id = f.freelancer_id) as all_services,
         COALESCE(
           json_agg(
             DISTINCT jsonb_build_object(
