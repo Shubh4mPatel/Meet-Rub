@@ -33,14 +33,30 @@ const getAllFreelancers = async (req, res, next) => {
         const offset = (page - 1) * limit;
         const freelancersRes = await query(
             `SELECT 
+    f.freelancer_id,
     f.freelancer_full_name, 
     f.phone_number, 
     f.freelancer_email, 
     f.created_at,
-    u.approval_status
+    u.approval_status,
+    COALESCE(
+        json_agg(
+            DISTINCT jsonb_build_object(
+                'service_name', so.service_name,
+                'priority', ff.priority,
+                'featured_at', ff.featured_at
+            )
+        ) FILTER (WHERE ff.is_active = true), 
+        '[]'
+    ) AS featured_services,
+    CASE WHEN COUNT(ff.id) FILTER (WHERE ff.is_active = true) > 0 THEN true ELSE false END AS is_featured
 FROM freelancer f
 INNER JOIN users u ON f.user_id = u.id
+LEFT JOIN featured_freelancers ff ON f.freelancer_id = ff.freelancer_id AND ff.is_active = true
+LEFT JOIN service_options so ON ff.service_option_id = so.id
 WHERE u.approval_status != 'approved'
+GROUP BY f.freelancer_id, f.freelancer_full_name, f.phone_number, f.freelancer_email, f.created_at, u.approval_status
+ORDER BY is_featured DESC, f.created_at DESC
 LIMIT $1 OFFSET $2`,
             [limit, offset]
         );

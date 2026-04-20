@@ -691,72 +691,6 @@ const rejectPayout = async (req, res, next) => {
   }
 };
 
-// Get all featured freelancers (admin view with more details)
-const getAllFeaturedFreelancers = async (req, res, next) => {
-  try {
-    const { service_name, is_active } = req.query;
-    
-    let conditions = [];
-    let params = [];
-    let idx = 1;
-
-    if (service_name) {
-      conditions.push(`LOWER(so.service_name) = LOWER($${idx++})`);
-      params.push(service_name);
-    }
-
-    if (is_active !== undefined) {
-      const activeValue = is_active === 'true' || is_active === '1';
-      conditions.push(`ff.is_active = $${idx++}`);
-      params.push(activeValue);
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-    const queryText = `
-      SELECT 
-        ff.id,
-        ff.freelancer_id,
-        ff.service_option_id,
-        ff.priority,
-        ff.is_active,
-        ff.featured_at,
-        ff.unfeatured_at,
-        ff.featured_by,
-        ff.unfeatured_by,
-        so.service_name,
-        u.user_name as freelancer_name,
-        u.user_email as freelancer_email,
-        f.profile_headline,
-        f.average_rating,
-        f.total_completed_orders,
-        admin_featured.user_name as featured_by_name,
-        admin_unfeatured.user_name as unfeatured_by_name
-      FROM featured_freelancers ff
-      INNER JOIN service_options so ON ff.service_option_id = so.id
-      INNER JOIN freelancer f ON ff.freelancer_id = f.freelancer_id
-      INNER JOIN users u ON f.user_id = u.id
-      LEFT JOIN admin a_feat ON ff.featured_by = a_feat.id
-      LEFT JOIN users admin_featured ON a_feat.user_id = admin_featured.id
-      LEFT JOIN admin a_unfeat ON ff.unfeatured_by = a_unfeat.id
-      LEFT JOIN users admin_unfeatured ON a_unfeat.user_id = admin_unfeatured.id
-      ${whereClause}
-      ORDER BY so.service_name ASC, ff.is_active DESC, ff.priority ASC NULLS LAST, ff.featured_at DESC
-    `;
-
-    const { rows } = await query(queryText, params);
-
-    return res.json({
-      status: 'success',
-      count: rows.length,
-      data: rows
-    });
-  } catch (error) {
-    console.error('Get all featured freelancers error:', error);
-    return next(new AppError('Failed to fetch featured freelancers', 500));
-  }
-};
-
 module.exports = {
   getEscrowTransactions,
   approvePayout,
@@ -770,6 +704,5 @@ module.exports = {
   rejectKYCByAdmin,
   suspendFreelancerByAdmin,
   addFeaturedFreelancer,
-  removeFeaturedFreelancer,
-  getAllFeaturedFreelancers
+  removeFeaturedFreelancer
 }
