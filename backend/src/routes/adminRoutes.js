@@ -1,6 +1,6 @@
 const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
-const { getEscrowTransactions, approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, addFeaturedFreelancer, removeFeaturedFreelancer } = require('../controller/razor-pay-controllers/adminController')
+const { getEscrowTransactions, approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, addFeaturedFreelancer, removeFeaturedFreelancer, getAllFeaturedFreelancers } = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches, AssignFreelancerToRequest, getServicesForAdmin, editServiceForAdmin, deleteServiceForAdmin } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
 const upload = require('../../config/multer')
@@ -77,6 +77,8 @@ router.patch('/services/:id', requireRole(['admin']), upload.fields([
 
 router.delete('/services/:id', requireRole(['admin']), deleteServiceForAdmin);
 
+// Featured freelancers management
+router.get('/featured-freelancers', requireRole(['admin']), getAllFeaturedFreelancers);
 router.post('/featured-freelancers', requireRole(['admin']), addFeaturedFreelancer);
 router.delete('/featured-freelancers', requireRole(['admin']), removeFeaturedFreelancer);
 
