@@ -215,9 +215,10 @@ const getWalletDashboard = async (req, res, next) => {
          FROM transactions WHERE freelancer_id = $1 AND status = 'HELD'`,
         [freelancerId]
       ),
-      // available_balance + earnings_balance directly from freelancer table
+      // available_balance + earnings_balance + bank details directly from freelancer table
       db.query(
-        `SELECT earnings_balance, available_balance FROM freelancer WHERE freelancer_id = $1`,
+        `SELECT earnings_balance, available_balance, bank_name, bank_account_no 
+         FROM freelancer WHERE freelancer_id = $1`,
         [freelancerId]
       ),
       // Total lifetime earnings from COMPLETED transactions
@@ -227,6 +228,14 @@ const getWalletDashboard = async (req, res, next) => {
         [freelancerId]
       ),
     ]);
+
+    // Prepare masked bank info
+    const freelancerData = balanceRows.rows[0];
+    let maskedBankInfo = null;
+    if (freelancerData?.bank_account_no && freelancerData?.bank_name) {
+      const lastFourDigits = freelancerData.bank_account_no.slice(-4);
+      maskedBankInfo = `${freelancerData.bank_name} ****${lastFourDigits}`;
+    }
 
     // Last 5 combined transactions (orders + withdrawals) ordered DESC
     const { rows: recentTx } = await db.query(
@@ -271,10 +280,11 @@ const getWalletDashboard = async (req, res, next) => {
         wallet_summary: {
           pending_release: parseFloat(pendingRows.rows[0].total),
           pending_orders_count: parseInt(pendingRows.rows[0].count),
-          available_balance: parseFloat(balanceRows.rows[0]?.available_balance || 0),
-          earnings_balance: parseFloat(balanceRows.rows[0]?.earnings_balance || 0),
+          available_balance: parseFloat(freelancerData?.available_balance || 0),
+          earnings_balance: parseFloat(freelancerData?.earnings_balance || 0),
           total_lifetime_earnings: parseFloat(completedRows.rows[0].total),
           currency: process.env.CURRENCY || 'INR',
+          bank_account: maskedBankInfo,
         },
         recent_transactions: recentTx.map(tx => ({
           id: tx.id,
