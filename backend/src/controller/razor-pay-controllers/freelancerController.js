@@ -82,7 +82,7 @@ const getBankAccount = async (req, res, next) => {
 // Get freelancer's withdrawal history with filters and pagination
 const getMyPayouts = async (req, res, next) => {
   try {
-    const freelancerId = req.user.id;
+    const freelancerId = req.user.user_id;
     const { status, from_date, to_date, page = 1, limit = 10 } = req.query;
 
     const parsedPage = parseInt(page);
