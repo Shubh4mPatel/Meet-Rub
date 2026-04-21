@@ -3,23 +3,8 @@ const payoutService = require('../../razor-pay-services/payoutService');
 const { pool: db } = require('../../../config/dbConfig');
 const { query } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
+const { createPresignedUrl } = require("../../../utils/helper");
 
-// class AdminController {
-// Get all escrow transactions
-const getEscrowTransactions = async (req, res, next) => {
-  try {
-    const status = req.query.status || 'HELD';
-    const transactions = await paymentService.getEscrowTransactions(status);
-
-    res.json({
-      count: transactions.length,
-      transactions
-    });
-  } catch (error) {
-    console.error('Get escrow transactions error:', error);
-    return next(new AppError('Failed to get escrow transactions', 500));
-  }
-}
 
 // Approve payout request (admin) — triggers Razorpay payout
 const approvePayout = async (req, res, next) => {
@@ -30,7 +15,7 @@ const approvePayout = async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: payouts } = await client.query(
-      `SELECT po.*, f.freelancer_id AS f_id
+      `SELECT po.*, f.freelancer_id AS f_id, f.verification_status
        FROM payouts po
        JOIN users u ON po.freelancer_id = u.id
        JOIN freelancer f ON f.user_id = u.id
@@ -50,13 +35,8 @@ const approvePayout = async (req, res, next) => {
       return next(new AppError(`Payout cannot be approved. Current status: ${payout.status}`, 400));
     }
 
-    // Get freelancer's verified bank account
-    const { rows: accounts } = await client.query(
-      `SELECT id FROM freelancer WHERE freelancer_id = $1 AND verification_status = 'VERIFIED'`,
-      [payout.f_id]
-    );
-
-    if (accounts.length === 0) {
+    // Check if freelancer's account is verified
+    if (payout.verification_status !== 'VERIFIED') {
       await client.query('ROLLBACK');
       return next(new AppError('Freelancer account not verified', 400));
     }
@@ -180,13 +160,92 @@ const getAllPayouts = async (req, res, next) => {
 const getPayoutDetails = async (req, res, next) => {
   try {
     const payoutId = req.params.id;
-    const payout = await payoutService.getPayout(payoutId);
+    const { page = 1, limit = 10 } = req.query;
 
-    if (!payout) {
+    // Get freelancer_id from payout
+    const { rows: payoutInfo } = await db.query(
+      `SELECT f.freelancer_id 
+       FROM payouts po
+       JOIN users u ON po.freelancer_id = u.id
+       JOIN freelancer f ON f.user_id = u.id
+       WHERE po.id = $1`,
+      [payoutId]
+    );
+
+    if (payoutInfo.length === 0) {
       return next(new AppError('Payout not found', 404));
     }
 
-    res.json(payout);
+    const freelancerId = payoutInfo[0].freelancer_id;
+    const parsedPage = Math.max(1, parseInt(page) || 1);
+    const parsedLimit = Math.min(50, Math.max(1, parseInt(limit) || 10));
+    const offset = (parsedPage - 1) * parsedLimit;
+
+    // Get completed projects for this freelancer with pagination
+    const { rows: projects } = await db.query(
+      `SELECT 
+        p.id,
+        c.full_name AS creator,
+        c.profile_image_url AS creator_image,
+        s.service_name AS services,
+        p.number_of_units AS units,
+        p.end_date AS deadline,
+        p.amount AS charges,
+        p.status
+       FROM projects p
+       JOIN creators c ON p.creator_id = c.creator_id
+       LEFT JOIN services s ON p.service_id = s.id
+       WHERE p.freelancer_id = $1 AND p.status = 'COMPLETED'
+       ORDER BY p.completed_at DESC
+       LIMIT $2 OFFSET $3`,
+      [freelancerId, parsedLimit, offset]
+    );
+
+    // Get total count
+    const { rows: countResult } = await db.query(
+      `SELECT COUNT(*) AS total 
+       FROM projects 
+       WHERE freelancer_id = $1 AND status = 'COMPLETED'`,
+      [freelancerId]
+    );
+
+    const total = parseInt(countResult[0].total);
+
+    // Generate presigned URLs for creator images
+    const bucketName = process.env.BUCKET_NAME;
+    const expirySeconds = 24 * 60 * 60; // 24 hours
+
+    for (const project of projects) {
+      if (project.creator_image) {
+        try {
+          const objectName = project.creator_image.replace(
+            `https://${process.env.MINIO_ENDPOINT}/${bucketName}/`,
+            ''
+          );
+          project.creator_image = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+        } catch (err) {
+          console.error('Error generating presigned URL:', err);
+          project.creator_image = null;
+        }
+      }
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        completed_projects: projects,
+        pagination: {
+          total,
+          totalPages: Math.ceil(total / parsedLimit),
+          currentPage: parsedPage,
+          limit: parsedLimit
+        }
+      }
+    });
   } catch (error) {
     console.error('Get payout details error:', error);
     return next(new AppError('Failed to get payout details', 500));
@@ -692,7 +751,6 @@ const rejectPayout = async (req, res, next) => {
 };
 
 module.exports = {
-  getEscrowTransactions,
   approvePayout,
   rejectPayout,
   getAllPayouts,

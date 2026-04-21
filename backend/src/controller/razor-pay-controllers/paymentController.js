@@ -106,7 +106,7 @@ const getMyTransactions = async (req, res, next) => {
       return next(new AppError('Invalid user type', 400));
     }
 
-    const { search = '', service = '', page = '1', limit = '10' } = req.query;
+    const { search = '', service = '', from_date = '', to_date = '', page = '1', limit = '10' } = req.query;
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
     const offset = (pageNum - 1) * limitNum;
@@ -130,6 +130,16 @@ const getMyTransactions = async (req, res, next) => {
       params.push(service.trim());
     }
 
+    if (from_date && from_date.trim()) {
+      conditions.push(`t.created_at >= $${idx++}::date`);
+      params.push(from_date.trim());
+    }
+
+    if (to_date && to_date.trim()) {
+      conditions.push(`t.created_at < ($${idx++}::date + interval '1 day')`);
+      params.push(to_date.trim());
+    }
+
     const whereClause = conditions.join(' AND ');
 
     const countQuery = `
@@ -151,6 +161,7 @@ const getMyTransactions = async (req, res, next) => {
         t.freelancer_amount,
         t.platform_commission,
         t.currency,
+        t.razorpay_payment_id,
         t.created_at,
         s.service_name,
         f.freelancer_full_name as freelancer_name,

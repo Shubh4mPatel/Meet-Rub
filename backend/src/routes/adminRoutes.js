@@ -1,6 +1,6 @@
 const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
-const { getEscrowTransactions, approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, addFeaturedFreelancer, removeFeaturedFreelancer } = require('../controller/razor-pay-controllers/adminController')
+const {  approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, addFeaturedFreelancer, removeFeaturedFreelancer } = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches, AssignFreelancerToRequest, getServicesForAdmin, editServiceForAdmin, deleteServiceForAdmin } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
 const upload = require('../../config/multer')
@@ -27,7 +27,7 @@ router.get('/service-requests', getUserServiceRequestsToAdmin)
 router.post('/add-niches', addNiches);
 
 
-router.get('/escrow', getEscrowTransactions);
+
 
 router.get('/payouts', getAllPayouts);
 

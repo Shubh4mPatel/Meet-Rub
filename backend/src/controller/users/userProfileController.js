@@ -2476,11 +2476,30 @@ const getFreelancerForAdmin = async (req, res, next) => {
         f.rating,
         f.worked_with,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
+        (SELECT COALESCE(array_agg(DISTINCT s3.service_name), ARRAY[]::text[])
+        FROM services s3 
+        WHERE s3.freelancer_id = f.freelancer_id) as all_services,
+        COALESCE(
+          json_agg(
+            DISTINCT jsonb_build_object(
+              'service_name', so.service_name,
+              'priority', ff.priority,
+              'featured_at', ff.featured_at
+            )
+          ) FILTER (WHERE ff.is_active = true), 
+          '[]'
+        ) AS featured_services,
+        CASE WHEN COUNT(ff.id) FILTER (WHERE ff.is_active = true) > 0 THEN true ELSE false END AS is_featured
       FROM freelancer f
       ${serviceTypes.length > 0 ? 'LEFT JOIN services s ON f.freelancer_id = s.freelancer_id' : ''}
+      LEFT JOIN featured_freelancers ff ON f.freelancer_id = ff.freelancer_id AND ff.is_active = true
+      LEFT JOIN service_options so ON ff.service_option_id = so.id
       WHERE ${whereClause}
-      ORDER BY f.created_at DESC
+      GROUP BY f.freelancer_id, f.user_id, f.profile_image_url, f.freelancer_full_name, 
+               f.phone_number, f.freelancer_email, f.created_at, f.gov_id_number, 
+               f.verification_status, f.rating, f.worked_with
+      ORDER BY is_featured DESC, f.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 

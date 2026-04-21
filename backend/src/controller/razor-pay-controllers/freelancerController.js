@@ -82,7 +82,7 @@ const getBankAccount = async (req, res, next) => {
 // Get freelancer's withdrawal history with filters and pagination
 const getMyPayouts = async (req, res, next) => {
   try {
-    const freelancerId = req.user.id;
+    const freelancerId = req.user.user_id;
     const { status, from_date, to_date, page = 1, limit = 10 } = req.query;
 
     const parsedPage = parseInt(page);
@@ -215,9 +215,10 @@ const getWalletDashboard = async (req, res, next) => {
          FROM transactions WHERE freelancer_id = $1 AND status = 'HELD'`,
         [freelancerId]
       ),
-      // available_balance + earnings_balance directly from freelancer table
+      // available_balance + earnings_balance + bank details directly from freelancer table
       db.query(
-        `SELECT earnings_balance, available_balance FROM freelancer WHERE freelancer_id = $1`,
+        `SELECT earnings_balance, available_balance, bank_name, bank_account_no 
+         FROM freelancer WHERE freelancer_id = $1`,
         [freelancerId]
       ),
       // Total lifetime earnings from COMPLETED transactions
@@ -227,6 +228,14 @@ const getWalletDashboard = async (req, res, next) => {
         [freelancerId]
       ),
     ]);
+
+    // Prepare masked bank info
+    const freelancerData = balanceRows.rows[0];
+    let maskedBankInfo = null;
+    if (freelancerData?.bank_account_no && freelancerData?.bank_name) {
+      const lastFourDigits = freelancerData.bank_account_no.slice(-4);
+      maskedBankInfo = `${freelancerData.bank_name} ****${lastFourDigits}`;
+    }
 
     // Last 5 combined transactions (orders + withdrawals) ordered DESC
     const { rows: recentTx } = await db.query(
@@ -271,10 +280,11 @@ const getWalletDashboard = async (req, res, next) => {
         wallet_summary: {
           pending_release: parseFloat(pendingRows.rows[0].total),
           pending_orders_count: parseInt(pendingRows.rows[0].count),
-          available_balance: parseFloat(balanceRows.rows[0]?.available_balance || 0),
-          earnings_balance: parseFloat(balanceRows.rows[0]?.earnings_balance || 0),
+          available_balance: parseFloat(freelancerData?.available_balance || 0),
+          earnings_balance: parseFloat(freelancerData?.earnings_balance || 0),
           total_lifetime_earnings: parseFloat(completedRows.rows[0].total),
           currency: process.env.CURRENCY || 'INR',
+          bank_account: maskedBankInfo,
         },
         recent_transactions: recentTx.map(tx => ({
           id: tx.id,
@@ -330,9 +340,14 @@ const getTransactionHistory = async (req, res, next) => {
         'Order Payment'                                           AS type,
         CONCAT('Payment received for order #', p.id)             AS description,
         t.freelancer_amount                                       AS amount,
-        'Completed'                                               AS status
+        'Completed'                                               AS status,
+        t.id                                                      AS transaction_id,
+        c.full_name                                               AS creator_name,
+        s.service_name                                            AS service_name
       FROM transactions t
       JOIN projects p ON t.project_id = p.id
+      LEFT JOIN creators c ON p.creator_id = c.creator_id
+      LEFT JOIN services s ON p.service_id = s.id
       WHERE t.freelancer_id = $1 AND t.status = 'COMPLETED'
     `;
 
@@ -348,7 +363,10 @@ const getTransactionHistory = async (req, res, next) => {
           WHEN py.status = 'REJECTED'   THEN 'Rejected'
           WHEN py.status = 'FAILED'     THEN 'Failed'
           ELSE 'Pending'
-        END                                                                                                   AS status
+        END                                                                                                   AS status,
+        NULL                                                      AS transaction_id,
+        NULL                                                      AS creator_name,
+        NULL                                                      AS service_name
       FROM payouts py
       JOIN freelancer f ON f.user_id = py.freelancer_id
       WHERE py.freelancer_id = $2
@@ -383,6 +401,9 @@ const getTransactionHistory = async (req, res, next) => {
           description: tx.description,
           amount: parseFloat(tx.amount),
           status: tx.status,
+          transaction_id: tx.transaction_id,
+          creator_name: tx.creator_name,
+          service_name: tx.service_name,
         })),
         pagination: {
           total,
