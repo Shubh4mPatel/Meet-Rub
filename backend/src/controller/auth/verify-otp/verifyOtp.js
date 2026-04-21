@@ -50,7 +50,25 @@ const creatorSchema = Joi.object({
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .optional(),
   niche: Joi.string().required(), // JSON stringified array
-  socialLinks: Joi.string().optional(), // JSON stringified array
+  socialLinks: Joi.string().required().custom((value, helpers) => {
+    try {
+      const parsed = JSON.parse(value);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        return helpers.error('any.invalid');
+      }
+      // Check if at least one social link has a non-empty URL
+      const hasValidLink = parsed.some(link => link && link.url && link.url.trim() !== '');
+      if (!hasValidLink) {
+        return helpers.error('any.invalid');
+      }
+      return value;
+    } catch (error) {
+      return helpers.error('any.invalid');
+    }
+  }, 'Social links validation').messages({
+    'any.required': 'At least one social link is required',
+    'any.invalid': 'At least one valid social link with URL is required'
+  })
 });
 
 // Password reset schema
