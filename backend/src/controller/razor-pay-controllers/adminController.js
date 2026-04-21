@@ -30,7 +30,7 @@ const approvePayout = async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: payouts } = await client.query(
-      `SELECT po.*, f.freelancer_id AS f_id
+      `SELECT po.*, f.freelancer_id AS f_id, f.verification_status
        FROM payouts po
        JOIN users u ON po.freelancer_id = u.id
        JOIN freelancer f ON f.user_id = u.id
@@ -50,13 +50,8 @@ const approvePayout = async (req, res, next) => {
       return next(new AppError(`Payout cannot be approved. Current status: ${payout.status}`, 400));
     }
 
-    // Get freelancer's verified bank account
-    const { rows: accounts } = await client.query(
-      `SELECT id FROM freelancer WHERE freelancer_id = $1 AND verification_status = 'VERIFIED'`,
-      [payout.f_id]
-    );
-
-    if (accounts.length === 0) {
+    // Check if freelancer's account is verified
+    if (payout.verification_status !== 'VERIFIED') {
       await client.query('ROLLBACK');
       return next(new AppError('Freelancer account not verified', 400));
     }
