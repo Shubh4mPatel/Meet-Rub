@@ -1076,7 +1076,7 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerData } = await query(
-      "SELECT user_id, freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, about_me, rating, worked_with FROM freelancer WHERE freelancer_id = $1",
+      "SELECT user_id, freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, about_me, rating, worked_with, user_name FROM freelancer WHERE freelancer_id = $1",
       [freelancerId]
     );
     logger.debug("Freelancer data query executed for ID:", freelancerData[0]);
@@ -3097,6 +3097,7 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
         f.about_me,
         f.rating,
         f.worked_with,
+        f.user_name,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
       FROM freelancer f
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $2
