@@ -259,18 +259,20 @@ SELECT
   cr.user1_id,
   cr.user2_id,
   cr.created_at as room_created_at,
-  COALESCE(f1.user_name, c1.user_name) as user1_name,
-  COALESCE(f2.user_name, c2.user_name) as user2_name,
+  COALESCE(f1.user_name, c1.user_name, CASE WHEN a1.id IS NOT NULL THEN 'Chat Support' ELSE NULL END) as user1_name,
+  COALESCE(f2.user_name, c2.user_name, CASE WHEN a2.id IS NOT NULL THEN 'Chat Support' ELSE NULL END) as user2_name,
   COALESCE(f1.profile_image_url, c1.profile_image_url) as user1_profile_image_url,
   COALESCE(f2.profile_image_url, c2.profile_image_url) as user2_profile_image_url,
-  CASE 
+  CASE
     WHEN f1.freelancer_id IS NOT NULL THEN 'freelancer'
     WHEN c1.creator_id IS NOT NULL THEN 'creator'
+    WHEN a1.id IS NOT NULL THEN 'admin'
     ELSE NULL
   END as user1_role,
-  CASE 
+  CASE
     WHEN f2.freelancer_id IS NOT NULL THEN 'freelancer'
     WHEN c2.creator_id IS NOT NULL THEN 'creator'
+    WHEN a2.id IS NOT NULL THEN 'admin'
     ELSE NULL
   END as user2_role,
   m.message as last_message,
@@ -280,8 +282,10 @@ SELECT
 FROM chat_rooms cr
 LEFT JOIN freelancer f1 ON cr.user1_id = f1.user_id
 LEFT JOIN creators c1 ON cr.user1_id = c1.user_id
+LEFT JOIN admin a1 ON cr.user1_id = a1.user_id
 LEFT JOIN freelancer f2 ON cr.user2_id = f2.user_id
 LEFT JOIN creators c2 ON cr.user2_id = c2.user_id
+LEFT JOIN admin a2 ON cr.user2_id = a2.user_id
 LEFT JOIN LATERAL (
   SELECT message, created_at, sender_id
   FROM messages
@@ -312,17 +316,29 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       SELECT
         cr.user1_id,
         cr.user2_id,
-        COALESCE(f1.user_name, c1.user_name)             AS user1_name,
-        COALESCE(f2.user_name, c2.user_name)             AS user2_name,
+        COALESCE(f1.user_name, c1.user_name, CASE WHEN a1.id IS NOT NULL THEN 'Chat Support' ELSE NULL END) AS user1_name,
+        COALESCE(f2.user_name, c2.user_name, CASE WHEN a2.id IS NOT NULL THEN 'Chat Support' ELSE NULL END) AS user2_name,
         COALESCE(f1.profile_image_url, c1.profile_image_url) AS user1_avatar,
         COALESCE(f2.profile_image_url, c2.profile_image_url) AS user2_avatar,
-        CASE WHEN f1.freelancer_id IS NOT NULL THEN 'freelancer' WHEN c1.creator_id IS NOT NULL THEN 'creator' END AS user1_role,
-        CASE WHEN f2.freelancer_id IS NOT NULL THEN 'freelancer' WHEN c2.creator_id IS NOT NULL THEN 'creator' END AS user2_role
+        CASE
+          WHEN f1.freelancer_id IS NOT NULL THEN 'freelancer'
+          WHEN c1.creator_id IS NOT NULL THEN 'creator'
+          WHEN a1.id IS NOT NULL THEN 'admin'
+          ELSE NULL
+        END AS user1_role,
+        CASE
+          WHEN f2.freelancer_id IS NOT NULL THEN 'freelancer'
+          WHEN c2.creator_id IS NOT NULL THEN 'creator'
+          WHEN a2.id IS NOT NULL THEN 'admin'
+          ELSE NULL
+        END AS user2_role
       FROM chat_rooms cr
       LEFT JOIN freelancer f1 ON cr.user1_id = f1.user_id
       LEFT JOIN creators   c1 ON cr.user1_id = c1.user_id
+      LEFT JOIN admin      a1 ON cr.user1_id = a1.user_id
       LEFT JOIN freelancer f2 ON cr.user2_id = f2.user_id
       LEFT JOIN creators   c2 ON cr.user2_id = c2.user_id
+      LEFT JOIN admin      a2 ON cr.user2_id = a2.user_id
       WHERE cr.room_id = $1
     `;
     try {
@@ -1013,6 +1029,99 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       [userId]
     );
     return result.rows[0]?.user_role || null;
+  },
+
+  // ========== SUPPORT CHAT METHODS ==========
+
+  // Get all admin user IDs
+  async getAllAdminIds() {
+    const query = `
+      SELECT u.id FROM users u
+      INNER JOIN admin a ON u.id = a.user_id
+      WHERE u.is_active = true AND a.is_active = true
+    `;
+    try {
+      const result = await pool.query(query);
+      return result.rows.map(row => row.id);
+    } catch (error) {
+      console.error("Error fetching admin IDs:", error);
+      throw error;
+    }
+  },
+
+  // Check if user already has a support assignment
+  async getSupportAssignment(userId) {
+    const query = `
+      SELECT user_id, admin_id, room_id, created_at
+      FROM support_assignments
+      WHERE user_id = $1
+    `;
+    try {
+      const result = await pool.query(query, [userId]);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error("Error fetching support assignment:", error);
+      throw error;
+    }
+  },
+
+  // Create new support assignment
+  async createSupportAssignment(userId, adminId, roomId) {
+    const query = `
+      INSERT INTO support_assignments (user_id, admin_id, room_id)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `;
+    try {
+      const result = await pool.query(query, [userId, adminId, roomId]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error creating support assignment:", error);
+      throw error;
+    }
+  },
+
+  // Get count of assignments per admin from database (for Redis rebuild)
+  async getAssignmentCountsPerAdmin() {
+    const query = `
+      SELECT admin_id, COUNT(*) as count
+      FROM support_assignments
+      GROUP BY admin_id
+    `;
+    try {
+      const result = await pool.query(query);
+      const counts = {};
+      result.rows.forEach(row => {
+        counts[row.admin_id] = parseInt(row.count);
+      });
+      return counts;
+    } catch (error) {
+      console.error("Error getting assignment counts:", error);
+      throw error;
+    }
+  },
+
+  // Get or create support chat room (uses same format as regular chats)
+  async getOrCreateSupportChatRoom(userId, adminId) {
+    // Use standard room ID format: smaller_id-larger_id
+    const [smallerId, largerId] = [userId, adminId].sort((a, b) => a - b);
+    const roomId = `${smallerId}-${largerId}`;
+
+    const query = `
+      INSERT INTO chat_rooms (room_id, user1_id, user2_id)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (room_id)
+      DO UPDATE SET room_id = EXCLUDED.room_id
+      RETURNING *
+    `;
+
+    try {
+      const result = await pool.query(query, [roomId, smallerId, largerId]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error creating/getting support chat room:", error);
+      throw error;
+    }
   },
 };
 

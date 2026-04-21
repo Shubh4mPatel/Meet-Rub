@@ -10,6 +10,7 @@ const { socketAuth } = require('../middleware/authentication');
 const { startMasterWorker } = require('../consumers/worker');
 const { startNotificationSubscriber, stopNotificationSubscriber } = require('../consumers/notificationSubscriber');
 const { chatController } = require('../controller/chat');
+const { rebuildAdminAssignmentCounters } = require('../utils/supportHelper');
 const AppError = require('../utils/appError');
 const cors = require('cors');
 
@@ -120,17 +121,19 @@ let serverWithSocket;
 const PORT = process.env.PORT || 5000;
 
 if (process.env.NODE_ENV !== 'development') {
-  serverWithSocket = server.listen(PORT, () => {
+  serverWithSocket = server.listen(PORT, async () => {
     manageLogFiles();
     // startMasterWorker();
     startNotificationSubscriber(io);
+    await rebuildAdminAssignmentCounters();
     logger.info(`Server running in ${process.env.NODE_ENV} mode on :${PORT}`);
   });
 } else {
-  serverWithSocket = server.listen(PORT, () => {
+  serverWithSocket = server.listen(PORT, async () => {
     // startMasterWorker();
     manageLogFiles();
     startNotificationSubscriber(io);
+    await rebuildAdminAssignmentCounters();
     logger.info(`Server running in ${process.env.NODE_ENV} mode on :${PORT}`);
   });
 }

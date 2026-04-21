@@ -1184,3 +1184,30 @@ CREATE UNIQUE INDEX uq_active_priority_per_service
 
 CREATE INDEX idx_featured_active ON featured_freelancers (service_option_id, priority)
     WHERE is_active = true;
+
+
+    CREATE TABLE IF NOT EXISTS public.support_assignments (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE NOT NULL,
+    admin_id INTEGER NOT NULL,
+    room_id VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_support_user 
+        FOREIGN KEY (user_id) 
+        REFERENCES public.users(id) 
+        ON DELETE CASCADE,
+    
+    CONSTRAINT fk_support_admin 
+        FOREIGN KEY (admin_id) 
+        REFERENCES public.users(id) 
+        ON DELETE CASCADE,
+    
+    CONSTRAINT fk_support_room 
+        FOREIGN KEY (room_id) 
+        REFERENCES public.chat_rooms(room_id) 
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_support_user_lookup ON support_assignments(user_id);
+CREATE INDEX idx_support_admin_lookup ON support_assignments(admin_id);

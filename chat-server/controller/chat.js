@@ -43,12 +43,399 @@ const chatController = (io) => {
     console.log(`User connected: ${username} (${userId})`);
 
 
+    // ========== SUPPORT CHAT HANDLER ==========
+    socket.on("contact-support", async () => {
+      try {
+        console.log(`${username} (${userId}) is contacting support`);
+
+        // Admins cannot contact support
+        if (userRole === 'admin') {
+          socket.emit("error", { message: "Admins cannot contact support" });
+          return;
+        }
+
+        // Check for existing assignment
+        let assignment = await chatModel.getSupportAssignment(userId);
+
+        if (assignment) {
+          // Existing assignment found - reuse same admin and room
+          console.log(`Existing support assignment found for user ${userId}: admin=${assignment.admin_id}, room=${assignment.room_id}`);
+
+          const chatRoomId = assignment.room_id;
+          const adminId = assignment.admin_id;
+
+          // Leave previous rooms and join support room
+          for (const room of socket.rooms) {
+            if (room !== socket.id) socket.leave(room);
+          }
+          socket.join(chatRoomId);
+          await redis.set(`user:${userId}:activeRoom`, chatRoomId, "EX", 3600);
+
+          // Get chat history and participants
+          const [chatHistory, participants] = await Promise.all([
+            chatModel.getChatHistory(chatRoomId),
+            chatModel.getRoomParticipants(chatRoomId),
+          ]);
+
+          if (participants) {
+            [participants.user1_avatar, participants.user2_avatar] = await Promise.all([
+              createPresignedUrl(participants.user1_avatar),
+              createPresignedUrl(participants.user2_avatar),
+            ]);
+          }
+
+          await chatModel.markMessagesAsRead(chatRoomId, userId);
+
+          socket.emit("support-chat-joined", {
+            chatRoomId,
+            adminId,
+            chatHistory: chatHistory || [],
+            participants,
+            isNewAssignment: false,
+          });
+
+          const unreadCount = await chatModel.getUnreadCount(userId);
+          socket.emit("unread-count", { count: unreadCount });
+
+          console.log(`${username} rejoined existing support chat: ${chatRoomId}`);
+        } else {
+          // No existing assignment - perform load balancing
+          console.log(`No existing assignment for user ${userId}, assigning admin...`);
+
+          const adminIds = await chatModel.getAllAdminIds();
+          if (!adminIds || adminIds.length === 0) {
+            socket.emit("error", { message: "No admins available at the moment. Please try again later." });
+            return;
+          }
+
+          // Query Redis for each admin's assignment count
+          const adminCounts = await Promise.all(
+            adminIds.map(async (adminId) => {
+              const count = await redis.get(`admin:${adminId}:assigned_count`);
+              return { adminId, count: parseInt(count) || 0 };
+            })
+          );
+
+          // Select admin with minimum count
+          adminCounts.sort((a, b) => a.count - b.count);
+          const selectedAdmin = adminCounts[0].adminId;
+
+          console.log(`Selected admin ${selectedAdmin} with count ${adminCounts[0].count}`);
+
+          // Increment counter
+          await redis.incr(`admin:${selectedAdmin}:assigned_count`);
+
+          // Create chat room with standard format
+          const [smallerId, largerId] = [userId, selectedAdmin].sort((a, b) => a - b);
+          const roomId = `${smallerId}-${largerId}`;
+          await chatModel.getOrCreateSupportChatRoom(userId, selectedAdmin);
+
+          // Save assignment
+          await chatModel.createSupportAssignment(userId, selectedAdmin, roomId);
+
+          // Join room
+          for (const room of socket.rooms) {
+            if (room !== socket.id) socket.leave(room);
+          }
+          socket.join(roomId);
+          await redis.set(`user:${userId}:activeRoom`, roomId, "EX", 3600);
+
+          // Get participants
+          const [chatHistory, participants] = await Promise.all([
+            chatModel.getChatHistory(roomId),
+            chatModel.getRoomParticipants(roomId),
+          ]);
+
+          if (participants) {
+            [participants.user1_avatar, participants.user2_avatar] = await Promise.all([
+              createPresignedUrl(participants.user1_avatar),
+              createPresignedUrl(participants.user2_avatar),
+            ]);
+          }
+
+          socket.emit("support-chat-joined", {
+            chatRoomId: roomId,
+            adminId: selectedAdmin,
+            chatHistory: chatHistory || [],
+            participants,
+            isNewAssignment: true,
+          });
+
+          // Notify the assigned admin
+          const adminSocketId = await redis.get(`user:${selectedAdmin}:socketId`);
+          if (adminSocketId) {
+            io.to(adminSocketId).emit("new-support-request", {
+              userId,
+              username,
+              roomId,
+              message: `${username} has contacted support and been assigned to you.`,
+            });
+          }
+
+          await emitWebNotification(
+            io,
+            selectedAdmin,
+            userId,
+            'support_request',
+            'New Support Request',
+            `${username} needs support assistance.`,
+            'link',
+            roomId
+          );
+
+          console.log(`Support assignment created: user=${userId}, admin=${selectedAdmin}, room=${roomId}`);
+        }
+      } catch (error) {
+        console.error("Error handling contact-support:", error);
+        socket.emit("error", { message: "Failed to contact support" });
+      }
+    });
+
+    // Admin: Proactively initiate chat with any user
+    socket.on("admin-initiate-chat", async ({ userId: targetUserId }) => {
+      try {
+        console.log(`[admin-initiate-chat] START - Admin: ${username} (ID: ${userId}), Target User: ${targetUserId}`);
+
+        if (userRole !== 'admin') {
+          console.log(`[admin-initiate-chat] REJECTED - User ${userId} is not an admin (role: ${userRole})`);
+          socket.emit("error", { message: "Only admins can initiate support chats" });
+          return;
+        }
+
+        console.log(`[admin-initiate-chat] Admin ${username} (${userId}) initiating chat with user ${targetUserId}`);
+
+        // Validate target user exists and is not an admin
+        const targetUserRole = await chatModel.getUserRole(targetUserId);
+        console.log(`[admin-initiate-chat] Target user ${targetUserId} role: ${targetUserRole}`);
+
+        if (!targetUserRole) {
+          console.log(`[admin-initiate-chat] REJECTED - Target user ${targetUserId} not found`);
+          socket.emit("error", { message: "User not found" });
+          return;
+        }
+
+        if (targetUserRole === 'admin') {
+          console.log(`[admin-initiate-chat] REJECTED - Cannot contact another admin (target: ${targetUserId})`);
+          socket.emit("error", { message: "Cannot initiate support chat with another admin" });
+          return;
+        }
+
+        // Check if assignment already exists
+        let assignment = await chatModel.getSupportAssignment(targetUserId);
+        console.log(`[admin-initiate-chat] Existing assignment check:`, assignment ? `Found - admin_id: ${assignment.admin_id}, room_id: ${assignment.room_id}` : 'None');
+
+        if (!assignment) {
+          // Create new assignment - admin proactively reaching out
+          console.log(`[admin-initiate-chat] Creating NEW support assignment: user=${targetUserId}, admin=${userId}`);
+
+          // Increment admin counter
+          const newCount = await redis.incr(`admin:${userId}:assigned_count`);
+          console.log(`[admin-initiate-chat] Admin counter incremented. New count: ${newCount}`);
+
+          // Create chat room with standard format
+          const [smallerId, largerId] = [targetUserId, userId].sort((a, b) => a - b);
+          const roomId = `${smallerId}-${largerId}`;
+          console.log(`[admin-initiate-chat] Creating chat room: ${roomId}`);
+          await chatModel.getOrCreateSupportChatRoom(targetUserId, userId);
+
+          // Save assignment
+          assignment = await chatModel.createSupportAssignment(targetUserId, userId, roomId);
+          console.log(`[admin-initiate-chat] Assignment created:`, { user_id: assignment.user_id, admin_id: assignment.admin_id, room_id: assignment.room_id });
+        } else {
+          // Assignment exists - verify it's assigned to this admin
+          if (assignment.admin_id !== userId) {
+            console.log(`[admin-initiate-chat] REJECTED - User ${targetUserId} already assigned to admin ${assignment.admin_id}, requester is ${userId}`);
+            socket.emit("error", { message: "This user is already assigned to another admin" });
+            return;
+          }
+          console.log(`[admin-initiate-chat] Using EXISTING assignment for user ${targetUserId}`);
+        }
+
+        const chatRoomId = assignment.room_id;
+        console.log(`[admin-initiate-chat] Chat room ID: ${chatRoomId}`);
+
+        // Leave previous rooms and join support room
+        const previousRooms = Array.from(socket.rooms).filter(r => r !== socket.id);
+        console.log(`[admin-initiate-chat] Admin leaving previous rooms:`, previousRooms);
+        for (const room of socket.rooms) {
+          if (room !== socket.id) socket.leave(room);
+        }
+
+        socket.join(chatRoomId);
+        console.log(`[admin-initiate-chat] Admin joined socket room: ${chatRoomId}`);
+
+        await redis.set(`user:${userId}:activeRoom`, chatRoomId, "EX", 3600);
+        console.log(`[admin-initiate-chat] Set Redis activeRoom for admin ${userId}: ${chatRoomId}`);
+
+        // Get chat history and participants
+        console.log(`[admin-initiate-chat] Fetching chat history and participants for room: ${chatRoomId}`);
+        const [chatHistory, participants] = await Promise.all([
+          chatModel.getChatHistory(chatRoomId),
+          chatModel.getRoomParticipants(chatRoomId),
+        ]);
+        console.log(`[admin-initiate-chat] Chat history: ${chatHistory?.length || 0} messages`);
+        console.log(`[admin-initiate-chat] Participants:`, participants);
+
+        if (participants) {
+          [participants.user1_avatar, participants.user2_avatar] = await Promise.all([
+            createPresignedUrl(participants.user1_avatar),
+            createPresignedUrl(participants.user2_avatar),
+          ]);
+          console.log(`[admin-initiate-chat] Avatar URLs generated for participants`);
+        }
+
+        await chatModel.markMessagesAsRead(chatRoomId, userId);
+        console.log(`[admin-initiate-chat] Marked messages as read for admin ${userId}`);
+
+        const responseData = {
+          chatRoomId,
+          targetUserId,
+          chatHistory: chatHistory || [],
+          participants,
+          isAdminInitiated: true,
+        };
+        console.log(`[admin-initiate-chat] Emitting 'support-chat-joined' to admin with data:`, {
+          chatRoomId: responseData.chatRoomId,
+          targetUserId: responseData.targetUserId,
+          historyCount: responseData.chatHistory.length,
+          hasParticipants: !!responseData.participants,
+          isAdminInitiated: responseData.isAdminInitiated
+        });
+        socket.emit("support-chat-joined", responseData);
+
+        const unreadCount = await chatModel.getUnreadCount(userId);
+        console.log(`[admin-initiate-chat] Admin unread count: ${unreadCount}`);
+        socket.emit("unread-count", { count: unreadCount });
+
+        // Notify the target user that admin wants to chat
+        const targetSocketId = await redis.get(`user:${targetUserId}:socketId`);
+        console.log(`[admin-initiate-chat] Target user socket ID:`, targetSocketId || 'Not online');
+
+        if (targetSocketId) {
+          const notificationData = {
+            adminId: userId,
+            adminName: username,
+            roomId: chatRoomId,
+            message: `${username} from support wants to chat with you.`,
+          };
+          console.log(`[admin-initiate-chat] Emitting 'admin-contacted-you' to target user`, notificationData);
+          io.to(targetSocketId).emit("admin-contacted-you", notificationData);
+        } else {
+          console.log(`[admin-initiate-chat] Target user ${targetUserId} not online, skipping socket notification`);
+        }
+
+        console.log(`[admin-initiate-chat] Creating web notification for user ${targetUserId}`);
+        await emitWebNotification(
+          io,
+          targetUserId,
+          userId,
+          'admin_contact',
+          'Support Reaching Out',
+          `${username} from support wants to chat with you.`,
+          'link',
+          chatRoomId
+        );
+
+        console.log(`[admin-initiate-chat] SUCCESS - Admin ${username} (${userId}) initiated/joined support chat: ${chatRoomId}`);
+      } catch (error) {
+        console.error(`[admin-initiate-chat] ERROR - Admin ${userId}, Target ${targetUserId}:`, error);
+        socket.emit("error", { message: "Failed to initiate support chat" });
+      }
+    });
+
+    // Admin: Join support chat room (allows admin to view their assigned support chats)
+    socket.on("admin-join-support-chat", async ({ userId: supportUserId }) => {
+      try {
+        console.log(`[admin-join-support-chat] START - Admin: ${username} (ID: ${userId}), Support User: ${supportUserId}`);
+
+        if (userRole !== 'admin') {
+          console.log(`[admin-join-support-chat] REJECTED - User ${userId} is not an admin (role: ${userRole})`);
+          socket.emit("error", { message: "Only admins can access support chats" });
+          return;
+        }
+
+        console.log(`[admin-join-support-chat] Checking assignment for user ${supportUserId}`);
+        const assignment = await chatModel.getSupportAssignment(supportUserId);
+        console.log(`[admin-join-support-chat] Assignment:`, assignment || 'None found');
+
+        if (!assignment) {
+          console.log(`[admin-join-support-chat] REJECTED - No assignment found for user ${supportUserId}`);
+          socket.emit("error", { message: "No support assignment found for this user" });
+          return;
+        }
+
+        if (assignment.admin_id !== userId) {
+          console.log(`[admin-join-support-chat] REJECTED - User ${supportUserId} assigned to admin ${assignment.admin_id}, requester is ${userId}`);
+          socket.emit("error", { message: "This support chat is assigned to another admin" });
+          return;
+        }
+
+        const chatRoomId = assignment.room_id;
+        console.log(`[admin-join-support-chat] Assignment verified. Room ID: ${chatRoomId}`);
+
+        // Leave previous rooms
+        const previousRooms = Array.from(socket.rooms).filter(r => r !== socket.id);
+        console.log(`[admin-join-support-chat] Admin leaving previous rooms:`, previousRooms);
+        for (const room of socket.rooms) {
+          if (room !== socket.id) socket.leave(room);
+        }
+
+        socket.join(chatRoomId);
+        console.log(`[admin-join-support-chat] Admin joined socket room: ${chatRoomId}`);
+
+        await redis.set(`user:${userId}:activeRoom`, chatRoomId, "EX", 3600);
+        console.log(`[admin-join-support-chat] Set Redis activeRoom for admin ${userId}: ${chatRoomId}`);
+
+        console.log(`[admin-join-support-chat] Fetching chat history and participants for room: ${chatRoomId}`);
+        const [chatHistory, participants] = await Promise.all([
+          chatModel.getChatHistory(chatRoomId),
+          chatModel.getRoomParticipants(chatRoomId),
+        ]);
+        console.log(`[admin-join-support-chat] Chat history: ${chatHistory?.length || 0} messages`);
+        console.log(`[admin-join-support-chat] Participants:`, participants);
+
+        if (participants) {
+          [participants.user1_avatar, participants.user2_avatar] = await Promise.all([
+            createPresignedUrl(participants.user1_avatar),
+            createPresignedUrl(participants.user2_avatar),
+          ]);
+          console.log(`[admin-join-support-chat] Avatar URLs generated for participants`);
+        }
+
+        await chatModel.markMessagesAsRead(chatRoomId, userId);
+        console.log(`[admin-join-support-chat] Marked messages as read for admin ${userId}`);
+
+        const responseData = {
+          chatRoomId,
+          supportUserId,
+          chatHistory: chatHistory || [],
+          participants,
+        };
+        console.log(`[admin-join-support-chat] Emitting 'support-chat-joined' to admin with data:`, {
+          chatRoomId: responseData.chatRoomId,
+          supportUserId: responseData.supportUserId,
+          historyCount: responseData.chatHistory.length,
+          hasParticipants: !!responseData.participants
+        });
+        socket.emit("support-chat-joined", responseData);
+
+        const unreadCount = await chatModel.getUnreadCount(userId);
+        console.log(`[admin-join-support-chat] Admin unread count: ${unreadCount}`);
+        socket.emit("unread-count", { count: unreadCount });
+
+        console.log(`[admin-join-support-chat] SUCCESS - Admin ${username} (${userId}) joined support chat: ${chatRoomId}`);
+      } catch (error) {
+        console.error(`[admin-join-support-chat] ERROR - Admin ${userId}, Support User ${supportUserId}:`, error);
+        socket.emit("error", { message: "Failed to join support chat" });
+      }
+    });
+
     // Join a private chat room
     socket.on("join-chat", async ({ recipientId }) => {
       try {
         console.log(`${username} is joining chat with user ID: ${recipientId}`);
 
-        // Role-based access: admin cannot join chat rooms
+        // Role-based access: admin cannot join regular chat rooms
         if (userRole === 'admin') {
           socket.emit("error", { message: "Admins cannot join or create chat rooms" });
           return;
@@ -526,11 +913,17 @@ const chatController = (io) => {
     // Send a message
     socket.on("send-message", async ({ recipientId, message }) => {
       try {
+        console.log(`[send-message] User ${username} (${userId}, role: ${userRole}) sending to ${recipientId}`);
+
+        // Standard room ID format for all chats (regular and support)
         const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
+        console.log(`[send-message] Using chat room: ${chatRoomId}`);
+
         const messageType = "text";
 
         // Save message to database
+        console.log(`[send-message] Saving message to room: ${chatRoomId}`);
         const savedMessage = await chatModel.saveMessage(
           chatRoomId,
           userId,
@@ -549,15 +942,17 @@ const chatController = (io) => {
           chatRoomId,
           isRead: false,
         };
-        console.log("Message saved to database:", messageData);
+        console.log(`[send-message] Message saved to database:`, { id: messageData.id, chatRoomId: messageData.chatRoomId, sender: messageData.senderId });
+
         // Send message to the chat room (both users)
         io.to(chatRoomId).emit("receive-message", messageData);
+        console.log(`[send-message] Message emitted to room: ${chatRoomId}`);
 
         await emitWebNotification(io, recipientId, userId, 'new_message', username, message, 'link', chatRoomId);
 
-        console.log(`Message saved: ${username} to ${recipientId}`);
+        console.log(`[send-message] SUCCESS - Message saved: ${username} to ${recipientId} in room ${chatRoomId}`);
       } catch (error) {
-        console.error("Error sending message:", error);
+        console.error(`[send-message] ERROR - Sender ${userId}, Recipient ${recipientId}:`, error);
         socket.emit("error", { message: "Failed to send message" });
       }
     });

@@ -1926,6 +1926,7 @@ const getAllCreatorProfiles = async (req, res, next) => {
     let queryText = `
       SELECT
         creator_id,
+        user_id,
         first_name,
         last_name,
         full_name,
@@ -2042,6 +2043,7 @@ const getAllCreatorProfiles = async (req, res, next) => {
 
         return {
           creator_id: creator.creator_id,
+          user_id: creator.user_id,
           name: creator.full_name || `${creator.first_name || ""} ${creator.last_name || ""}`.trim(),
           phone_number: creator.phone_number,
           email: creator.email,
