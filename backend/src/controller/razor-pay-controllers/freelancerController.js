@@ -340,9 +340,14 @@ const getTransactionHistory = async (req, res, next) => {
         'Order Payment'                                           AS type,
         CONCAT('Payment received for order #', p.id)             AS description,
         t.freelancer_amount                                       AS amount,
-        'Completed'                                               AS status
+        'Completed'                                               AS status,
+        t.id                                                      AS transaction_id,
+        c.full_name                                               AS creator_name,
+        s.service_name                                            AS service_name
       FROM transactions t
       JOIN projects p ON t.project_id = p.id
+      LEFT JOIN creators c ON p.creator_id = c.creator_id
+      LEFT JOIN services s ON p.service_id = s.id
       WHERE t.freelancer_id = $1 AND t.status = 'COMPLETED'
     `;
 
@@ -358,7 +363,10 @@ const getTransactionHistory = async (req, res, next) => {
           WHEN py.status = 'REJECTED'   THEN 'Rejected'
           WHEN py.status = 'FAILED'     THEN 'Failed'
           ELSE 'Pending'
-        END                                                                                                   AS status
+        END                                                                                                   AS status,
+        NULL                                                      AS transaction_id,
+        NULL                                                      AS creator_name,
+        NULL                                                      AS service_name
       FROM payouts py
       JOIN freelancer f ON f.user_id = py.freelancer_id
       WHERE py.freelancer_id = $2
@@ -393,6 +401,9 @@ const getTransactionHistory = async (req, res, next) => {
           description: tx.description,
           amount: parseFloat(tx.amount),
           status: tx.status,
+          transaction_id: tx.transaction_id,
+          creator_name: tx.creator_name,
+          service_name: tx.service_name,
         })),
         pagination: {
           total,
