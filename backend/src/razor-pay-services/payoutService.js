@@ -112,10 +112,31 @@ class PayoutService {
     } catch (error) {
       await client.query('ROLLBACK');
 
+      // Get payout details and refund to available_balance
+      const { rows: payoutDetails } = await db.query(
+        `SELECT po.amount, po.freelancer_id, f.freelancer_id AS f_id
+         FROM payouts po
+         JOIN users u ON po.freelancer_id = u.id
+         JOIN freelancer f ON f.user_id = u.id
+         WHERE po.id = $1`,
+        [payoutId]
+      );
+
+      // Update payout status to FAILED
       await db.query(
         `UPDATE payouts SET status = 'FAILED', failure_reason = $1 WHERE id = $2`,
         [error.message, payoutId]
       );
+
+      // Refund to available_balance
+      if (payoutDetails.length > 0) {
+        await db.query(
+          `UPDATE freelancer SET available_balance = available_balance + $1
+           WHERE freelancer_id = $2`,
+          [payoutDetails[0].amount, payoutDetails[0].f_id]
+        );
+        console.log(`[processPayout] Refunded ${payoutDetails[0].amount} to freelancer ${payoutDetails[0].f_id} due to processing failure`);
+      }
 
       throw error;
     } finally {
