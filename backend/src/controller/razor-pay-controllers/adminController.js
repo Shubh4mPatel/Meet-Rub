@@ -160,11 +160,7 @@ const getAllPayouts = async (req, res, next) => {
 const getPayoutDetails = async (req, res, next) => {
   try {
     const payoutId = req.params.id;
-    const payout = await payoutService.getPayout(payoutId);
-
-    if (!payout) {
-      return next(new AppError('Payout not found', 404));
-    }
+    const { page = 1, limit = 10 } = req.query;
 
     // Get freelancer_id from payout
     const { rows: payoutInfo } = await db.query(
@@ -176,31 +172,80 @@ const getPayoutDetails = async (req, res, next) => {
       [payoutId]
     );
 
-    if (payoutInfo.length > 0) {
-      const freelancerId = payoutInfo[0].freelancer_id;
-
-      // Get completed projects for this freelancer
-      const { rows: projects } = await db.query(
-        `SELECT 
-          p.id,
-          c.full_name AS creator,
-          s.service_name AS services,
-          p.number_of_units AS units,
-          p.end_date AS deadline,
-          p.amount AS charges,
-          p.status
-         FROM projects p
-         JOIN creators c ON p.creator_id = c.creator_id
-         LEFT JOIN services s ON p.service_id = s.id
-         WHERE p.freelancer_id = $1 AND p.status = 'COMPLETED'
-         ORDER BY p.completed_at DESC`,
-        [freelancerId]
-      );
-
-      payout.completed_projects = projects;
+    if (payoutInfo.length === 0) {
+      return next(new AppError('Payout not found', 404));
     }
 
-    res.json(payout);
+    const freelancerId = payoutInfo[0].freelancer_id;
+    const parsedPage = Math.max(1, parseInt(page) || 1);
+    const parsedLimit = Math.min(50, Math.max(1, parseInt(limit) || 10));
+    const offset = (parsedPage - 1) * parsedLimit;
+
+    // Get completed projects for this freelancer with pagination
+    const { rows: projects } = await db.query(
+      `SELECT 
+        p.id,
+        c.full_name AS creator,
+        c.profile_image_url AS creator_image,
+        s.service_name AS services,
+        p.number_of_units AS units,
+        p.end_date AS deadline,
+        p.amount AS charges,
+        p.status
+       FROM projects p
+       JOIN creators c ON p.creator_id = c.creator_id
+       LEFT JOIN services s ON p.service_id = s.id
+       WHERE p.freelancer_id = $1 AND p.status = 'COMPLETED'
+       ORDER BY p.completed_at DESC
+       LIMIT $2 OFFSET $3`,
+      [freelancerId, parsedLimit, offset]
+    );
+
+    // Get total count
+    const { rows: countResult } = await db.query(
+      `SELECT COUNT(*) AS total 
+       FROM projects 
+       WHERE freelancer_id = $1 AND status = 'COMPLETED'`,
+      [freelancerId]
+    );
+
+    const total = parseInt(countResult[0].total);
+
+    // Generate presigned URLs for creator images
+    const bucketName = process.env.BUCKET_NAME;
+    const expirySeconds = 24 * 60 * 60; // 24 hours
+
+    for (const project of projects) {
+      if (project.creator_image) {
+        try {
+          const objectName = project.creator_image.replace(
+            `https://${process.env.MINIO_ENDPOINT}/${bucketName}/`,
+            ''
+          );
+          project.creator_image = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+        } catch (err) {
+          console.error('Error generating presigned URL:', err);
+          project.creator_image = null;
+        }
+      }
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        completed_projects: projects,
+        pagination: {
+          total,
+          totalPages: Math.ceil(total / parsedLimit),
+          currentPage: parsedPage,
+          limit: parsedLimit
+        }
+      }
+    });
   } catch (error) {
     console.error('Get payout details error:', error);
     return next(new AppError('Failed to get payout details', 500));
