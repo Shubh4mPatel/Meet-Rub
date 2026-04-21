@@ -1164,7 +1164,7 @@ const rejectProject = async (req, res, next) => {
        JOIN freelancer f ON p.freelancer_id = f.freelancer_id
        JOIN creators c ON p.creator_id = c.creator_id
        LEFT JOIN services s ON p.service_id = s.id
-       WHERE p.id = $1 AND p.creator_id = $2 FOR UPDATE`,
+       WHERE p.id = $1 AND p.creator_id = $2 FOR UPDATE OF p`,
       [projectId, creatorId]
     );
 
