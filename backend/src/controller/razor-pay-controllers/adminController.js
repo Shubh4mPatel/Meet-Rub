@@ -4,22 +4,6 @@ const { pool: db } = require('../../../config/dbConfig');
 const { query } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 
-// class AdminController {
-// Get all escrow transactions
-const getEscrowTransactions = async (req, res, next) => {
-  try {
-    const status = req.query.status || 'HELD';
-    const transactions = await paymentService.getEscrowTransactions(status);
-
-    res.json({
-      count: transactions.length,
-      transactions
-    });
-  } catch (error) {
-    console.error('Get escrow transactions error:', error);
-    return next(new AppError('Failed to get escrow transactions', 500));
-  }
-}
 
 // Approve payout request (admin) — triggers Razorpay payout
 const approvePayout = async (req, res, next) => {
@@ -687,7 +671,6 @@ const rejectPayout = async (req, res, next) => {
 };
 
 module.exports = {
-  getEscrowTransactions,
   approvePayout,
   rejectPayout,
   getAllPayouts,
