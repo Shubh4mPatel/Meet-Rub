@@ -183,46 +183,19 @@ const getPayoutDetails = async (req, res, next) => {
       const { rows: projects } = await db.query(
         `SELECT 
           p.id,
-          c.full_name AS creator_name,
-          c.profile_image_url AS creator_profile_image,
-          s.service_name AS service_name,
+          c.full_name AS creator,
+          s.service_name AS services,
           p.number_of_units AS units,
           p.end_date AS deadline,
           p.amount AS charges,
-          p.status,
-          p.created_at,
-          p.completed_at
+          p.status
          FROM projects p
          JOIN creators c ON p.creator_id = c.creator_id
          LEFT JOIN services s ON p.service_id = s.id
          WHERE p.freelancer_id = $1 AND p.status = 'COMPLETED'
-         ORDER BY p.completed_at DESC
-         LIMIT 10`,
+         ORDER BY p.completed_at DESC`,
         [freelancerId]
       );
-
-      // Generate presigned URLs for creator profile images
-      const bucketName = process.env.BUCKET_NAME;
-      const expirySeconds = 24 * 60 * 60; // 24 hours
-
-      for (const project of projects) {
-        if (project.creator_profile_image) {
-          try {
-            const objectName = project.creator_profile_image.replace(
-              `https://${process.env.MINIO_ENDPOINT}/${bucketName}/`,
-              ''
-            );
-            project.creator_profile_image = await createPresignedUrl(
-              bucketName,
-              objectName,
-              expirySeconds
-            );
-          } catch (err) {
-            console.error('Error generating presigned URL:', err);
-            project.creator_profile_image = null;
-          }
-        }
-      }
 
       payout.completed_projects = projects;
     }
