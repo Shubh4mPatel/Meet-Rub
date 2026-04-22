@@ -1,5 +1,6 @@
 const pool = require("../config/dbConfig");
 const { logger } = require("../utils/logger");
+const { createDownloadablePresignedUrl } = require("../utils/helper");
 
 // Converts a time string to UTC.
 // If the value already carries a UTC indicator (Z or +00:00) it is returned unchanged.
@@ -75,11 +76,12 @@ const chatModel = {
     message,
     messageType = "text",
     custom_package_id = null,
-    deadline_extension_id = null
+    deadline_extension_id = null,
+    file_url = null
   ) {
     const query = `
-      INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type, custom_package_id, deadline_extension_id, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type, custom_package_id, deadline_extension_id, file_url, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `;
 
@@ -92,6 +94,7 @@ const chatModel = {
         messageType,
         custom_package_id,
         deadline_extension_id,
+        file_url,
         new Date().toISOString(),
       ]);
       return result.rows[0];
@@ -115,6 +118,7 @@ const chatModel = {
     m.created_at,
     m.deadline_extension_id,
     m.custom_package_id,
+    m.file_url,
     COALESCE(f.user_name, c.user_name) as sender_username,
     CASE
         WHEN f.freelancer_id IS NOT NULL THEN 'freelancer'
@@ -179,10 +183,11 @@ LIMIT $2 OFFSET $3;
     try {
       const result = await pool.query(query, [roomId, limit, offset]);
       console.log(
-        `Fetched ${result.rows} messages for room ${roomId} with limit ${limit} and offset ${offset}`
+        `Fetched ${result.rows.length} messages for room ${roomId} with limit ${limit} and offset ${offset}`
       );
+
       // Reverse to oldest-first and map to camelCase to match real-time message format
-      return result.rows.reverse().map((row) => ({
+      const messages = result.rows.reverse().map((row) => ({
         id: row.id,
         chatRoomId: row.room_id,
         senderId: row.sender_id,
@@ -193,6 +198,7 @@ LIMIT $2 OFFSET $3;
         timestamp: row.created_at,
         created_at: row.created_at,
         senderUsername: row.sender_username,
+        file_url: row.file_url || null,
         deadlineExtension: row.deadline_extension_id
           ? {
             id: row.deadline_extension_id,
@@ -244,6 +250,25 @@ LIMIT $2 OFFSET $3;
           }
           : null,
       }));
+
+      // Generate downloadable presigned URLs for file messages
+      const messagesWithPresignedUrls = await Promise.all(
+        messages.map(async (msg) => {
+          if (msg.file_url && msg.message_type !== 'text') {
+            // Extract filename from file_url path or use a default
+            const pathParts = msg.file_url.split('/');
+            const filenameWithTimestamp = pathParts[pathParts.length - 1];
+            // Remove timestamp prefix (e.g., "1714723800000-abc123-document.pdf" -> "document.pdf")
+            const filenameParts = filenameWithTimestamp.split('-');
+            const filename = filenameParts.slice(2).join('-') || 'download';
+
+            msg.file_url = await createDownloadablePresignedUrl(msg.file_url, filename);
+          }
+          return msg;
+        })
+      );
+
+      return messagesWithPresignedUrls;
     } catch (error) {
       console.error("Error getting chat history:", error);
       throw error;

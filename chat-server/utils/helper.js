@@ -47,4 +47,45 @@ function getObjectNameFromUrl(url, bucketName) {
   u.pathname = '/' + parts.join('/');
   return u.toString();
 }
-module.exports = { decodedToken, getObjectNameFromUrl, addAssetsPrefix, createPresignedUrl };
+
+// Generate presigned URL with download headers for chat files
+async function createDownloadablePresignedUrl(objectPath, filename) {
+  if (!objectPath) return null;
+
+  console.log('[createDownloadablePresignedUrl] Input objectPath:', objectPath);
+  console.log('[createDownloadablePresignedUrl] Input filename:', filename);
+
+  try {
+    // objectPath should be like: "chat-files/102-109/1776884991094-za2ezh-file.pdf"
+    // NOT a full URL, NOT with bucket prefix
+    const bucket = process.env.MINIO_BUCKET_NAME || 'meet-rub-assets';
+    const object = objectPath;
+
+    console.log('[createDownloadablePresignedUrl] Using bucket:', bucket);
+    console.log('[createDownloadablePresignedUrl] Using object:', object);
+
+    // Generate presigned URL with Content-Disposition header to force download
+    const url = await minioClient.presignedGetObject(
+      bucket,
+      object,
+      PRESIGNED_EXPIRY,
+      {
+        'response-content-disposition': `attachment; filename="${encodeURIComponent(filename || 'download')}"`
+      }
+    );
+
+    console.log('[createDownloadablePresignedUrl] Generated URL:', url);
+
+    const parsed = new URL(url);
+    const finalUrl = `https://staging.meetrub.com${parsed.pathname}${parsed.search}`;
+
+    console.log('[createDownloadablePresignedUrl] Final URL:', finalUrl);
+
+    return finalUrl;
+  } catch (err) {
+    console.error('[createDownloadablePresignedUrl] Error:', err);
+    return null;
+  }
+}
+
+module.exports = { decodedToken, getObjectNameFromUrl, addAssetsPrefix, createPresignedUrl, createDownloadablePresignedUrl };

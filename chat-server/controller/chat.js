@@ -957,6 +957,88 @@ const chatController = (io) => {
       }
     });
 
+    // Send a file message (image, video, audio, document)
+    socket.on("send-file-message", async ({ recipientId, file_url, object_name, filename, file_size, file_type, message }) => {
+      try {
+        console.log(`[send-file-message] User ${username} (${userId}) sending file to ${recipientId}`);
+
+        // Standard room ID format for all chats (regular and support)
+        const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
+        const chatRoomId = `${smallerId}-${largerId}`;
+        console.log(`[send-file-message] Using chat room: ${chatRoomId}`);
+
+        // Validate required fields
+        if (!object_name || !filename || !file_type) {
+          console.error(`[send-file-message] Missing required fields (object_name, filename, or file_type)`);
+          socket.emit("error", { message: "Missing file information. Please include object_name." });
+          return;
+        }
+
+        // Determine message type based on file_type
+        const messageType = file_type; // 'image', 'video', 'audio', or 'file'
+        const messageText = message || `Sent a ${file_type}`;
+
+        // Store ONLY object_name (path without bucket) in database
+        // Format should be: "chat-files/chatRoomId/timestamp-random-filename.ext"
+        const fileUrlToStore = object_name;
+
+        // Save message to database
+        console.log(`[send-file-message] Saving file message to room: ${chatRoomId}`);
+        const savedMessage = await chatModel.saveMessage(
+          chatRoomId,
+          userId,
+          recipientId,
+          messageText,
+          messageType,
+          null, // custom_package_id
+          null, // deadline_extension_id
+          fileUrlToStore // Store object path, not presigned URL
+        );
+
+        const messageData = {
+          id: savedMessage.id,
+          senderId: userId,
+          senderUsername: username,
+          recipientId,
+          message: messageText,
+          file_url,
+          filename,
+          file_size,
+          message_type: messageType,
+          timestamp: savedMessage.created_at,
+          chatRoomId,
+          isRead: false,
+        };
+        console.log(`[send-file-message] File message saved to database:`, {
+          id: messageData.id,
+          chatRoomId: messageData.chatRoomId,
+          sender: messageData.senderId,
+          file_type: messageType
+        });
+
+        // Send message to the chat room (both users)
+        io.to(chatRoomId).emit("receive-file-message", messageData);
+        console.log(`[send-file-message] File message emitted to room: ${chatRoomId}`);
+
+        // Send web notification
+        await emitWebNotification(
+          io,
+          recipientId,
+          userId,
+          'new_message',
+          username,
+          `Sent a ${file_type}`,
+          'link',
+          chatRoomId
+        );
+
+        console.log(`[send-file-message] SUCCESS - File message saved: ${username} to ${recipientId} in room ${chatRoomId}`);
+      } catch (error) {
+        console.error(`[send-file-message] ERROR - Sender ${userId}, Recipient ${recipientId}:`, error);
+        socket.emit("error", { message: "Failed to send file message" });
+      }
+    });
+
     // Typing indicator
     socket.on("typing", async ({ recipientId, isTyping }) => {
       try {
