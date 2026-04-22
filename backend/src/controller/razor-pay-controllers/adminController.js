@@ -160,11 +160,19 @@ const getAllPayouts = async (req, res, next) => {
 const getPayoutDetails = async (req, res, next) => {
   try {
     const payoutId = req.params.id;
-    const { page = 1, limit = 10 } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      service_id,
+      from_date,
+      to_date,
+      search
+    } = req.query;
 
     // Get freelancer_id from payout
     const { rows: payoutInfo } = await db.query(
-      `SELECT f.freelancer_id 
+      `SELECT f.freelancer_id
        FROM payouts po
        JOIN users u ON po.freelancer_id = u.id
        JOIN freelancer f ON f.user_id = u.id
@@ -181,9 +189,41 @@ const getPayoutDetails = async (req, res, next) => {
     const parsedLimit = Math.min(50, Math.max(1, parseInt(limit) || 10));
     const offset = (parsedPage - 1) * parsedLimit;
 
-    // Get completed projects for this freelancer with pagination
+    // Build dynamic WHERE clause
+    const conditions = ['p.freelancer_id = $1'];
+    const params = [freelancerId];
+    let paramIndex = 2;
+
+    if (status) {
+      conditions.push(`p.status = $${paramIndex++}`);
+      params.push(status);
+    }
+
+    if (service_id) {
+      conditions.push(`p.service_id = $${paramIndex++}`);
+      params.push(service_id);
+    }
+
+    if (from_date) {
+      conditions.push(`p.created_at >= $${paramIndex++}`);
+      params.push(from_date);
+    }
+
+    if (to_date) {
+      conditions.push(`p.created_at <= ($${paramIndex++}::date + interval '1 day')`);
+      params.push(to_date);
+    }
+
+    if (search) {
+      conditions.push(`c.full_name ILIKE $${paramIndex++}`);
+      params.push(`%${search}%`);
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    // Get projects for this freelancer with pagination and filters
     const { rows: projects } = await db.query(
-      `SELECT 
+      `SELECT
         p.id,
         c.full_name AS creator,
         c.profile_image_url AS creator_image,
@@ -195,18 +235,19 @@ const getPayoutDetails = async (req, res, next) => {
        FROM projects p
        JOIN creators c ON p.creator_id = c.creator_id
        LEFT JOIN services s ON p.service_id = s.id
-       WHERE p.freelancer_id = $1 AND p.status = 'COMPLETED'
-       ORDER BY p.completed_at DESC
-       LIMIT $2 OFFSET $3`,
-      [freelancerId, parsedLimit, offset]
+       WHERE ${whereClause}
+       ORDER BY p.created_at DESC
+       LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+      [...params, parsedLimit, offset]
     );
 
-    // Get total count
+    // Get total count with same filters
     const { rows: countResult } = await db.query(
-      `SELECT COUNT(*) AS total 
-       FROM projects 
-       WHERE freelancer_id = $1 AND status = 'COMPLETED'`,
-      [freelancerId]
+      `SELECT COUNT(*) AS total
+       FROM projects p
+       JOIN creators c ON p.creator_id = c.creator_id
+       WHERE ${whereClause}`,
+      params
     );
 
     const total = parseInt(countResult[0].total);
@@ -237,7 +278,7 @@ const getPayoutDetails = async (req, res, next) => {
     return res.status(200).json({
       status: 'success',
       data: {
-        completed_projects: projects,
+        projects: projects,
         pagination: {
           total,
           totalPages: Math.ceil(total / parsedLimit),
