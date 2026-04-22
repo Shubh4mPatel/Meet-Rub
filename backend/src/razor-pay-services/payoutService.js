@@ -1,24 +1,37 @@
 const { pool: db } = require('../../config/dbConfig');
-const razorpay = require('../../config/razorpayX');
+const razorpayX = require('../../config/razorpayX');
 const { getLogger } = require('../../utils/logger');
 const logger = getLogger('payout-service');
 
 class PayoutService {
-  // Create Razorpay contact + fund account using bank details from freelancer table
-  async createFundAccount(freelancer) {
+  // Step 1: Create a RazorpayX Contact
+  async createContact(freelancer) {
     try {
-      logger.info(`[createFundAccount] Starting for freelancer_id=${freelancer.freelancer_id}`);
+      const contactData = {
+        name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
+        email: freelancer.freelancer_email || '',
+        contact: freelancer.phone_number || '',
+        type: 'vendor',
+        reference_id: `freelancer_${freelancer.freelancer_id}`,
+        notes: {
+          freelancer_id: String(freelancer.freelancer_id)
+        }
+      };
+      logger.info(`[createContact] Creating contact for freelancer_id=${freelancer.freelancer_id}`);
 
-      // Validate Razorpay SDK is initialized
-      if (!razorpay) {
-        throw new Error('Razorpay SDK not initialized - check razorpayX config');
-      }
+      const response = await razorpayX.post('/contacts', contactData);
+      logger.info(`[createContact] Contact created: contact_id=${response.data.id}`);
+      return response.data.id;
+    } catch (err) {
+      const errMsg = err.response?.data?.error?.description || err.message;
+      logger.error(`[createContact] Failed for freelancer_id=${freelancer?.freelancer_id}: ${errMsg}`);
+      throw new Error(`Contact creation failed: ${errMsg}`);
+    }
+  }
 
-      if (!razorpay.contacts) {
-        throw new Error('Razorpay contacts API not available - SDK may not be properly configured');
-      }
-
-      // Validate freelancer data
+  // Step 2: Create a Fund Account linked to a contact
+  async createFundAccount(contactId, freelancer) {
+    try {
       if (!freelancer.bank_account_holder_name && !freelancer.freelancer_full_name) {
         throw new Error('Missing account holder name and freelancer name');
       }
@@ -29,27 +42,8 @@ class PayoutService {
         throw new Error(`Missing bank account number for freelancer ${freelancer.freelancer_id}`);
       }
 
-      const contactData = {
-        name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
-        email: freelancer.freelancer_email || '',
-        contact: freelancer.phone_number || '',
-        type: 'vendor',
-        reference_id: `freelancer_${freelancer.freelancer_id}`,
-        notes: {
-          freelancer_id: freelancer.freelancer_id
-        }
-      };
-      logger.info(`[createFundAccount] Creating contact with data:`, JSON.stringify(contactData, null, 2));
-
-      const contact = await razorpay.contacts.create(contactData);
-      logger.info(`[createFundAccount] Contact created successfully: contact_id=${contact.id}`);
-
-      if (!razorpay.fundAccount) {
-        throw new Error('Razorpay fundAccount API not available - SDK may not be properly configured');
-      }
-
       const fundAccountData = {
-        contact_id: contact.id,
+        contact_id: contactId,
         account_type: 'bank_account',
         bank_account: {
           name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
@@ -57,35 +51,48 @@ class PayoutService {
           account_number: freelancer.bank_account_no
         }
       };
-      logger.info(`[createFundAccount] Creating fund account with data:`, JSON.stringify({
+      logger.info(`[createFundAccount] Creating fund account for freelancer_id=${freelancer.freelancer_id}, contact_id=${contactId}`, JSON.stringify({
         ...fundAccountData,
-        bank_account: {
-          ...fundAccountData.bank_account,
-          account_number: '****' + freelancer.bank_account_no.slice(-4) // Mask account number in logs
-        }
+        bank_account: { ...fundAccountData.bank_account, account_number: '****' + freelancer.bank_account_no.slice(-4) }
       }, null, 2));
 
-      const fundAccount = await razorpay.fundAccount.create(fundAccountData);
-      logger.info(`[createFundAccount] Fund account created successfully: fund_account_id=${fundAccount.id}`);
+      const response = await razorpayX.post('/fund_accounts', fundAccountData);
+      logger.info(`[createFundAccount] Fund account created: fund_account_id=${response.data.id}`);
+      return response.data.id;
+    } catch (err) {
+      const errMsg = err.response?.data?.error?.description || err.message;
+      logger.error(`[createFundAccount] Failed for freelancer_id=${freelancer?.freelancer_id}: ${errMsg}`);
+      throw new Error(`Fund account creation failed: ${errMsg}`);
+    }
+  }
 
-      return fundAccount;
-    } catch (error) {
-      logger.error(`[createFundAccount] ERROR for freelancer_id=${freelancer?.freelancer_id}:`, {
-        errorMessage: error.message,
-        errorStack: error.stack,
-        razorpayDefined: !!razorpay,
-        contactsAPIDefined: !!(razorpay?.contacts),
-        fundAccountAPIDefined: !!(razorpay?.fundAccount),
-        freelancerData: {
-          freelancer_id: freelancer?.freelancer_id,
-          has_bank_account_no: !!freelancer?.bank_account_no,
-          has_ifsc: !!freelancer?.bank_ifsc_code,
-          has_account_holder_name: !!freelancer?.bank_account_holder_name,
-          has_freelancer_name: !!freelancer?.freelancer_full_name,
+  // Step 3: Create a Payout to a fund account
+  async createPayout(fundAccountId, amount, payoutId, freelancerId, currency, mode) {
+    try {
+      const payoutData = {
+        account_number: process.env.RAZORPAY_ACCOUNT_NUMBER,
+        fund_account_id: fundAccountId,
+        amount: Math.round(amount * 100),
+        currency: currency || 'INR',
+        mode: mode || 'IMPS',
+        purpose: 'payout',
+        queue_if_low_balance: true,
+        reference_id: `payout_${payoutId}`,
+        narration: `Freelancer payout ${payoutId}`,
+        notes: {
+          payout_id: String(payoutId),
+          freelancer_id: String(freelancerId)
         }
-      });
+      };
+      logger.info(`[createPayout] Creating payout for payout_id=${payoutId}, amount=${amount}`);
 
-      throw new Error(`Fund account creation failed: ${error.message} | Freelancer: ${freelancer?.freelancer_id || 'unknown'}`);
+      const response = await razorpayX.post('/payouts', payoutData);
+      logger.info(`[createPayout] Payout created: razorpay_payout_id=${response.data.id}, status=${response.data.status}`);
+      return response.data;
+    } catch (err) {
+      const errMsg = err.response?.data?.error?.description || err.message;
+      logger.error(`[createPayout] Failed for payout_id=${payoutId}: ${errMsg}`);
+      throw new Error(`Payout creation failed: ${errMsg}`);
     }
   }
 
@@ -132,8 +139,11 @@ class PayoutService {
       let fundAccountId = payout.razorpay_fund_account_id || payout.razorpay_account_id;
 
       if (!fundAccountId) {
-        const fundAccount = await this.createFundAccount(payout);
-        fundAccountId = fundAccount.id;
+        // Step 1: Create Contact
+        const contactId = await this.createContact(payout);
+
+        // Step 2: Create Fund Account
+        fundAccountId = await this.createFundAccount(contactId, payout);
 
         await db.query(
           `UPDATE freelancer SET razorpay_account_id = $1 WHERE freelancer_id = $2`,
@@ -141,21 +151,11 @@ class PayoutService {
         );
       }
 
-      const razorpayPayout = await razorpay.payouts.create({
-        account_number: process.env.RAZORPAY_ACCOUNT_NUMBER,
-        fund_account_id: fundAccountId,
-        amount: Math.round(payout.amount * 100),
-        currency: payout.currency || 'INR',
-        mode: payout.mode || 'IMPS',
-        purpose: 'payout',
-        queue_if_low_balance: true,
-        reference_id: payout.reference_id,
-        narration: `Payout #${payoutId} for freelancer ${payout.freelancer_id}`,
-        notes: {
-          payout_id: payoutId,
-          freelancer_id: payout.freelancer_id
-        }
-      });
+      // Step 3: Create Payout
+      const razorpayPayout = await this.createPayout(
+        fundAccountId, payout.amount, payoutId,
+        payout.freelancer_id, payout.currency, payout.mode
+      );
 
       await db.query(
         `UPDATE payouts
@@ -169,10 +169,6 @@ class PayoutService {
     } catch (error) {
       logger.error(`[processPayout] ERROR processing payout_id=${payoutId}:`, {
         errorMessage: error.message,
-        errorStack: error.stack,
-        errorName: error.constructor.name,
-        razorpayDefined: !!razorpay,
-        payoutsAPIDefined: !!(razorpay?.payouts),
         envAccountNumber: !!process.env.RAZORPAY_ACCOUNT_NUMBER
       });
 
@@ -206,17 +202,6 @@ class PayoutService {
         if (validationIssues.length > 0) {
           detailedReason += ` | Validation: ${validationIssues.join(', ')}`;
         }
-      }
-
-      // Add SDK status
-      if (!razorpay) {
-        detailedReason += ' | SDK: not_initialized';
-      } else if (!razorpay.contacts) {
-        detailedReason += ' | SDK: contacts_api_missing';
-      } else if (!razorpay.fundAccount) {
-        detailedReason += ' | SDK: fundAccount_api_missing';
-      } else if (!razorpay.payouts) {
-        detailedReason += ' | SDK: payouts_api_missing';
       }
 
       // Update payout status to FAILED with detailed reason
