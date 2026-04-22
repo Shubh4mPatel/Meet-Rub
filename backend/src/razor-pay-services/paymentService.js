@@ -41,13 +41,32 @@ class PaymentService {
     try {
       await client.query('BEGIN');
 
-      // Guard: reject if an active (INITIATED or HELD) transaction already exists for this project
+      // Guard: Check for existing active transactions
+      // If old INITIATED transaction exists (>15 min), auto-expire it and allow retry
       const { rows: activeTx } = await client.query(
-        `SELECT id, status FROM transactions WHERE project_id = $1 AND status IN ('INITIATED', 'HELD') LIMIT 1`,
+        `SELECT id, status, created_at, razorpay_order_id 
+         FROM transactions 
+         WHERE project_id = $1 AND status IN ('INITIATED', 'HELD') 
+         ORDER BY created_at DESC 
+         LIMIT 1`,
         [projectId]
       );
+      
       if (activeTx.length > 0) {
-        throw new Error(`Payment already exists for project ${projectId} (transaction ${activeTx[0].id} is ${activeTx[0].status})`);
+        const tx = activeTx[0];
+        const ageMinutes = (Date.now() - new Date(tx.created_at).getTime()) / (1000 * 60);
+        
+        if (ageMinutes > 15) {
+          // Razorpay orders expire after 15 minutes - mark as expired and allow retry
+          logger.warn(`[createServicePaymentOrder] Transaction ${tx.id} expired (age: ${ageMinutes.toFixed(1)} min), marking as FAILED`);
+          await client.query(
+            `UPDATE transactions SET status = 'FAILED', updated_at = NOW() WHERE id = $1`,
+            [tx.id]
+          );
+        } else {
+          // Recent transaction exists - reject with helpful message
+          throw new Error(`Payment already initiated for this project. Please complete the existing payment or wait ${Math.ceil(15 - ageMinutes)} minutes to retry.`);
+        }
       }
 
       logger.info(`[createServicePaymentOrder] Looking up project_id=${projectId} creator_id(clientId)=${clientId}`);

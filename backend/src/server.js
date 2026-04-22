@@ -16,6 +16,7 @@ const http = require("http");
 // const socketHandler = require("../socket/socketHandler");
 const { logger } = require("../utils/logger");
 const { manageLogFiles } = require("../cron/logmanager");
+const payoutReconciliation = require("../cron/payoutReconciliation");
 const globalErrorHandler = require("./middleware/errorHandler");
 const redisClient = require("../config/reddis");
 const { loadUsernamesIntoRedis, USERNAMES_SET_KEY } = require("../utils/helper");
@@ -133,6 +134,7 @@ if (process.env.NODE_ENV !== "development") {
     logger.info(
       `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
     );
+    logger.info('Payout reconciliation cron initialized');
   });
 } else {
   server = serverWithSocket.listen(PORT, async () => {
