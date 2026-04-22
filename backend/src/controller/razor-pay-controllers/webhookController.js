@@ -327,7 +327,13 @@ const handleWebhook = async (req, res, next) => {
     const parsedForEvent = JSON.parse(rawBody.toString('utf8'));
     const event = parsedForEvent.event;
 
-    logger.info(`[handleWebhook] Received webhook event: ${event}, id: ${parsedForEvent.id}`);
+    // RazorpayX payout webhooks don't have a top-level id; fall back to entity id
+    const webhookEventId = parsedForEvent.id
+      || parsedForEvent.payload?.payout?.entity?.id
+      || parsedForEvent.payload?.payment?.entity?.id
+      || null;
+
+    logger.info(`[handleWebhook] Received webhook event: ${event}, id: ${webhookEventId}`);
     logger.info(`[handleWebhook] Raw signature header: ${req.headers['x-razorpay-signature']}`);
     logger.info(`[handleWebhook] Secret being used: ${process.env.RAZORPAY_WEBHOOK_SECRET}`);
 
@@ -344,7 +350,7 @@ const handleWebhook = async (req, res, next) => {
     await db.query(
       `INSERT INTO webhook_logs (event_type, razorpay_event_id, payload)
        VALUES ($1, $2, $3)`,
-      [event, body.id || null, rawBody.toString('utf8')]
+      [event, webhookEventId, rawBody.toString('utf8')]
     );
     logger.info(`[handleWebhook] Webhook logged to database: ${event}`);
 
@@ -382,7 +388,7 @@ const handleWebhook = async (req, res, next) => {
     // Update webhook log as processed
     await db.query(
       'UPDATE webhook_logs SET processed = TRUE WHERE razorpay_event_id = $1',
-      [body.id]
+      [webhookEventId]
     );
 
     res.json({ status: 'ok' });
@@ -391,9 +397,14 @@ const handleWebhook = async (req, res, next) => {
 
     // Log error
     try {
+      const fallbackId = JSON.parse(req.body.toString('utf8'));
+      const errorEventId = fallbackId.id
+        || fallbackId.payload?.payout?.entity?.id
+        || fallbackId.payload?.payment?.entity?.id
+        || null;
       await db.query(
         'UPDATE webhook_logs SET error_message = $1 WHERE razorpay_event_id = $2',
-        [error.message, req.body?.id]
+        [error.message, errorEventId]
       );
     } catch (dbError) {
       logger.error('[handleWebhook] Failed to log error to database:', dbError);
