@@ -316,7 +316,6 @@ class PayoutService {
         p.mode,
         p.utr,
         p.rejection_reason,
-        p.failure_reason,
         p.rejected_at,
         p.requested_at,
         f.bank_account_no,
