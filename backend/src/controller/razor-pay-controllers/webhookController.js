@@ -328,6 +328,8 @@ const handleWebhook = async (req, res, next) => {
     const event = parsedForEvent.event;
 
     logger.info(`[handleWebhook] Received webhook event: ${event}, id: ${parsedForEvent.id}`);
+    logger.info(`[handleWebhook] Raw signature header: ${req.headers['x-razorpay-signature']}`);
+    logger.info(`[handleWebhook] Secret being used: ${process.env.RAZORPAY_WEBHOOK_SECRET}`);
 
     // Verify signature on raw bytes BEFORE any further processing
     if (!verifyWebhookSignature(rawBody, signature, event)) {
