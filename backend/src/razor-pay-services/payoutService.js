@@ -1,11 +1,13 @@
 const { pool: db } = require('../../config/dbConfig');
 const razorpay = require('../../config/razorpayX');
+const { getLogger } = require('../../utils/logger');
+const logger = getLogger('payout-service');
 
 class PayoutService {
   // Create Razorpay contact + fund account using bank details from freelancer table
   async createFundAccount(freelancer) {
     try {
-      console.log(`[createFundAccount] Starting for freelancer_id=${freelancer.freelancer_id}`);
+      logger.info(`[createFundAccount] Starting for freelancer_id=${freelancer.freelancer_id}`);
 
       // Validate Razorpay SDK is initialized
       if (!razorpay) {
@@ -37,10 +39,10 @@ class PayoutService {
           freelancer_id: freelancer.freelancer_id
         }
       };
-      console.log(`[createFundAccount] Creating contact with data:`, JSON.stringify(contactData, null, 2));
+      logger.info(`[createFundAccount] Creating contact with data:`, JSON.stringify(contactData, null, 2));
 
       const contact = await razorpay.contacts.create(contactData);
-      console.log(`[createFundAccount] Contact created successfully: contact_id=${contact.id}`);
+      logger.info(`[createFundAccount] Contact created successfully: contact_id=${contact.id}`);
 
       if (!razorpay.fundAccount) {
         throw new Error('Razorpay fundAccount API not available - SDK may not be properly configured');
@@ -55,7 +57,7 @@ class PayoutService {
           account_number: freelancer.bank_account_no
         }
       };
-      console.log(`[createFundAccount] Creating fund account with data:`, JSON.stringify({
+      logger.info(`[createFundAccount] Creating fund account with data:`, JSON.stringify({
         ...fundAccountData,
         bank_account: {
           ...fundAccountData.bank_account,
@@ -64,11 +66,11 @@ class PayoutService {
       }, null, 2));
 
       const fundAccount = await razorpay.fundAccount.create(fundAccountData);
-      console.log(`[createFundAccount] Fund account created successfully: fund_account_id=${fundAccount.id}`);
+      logger.info(`[createFundAccount] Fund account created successfully: fund_account_id=${fundAccount.id}`);
 
       return fundAccount;
     } catch (error) {
-      console.error(`[createFundAccount] ERROR for freelancer_id=${freelancer?.freelancer_id}:`, {
+      logger.error(`[createFundAccount] ERROR for freelancer_id=${freelancer?.freelancer_id}:`, {
         errorMessage: error.message,
         errorStack: error.stack,
         razorpayDefined: !!razorpay,
@@ -165,7 +167,7 @@ class PayoutService {
 
       return razorpayPayout;
     } catch (error) {
-      console.error(`[processPayout] ERROR processing payout_id=${payoutId}:`, {
+      logger.error(`[processPayout] ERROR processing payout_id=${payoutId}:`, {
         errorMessage: error.message,
         errorStack: error.stack,
         errorName: error.constructor.name,
@@ -223,7 +225,7 @@ class PayoutService {
         [detailedReason, payoutId]
       );
 
-      console.log(`[processPayout] Updated payout status to FAILED with reason: ${detailedReason}`);
+      logger.error(`[processPayout] Updated payout status to FAILED with reason: ${detailedReason}`);
 
       // Refund to available_balance
       if (payoutDetails.length > 0) {
@@ -232,7 +234,7 @@ class PayoutService {
            WHERE freelancer_id = $2`,
           [payoutDetails[0].amount, payoutDetails[0].f_id]
         );
-        console.log(`[processPayout] Refunded ${payoutDetails[0].amount} to freelancer ${payoutDetails[0].f_id} (user_id: ${payoutDetails[0].freelancer_id}) due to processing failure`);
+        logger.warn(`[processPayout] Refunded ${payoutDetails[0].amount} to freelancer ${payoutDetails[0].f_id} (user_id: ${payoutDetails[0].freelancer_id}) due to processing failure`);
       }
 
       throw error;
@@ -314,6 +316,7 @@ class PayoutService {
         p.mode,
         p.utr,
         p.rejection_reason,
+        p.failure_reason,
         p.rejected_at,
         p.requested_at,
         f.bank_account_no,
