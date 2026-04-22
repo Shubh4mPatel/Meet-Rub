@@ -696,6 +696,7 @@ const createSreviceRequest = async (req, res, next) => {
 // ✅ Get user's service requests
 const getUserServiceRequests = async (req, res, next) => {
   logger.info("Fetching user service requests");
+
   try {
     const user = req.user;
     const creator_id = user?.roleWiseId;
@@ -735,10 +736,62 @@ const getUserServiceRequests = async (req, res, next) => {
       });
     }
 
+    // Fetch suggested freelancer images for each request (max 4)
+    const requestsWithSuggestions = await Promise.all(
+      serviceRequests.map(async (request) => {
+        // Get suggested freelancer IDs
+        const { rows: suggestions } = await query(
+          `SELECT freelancer_id FROM service_request_suggestions WHERE request_id = $1`,
+          [request.request_id]
+        );
+
+        if (suggestions.length === 0 || !suggestions[0].freelancer_id) {
+          request.suggested_freelancer_images = [];
+          return request;
+        }
+
+        const freelancerIds = suggestions[0].freelancer_id;
+        // Take only first 4 IDs to reduce load
+        const limitedIds = freelancerIds.slice(0, 4);
+
+        // Get freelancer profile images (limited to 4)
+        const { rows: freelancers } = await query(
+          `SELECT profile_image_url FROM freelancer WHERE freelancer_id = ANY($1::int[]) LIMIT 4`,
+          [limitedIds]
+        );
+
+        // Generate presigned URLs for images and return only URLs
+        const imageUrls = await Promise.all(
+          freelancers.map(async (freelancer) => {
+            if (freelancer.profile_image_url) {
+              try {
+                const parts = freelancer.profile_image_url.split("/");
+                const bucketName = parts[0];
+                const objectName = parts.slice(1).join("/");
+                return await createPresignedUrl(
+                  bucketName,
+                  objectName,
+                  expirySeconds
+                );
+              } catch (error) {
+                logger.error(`Error generating signed URL for profile image:`, error);
+                return null;
+              }
+            }
+            return null;
+          })
+        );
+
+        // Filter out null values
+        request.suggested_freelancer_images = imageUrls.filter(url => url !== null);
+        return request;
+      })
+    );
+
     return res.status(200).json({
       status: "success",
       message: "Service requests fetched successfully",
-      data: serviceRequests,
+      data: requestsWithSuggestions,
     });
   } catch (error) {
     logger.error("Failed to fetch service requests:", error);
