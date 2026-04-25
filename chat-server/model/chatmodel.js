@@ -167,14 +167,7 @@ LEFT JOIN deadline_extension_requested der ON m.deadline_extension_id = der.id
 LEFT JOIN projects dp ON der.project_id = dp.id
 LEFT JOIN services ds ON dp.service_id = ds.id
 LEFT JOIN custom_packages cp ON m.custom_package_id = cp.id
-LEFT JOIN LATERAL (
-  SELECT id, status
-  FROM projects
-  WHERE creator_id = cp.creator_id
-    AND freelancer_id = cp.freelancer_id
-  ORDER BY created_at DESC
-  LIMIT 1
-) cp_proj ON cp.id IS NOT NULL
+LEFT JOIN projects cp_proj ON cp.id = cp_proj.custom_package_id
 WHERE m.room_id = $1
 ORDER BY m.created_at DESC
 LIMIT $2 OFFSET $3;

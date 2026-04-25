@@ -44,18 +44,23 @@ class PaymentService {
       // Guard: Check for existing active transactions
       // If old INITIATED transaction exists (>15 min), auto-expire it and allow retry
       const { rows: activeTx } = await client.query(
-        `SELECT id, status, created_at, razorpay_order_id 
-         FROM transactions 
-         WHERE project_id = $1 AND status IN ('INITIATED', 'HELD') 
-         ORDER BY created_at DESC 
+        `SELECT id, status, created_at, razorpay_order_id
+         FROM transactions
+         WHERE project_id = $1 AND status IN ('INITIATED', 'HELD')
+         ORDER BY created_at DESC
          LIMIT 1`,
         [projectId]
       );
-      
+
       if (activeTx.length > 0) {
         const tx = activeTx[0];
         const ageMinutes = (Date.now() - new Date(tx.created_at).getTime()) / (1000 * 60);
-        
+
+        // Block HELD transactions - payment is completed and in escrow
+        if (tx.status === 'HELD') {
+          throw new Error(`Payment already completed for this project. Transaction is in escrow.`);
+        }
+
         if (ageMinutes > 15) {
           // Razorpay orders expire after 15 minutes - mark as expired and allow retry
           logger.warn(`[createServicePaymentOrder] Transaction ${tx.id} expired (age: ${ageMinutes.toFixed(1)} min), marking as FAILED`);
@@ -63,9 +68,71 @@ class PaymentService {
             `UPDATE transactions SET status = 'FAILED', updated_at = NOW() WHERE id = $1`,
             [tx.id]
           );
+        } else if (tx.razorpay_order_id) {
+          // Check if the Razorpay order is still valid
+          try {
+            const order = await razorpay.orders.fetch(tx.razorpay_order_id);
+            logger.info(`[createServicePaymentOrder] Checking Razorpay order ${tx.razorpay_order_id}: status=${order.status}`);
+
+            // If order is paid, attempted, or still active - handle accordingly
+            if (order.status === 'paid') {
+              throw new Error(`Payment already completed. Please refresh the page.`);
+            } else if (order.status === 'attempted') {
+              // User started payment but didn't complete - wait for them to complete or timeout
+              throw new Error(`Payment in progress. Please complete the payment or wait ${Math.ceil(15 - ageMinutes)} minutes to retry.`);
+            } else if (order.status === 'created') {
+              // Reuse order only if < 10 minutes old (5 min buffer before 15 min Razorpay expiration)
+              if (ageMinutes < 10) {
+                // Order still has sufficient validity - reuse it
+                logger.info(`[createServicePaymentOrder] Reusing existing order ${tx.razorpay_order_id} for transaction ${tx.id} (age: ${ageMinutes.toFixed(1)} min)`);
+
+                // Get transaction details to return the breakdown
+                const { rows: existingTx } = await client.query(
+                  `SELECT total_amount, platform_commission, freelancer_amount, gst
+                   FROM transactions
+                   WHERE id = $1`,
+                  [tx.id]
+                );
+
+                await client.query('COMMIT');
+
+                return {
+                  transactionId: tx.id,
+                  razorpayOrder: {
+                    id: order.id,
+                    amount: order.amount / 100, // Convert paise to rupees
+                    currency: order.currency
+                  },
+                  totalAmount: existingTx[0].total_amount,
+                  serviceAmount: (order.amount / 100) - existingTx[0].gst,
+                  platformCommission: existingTx[0].platform_commission,
+                  freelancerAmount: existingTx[0].freelancer_amount,
+                  gst: existingTx[0].gst
+                };
+              } else {
+                // Order approaching expiration (10-15 min) - create new order to avoid mid-payment expiry
+                logger.warn(`[createServicePaymentOrder] Transaction ${tx.id} approaching expiration (age: ${ageMinutes.toFixed(1)} min), marking as FAILED and creating new order`);
+                await client.query(
+                  `UPDATE transactions SET status = 'FAILED', updated_at = NOW() WHERE id = $1`,
+                  [tx.id]
+                );
+              }
+            }
+          } catch (razorpayError) {
+            // If order not found or API error, assume expired and allow retry
+            logger.warn(`[createServicePaymentOrder] Razorpay order fetch failed: ${razorpayError.message}. Marking transaction ${tx.id} as FAILED`);
+            await client.query(
+              `UPDATE transactions SET status = 'FAILED', updated_at = NOW() WHERE id = $1`,
+              [tx.id]
+            );
+          }
         } else {
-          // Recent transaction exists - reject with helpful message
-          throw new Error(`Payment already initiated for this project. Please complete the existing payment or wait ${Math.ceil(15 - ageMinutes)} minutes to retry.`);
+          // No razorpay_order_id - orphaned transaction, mark as FAILED
+          logger.warn(`[createServicePaymentOrder] Transaction ${tx.id} has no razorpay_order_id, marking as FAILED`);
+          await client.query(
+            `UPDATE transactions SET status = 'FAILED', updated_at = NOW() WHERE id = $1`,
+            [tx.id]
+          );
         }
       }
 

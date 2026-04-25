@@ -113,7 +113,10 @@ const getMyTransactions = async (req, res, next) => {
 
     const params = [roleWiseId];
     let idx = 2;
-    const conditions = [role === 'creator' ? 't.creator_id = $1' : 't.freelancer_id = $1'];
+    const conditions = [
+      role === 'creator' ? 't.creator_id = $1' : 't.freelancer_id = $1',
+      "t.status IN ('HELD', 'COMPLETED', 'RELEASED')"  // Only show successful transactions
+    ];
 
     if (search && search.trim()) {
       // creator searches by freelancer name, freelancer searches by creator name

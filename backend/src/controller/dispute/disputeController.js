@@ -58,17 +58,52 @@ const raiseDispute = async (req, res, next) => {
     let projectAmount = null;
     if (project_id) {
       const projectCheck = await db.query(
-        `SELECT p.id, p.amount, s.service_name
+        `SELECT p.id, p.amount, p.status, s.service_name,
+                t.status as transaction_status
          FROM projects p
          LEFT JOIN services s ON p.service_id = s.id
+         LEFT JOIN transactions t ON t.project_id = p.id AND t.status IN ('HELD', 'COMPLETED')
          WHERE p.id = $1`,
         [project_id]
       );
       if (projectCheck.rows.length === 0) {
         return next(new AppError('Project not found', 404));
       }
-      serviceName = projectCheck.rows[0].service_name;
-      projectAmount = projectCheck.rows[0].amount;
+
+      const projectData = projectCheck.rows[0];
+      serviceName = projectData.service_name;
+      projectAmount = projectData.amount;
+
+      // Validate project state before allowing dispute
+      // 1. Check if payment was made (transaction must be HELD or COMPLETED)
+      if (!projectData.transaction_status || projectData.transaction_status === 'INITIATED') {
+        return next(new AppError('Cannot raise dispute for unpaid project. Payment must be completed first.', 400));
+      }
+
+      // 2. Only allow disputes during IN_PROGRESS or SUBMITTED status
+      const validStatuses = ['IN_PROGRESS', 'SUBMITTED'];
+      if (!validStatuses.includes(projectData.status)) {
+        if (projectData.status === 'COMPLETED') {
+          return next(new AppError('Cannot raise dispute for completed project.', 400));
+        } else if (projectData.status === 'CANCELLED') {
+          return next(new AppError('Cannot raise dispute for cancelled project.', 400));
+        } else if (projectData.status === 'CREATED') {
+          return next(new AppError('Cannot raise dispute. Project has not started yet.', 400));
+        } else {
+          return next(new AppError(`Cannot raise dispute for project in ${projectData.status} status.`, 400));
+        }
+      }
+
+      // 3. Check if dispute already exists
+      const { rows: existingDisputes } = await db.query(
+        `SELECT id FROM disputes
+         WHERE project_id = $1 AND status != 'resolved'`,
+        [project_id]
+      );
+
+      if (existingDisputes.length > 0) {
+        return next(new AppError('A dispute already exists for this project. Please wait for admin resolution.', 409));
+      }
     }
 
     const disputeResult = await db.query(
@@ -394,6 +429,9 @@ const resolveDispute = async (req, res, next) => {
        FROM disputes d
        JOIN transactions t ON t.project_id = d.project_id
        WHERE d.id = $1
+       AND t.status IN ('HELD', 'COMPLETED')
+       ORDER BY t.created_at DESC
+       LIMIT 1
        FOR UPDATE`,
       [id]
     );
@@ -413,9 +451,18 @@ const resolveDispute = async (req, res, next) => {
       });
     }
 
-    if (resolution_action !== 'resolve' && dispute.transaction_status !== 'HELD') {
-      await client.query('ROLLBACK');
-      return next(new AppError(`Cannot process payment action: transaction status is ${dispute.transaction_status}`, 400));
+    if (resolution_action !== 'resolve') {
+      // Check if transaction already COMPLETED (funds already released)
+      if (dispute.transaction_status === 'COMPLETED') {
+        await client.query('ROLLBACK');
+        return next(new AppError('Transaction already completed. Funds already released to freelancer.', 400));
+      }
+
+      // Check if transaction is not HELD (can't release/refund)
+      if (dispute.transaction_status !== 'HELD') {
+        await client.query('ROLLBACK');
+        return next(new AppError(`Cannot process payment action: transaction status is ${dispute.transaction_status}`, 400));
+      }
     }
 
     if (resolution_action === 'resolve') {

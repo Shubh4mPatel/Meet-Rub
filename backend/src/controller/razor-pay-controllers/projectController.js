@@ -355,14 +355,14 @@ const deleteProject = async (req, res, next) => {
       return next(new AppError('Only client can delete project', 403));
     }
 
-    // Check if payment has been made
+    // Check if payment has been made (allow deletion if only FAILED/INITIATED transactions exist)
     const { rows: transactions } = await db.query(
-      'SELECT id FROM transactions WHERE project_id = $1',
+      'SELECT id, status FROM transactions WHERE project_id = $1 AND status NOT IN (\'FAILED\', \'INITIATED\')',
       [projectId]
     );
 
     if (transactions.length > 0) {
-      return next(new AppError('Cannot delete project with associated transactions', 400));
+      return next(new AppError('Cannot delete project with completed payments', 400));
     }
 
     // Delete project
@@ -688,6 +688,17 @@ const uploadDeliverable = async (req, res, next) => {
 
     if (project.status !== 'IN_PROGRESS') {
       return next(new AppError(`Cannot upload deliverable for a project in status ${project.status}. Project must be IN_PROGRESS.`, 400));
+    }
+
+    // Verify payment is completed (transaction HELD) before allowing deliverable upload
+    const { rows: heldTx } = await db.query(
+      `SELECT id FROM transactions
+       WHERE project_id = $1 AND status = 'HELD'`,
+      [project_id]
+    );
+
+    if (heldTx.length === 0) {
+      return next(new AppError('Payment not completed. Cannot submit deliverable until payment is confirmed.', 400));
     }
 
     const client = await db.connect();
@@ -1092,6 +1103,18 @@ const approveProject = async (req, res, next) => {
     if (projects[0].status !== 'SUBMITTED') {
       await client.query('ROLLBACK');
       return next(new AppError('Project must be SUBMITTED before approving', 400));
+    }
+
+    // Check if any unresolved disputes exist
+    const { rows: activeDisputes } = await client.query(
+      `SELECT id FROM disputes
+       WHERE project_id = $1 AND status != 'resolved'`,
+      [projectId]
+    );
+
+    if (activeDisputes.length > 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError('Cannot approve project with active dispute. Please resolve dispute first.', 400));
     }
 
     const { rows: transactions } = await client.query(

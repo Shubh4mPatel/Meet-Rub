@@ -693,11 +693,22 @@ CREATE TABLE IF NOT EXISTS public.projects
     completed_at timestamp with time zone,
     end_date timestamp with time zone,
     service_id integer,
+    approved_by integer,
+    approved_at timestamp with time zone,
+    custom_package_id integer,
     CONSTRAINT projects_pkey PRIMARY KEY (id),
     CONSTRAINT fk_projects_service FOREIGN KEY (service_id)
         REFERENCES public.services (id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE CASCADE,
+    CONSTRAINT projects_approved_by_fkey FOREIGN KEY (approved_by)
+        REFERENCES public.admin (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT fk_projects_custom_package FOREIGN KEY (custom_package_id)
+        REFERENCES public.custom_packages (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE SET NULL,
     CONSTRAINT projects_creator_id_fkey FOREIGN KEY (creator_id)
         REFERENCES public.creators (creator_id) MATCH SIMPLE
         ON UPDATE NO ACTION

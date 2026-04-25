@@ -948,7 +948,7 @@ const chatController = (io) => {
         io.to(chatRoomId).emit("receive-message", messageData);
         console.log(`[send-message] Message emitted to room: ${chatRoomId}`);
 
-        await emitWebNotification(io, recipientId, userId, 'new_message', username, message, 'link', chatRoomId);
+        await emitWebNotification(io, recipientId, userId, 'new_message', 'New Message', `You have received a new message from ${username}`, 'link', chatRoomId);
 
         console.log(`[send-message] SUCCESS - Message saved: ${username} to ${recipientId} in room ${chatRoomId}`);
       } catch (error) {
@@ -1026,8 +1026,8 @@ const chatController = (io) => {
           recipientId,
           userId,
           'new_message',
-          username,
-          `Sent a ${file_type}`,
+          'New Message',
+          `You have received a new message from ${username}`,
           'link',
           chatRoomId
         );
