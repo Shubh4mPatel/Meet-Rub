@@ -859,10 +859,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     const suggestedFreelancerIds = suggestionRows[0].freelancer_id;
     logger.debug(`Total suggested freelancer IDs: ${suggestedFreelancerIds.length}`);
 
-    // Service type-wise banner: use desiredService from the request
-    const serviceSubquery = desiredService ? `AND s2.service_name = $3` : ``;
-
-    // Build the query — return all suggested freelancers by ID only
+    // Build the query — return all suggested freelancers by ID (no service matching filter)
     let queryText = `
       SELECT
         f.freelancer_id,
@@ -875,18 +872,16 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist,
-        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       WHERE f.freelancer_id = ANY($2::int[])
     `;
 
-    const queryParams = desiredService
-      ? [creator_id, suggestedFreelancerIds, desiredService]
-      : [creator_id, suggestedFreelancerIds];
-    let paramCount = desiredService ? 4 : 3;
+    const queryParams = [creator_id, suggestedFreelancerIds];
+    let paramCount = 3;
 
     // Add search condition
     if (searchTerm) {
@@ -897,11 +892,6 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
 
     // Add GROUP BY clause
     queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, w.freelancer_id`;
-
-    // If desiredService is set, exclude freelancers with no matching service
-    if (desiredService) {
-      queryText += ` HAVING (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.service_name = $3 ORDER BY s2.created_at DESC LIMIT 1) IS NOT NULL`;
-    }
 
     // Count total before pagination
     const countQuery = `SELECT COUNT(*) as count FROM (${queryText}) as sub`;
