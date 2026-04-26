@@ -10,7 +10,7 @@ const upload = require('../../config/multer');
 router.post("/send-otp", otpSendApi);
 
 
-router.post("/verify-otp", upload.single('file'), verifyOtpAndProcess, setTokenCookies, (req, res) => {
+router.post("/verify-otp", upload.fields([{ name: 'govIdImage', maxCount: 1 }, { name: 'panCardImage', maxCount: 1 }]), verifyOtpAndProcess, setTokenCookies, (req, res) => {
 
   res.status(200).json({
     message: "Login successful ",

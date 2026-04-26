@@ -386,6 +386,8 @@ CREATE TABLE IF NOT EXISTS public.freelancer
     earnings_balance numeric(15,2) DEFAULT 0.00,
     interested_service character varying[] COLLATE pg_catalog."default",
     available_balance numeric(15,2) DEFAULT 0.00,
+    pan_card_number character varying(20) COLLATE pg_catalog."default",
+    pan_card_image_url text COLLATE pg_catalog."default",
     CONSTRAINT influencer_pkey PRIMARY KEY (freelancer_id),
     CONSTRAINT unique_freelancer_user_name UNIQUE (user_name),
     CONSTRAINT influencer_user_id_fkey FOREIGN KEY (user_id)

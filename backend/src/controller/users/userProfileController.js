@@ -166,7 +166,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "govtId") {
         logger.info("Fetching: Freelancer Govt ID");
         const { rows } = await query(
-          "SELECT gov_id_type, gov_id_url, gov_id_number,verification_status FROM freelancer WHERE user_id = $1",
+          "SELECT gov_id_type, gov_id_url, gov_id_number, verification_status, pan_card_number, pan_card_image_url FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -185,6 +185,14 @@ const getUserProfile = async (req, res, next) => {
           expirySeconds
         );
 
+        let panCardSignedUrl = null;
+        if (rows[0]?.pan_card_image_url) {
+          const panParts = rows[0].pan_card_image_url.split("/");
+          const panBucket = panParts[0];
+          const panObject = panParts.slice(1).join("/");
+          panCardSignedUrl = await createPresignedUrl(panBucket, panObject, expirySeconds);
+        }
+
         return res.status(200).json({
           status: "success",
           message: "Govt ID fetched successfully",
@@ -192,7 +200,9 @@ const getUserProfile = async (req, res, next) => {
             userGovtIdUrl: signedUrl,
             userGovtIdType: rows[0]?.gov_id_type,
             userGovtIdNumber: rows[0]?.gov_id_number,
-            verificationStatus: rows[0]?.verification_status
+            verificationStatus: rows[0]?.verification_status,
+            panCardNumber: rows[0]?.pan_card_number,
+            panCardImageUrl: panCardSignedUrl,
           },
         });
       }
@@ -234,6 +244,11 @@ const freelancerGovInfoSchema = Joi.object({
   type: Joi.string().valid("govtId").required(),
   gov_id_type: Joi.string().required(),
   gov_id_number: Joi.string().required(),
+});
+
+const freelancerPanCardSchema = Joi.object({
+  type: Joi.string().valid("panCard").required(),
+  pan_card_number: Joi.string().pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/).required(),
 });
 
 const freelancerBankDetailsSchema = Joi.object({
@@ -340,6 +355,11 @@ const editProfile = async (req, res, next) => {
         validationError = error;
       } else if (type === "govtId") {
         const { error } = freelancerGovInfoSchema.validate(req.body, {
+          abortEarly: false,
+        });
+        validationError = error;
+      } else if (type === "panCard") {
+        const { error } = freelancerPanCardSchema.validate(req.body, {
           abortEarly: false,
         });
         validationError = error;
@@ -665,6 +685,67 @@ const editProfile = async (req, res, next) => {
             data: freelancerGovInfo[0].gov_id_url
               ? { ...freelancerGovInfo[0], gov_id_url: signedUrl }
               : freelancerGovInfo[0],
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
+        }
+      }
+      if (type === "panCard") {
+        logger.info("Updating Freelancer PAN Card");
+
+        if (freelancerExistsResult[0]?.verification_status === 'PENDING') {
+          logger.warn("PAN card update blocked — verification is pending");
+          return next(new AppError("Your details are currently under review and cannot be changed", 403));
+        }
+
+        const { pan_card_number } = req.body;
+
+        const panFile = Array.isArray(req.files)
+          ? req.files.find((f) => f.fieldname === "panCardImage")
+          : req.file;
+
+        if (!panFile) {
+          logger.warn("Missing PAN card image file");
+          return next(new AppError("PAN card image is required", 400));
+        }
+
+        if (!panFile.mimetype.startsWith("image/")) {
+          logger.warn("Invalid file type for PAN card:", panFile.mimetype);
+          return next(new AppError("PAN card must be an image file (JPEG, PNG, etc.)", 400));
+        }
+
+        const panFileExt = path.extname(panFile.originalname);
+        const panFileName = `${crypto.randomUUID()}${panFileExt}`;
+        const panObjectName = `freelancer/pan-card/${panFileName}`;
+        const panCardImageUrl = `${BUCKET_NAME}/${panObjectName}`;
+
+        await query("BEGIN");
+        try {
+          await minioClient.putObject(
+            BUCKET_NAME,
+            panObjectName,
+            panFile.buffer,
+            panFile.size,
+            { "Content-Type": panFile.mimetype }
+          );
+
+          await query(
+            "UPDATE freelancer SET pan_card_number=$1, pan_card_image_url=$2, updated_at=NOW() WHERE user_id=$3",
+            [pan_card_number, panCardImageUrl, user.user_id]
+          );
+
+          const signedUrl = await createPresignedUrl(BUCKET_NAME, panObjectName, expirySeconds);
+
+          await query("COMMIT");
+          logger.info("PAN card updated successfully");
+          return res.status(200).json({
+            status: "success",
+            message: "PAN card updated successfully",
+            data: {
+              pan_card_number,
+              pan_card_image_url: signedUrl,
+            },
           });
         } catch (error) {
           await query("ROLLBACK");
