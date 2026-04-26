@@ -15,7 +15,7 @@ router.post("/verify-otp", upload.fields([{ name: 'govIdImage', maxCount: 1 }, {
   res.status(200).json({
     message: "Login successful ",
     userInfo: res.locals.user,
-   
+
   });
 
 });

@@ -326,7 +326,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           client.release();
         }
       } else if (role === "creator") {
-        const { firstName, lastName, niche, socialLinks, phoneNo,userName } = req.body;
+        const { firstName, lastName, niche, socialLinks, phoneNo, userName } = req.body;
 
         // Parse JSON strings from FormData
         const parsedNiche = JSON.parse(niche);
