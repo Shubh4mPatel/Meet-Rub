@@ -133,7 +133,8 @@ const getAllPayouts = async (req, res, next) => {
           p.requested_at as payout_created_at,
           fl.freelancer_full_name as freelancer_name,
           fl.freelancer_email,
-          fl.user_name as freelancer_username
+          fl.user_name as freelancer_username,
+          fl.profile_image_url as freelancer_profile_image
        FROM payouts p
        JOIN users u ON p.freelancer_id = u.id
        JOIN freelancer fl ON fl.user_id = u.id
@@ -143,12 +144,28 @@ const getAllPayouts = async (req, res, next) => {
       [...params, parsedLimit, offset]
     );
 
+    const enhancedPayouts = await Promise.all(
+      payouts.map(async (payout) => {
+        let profileImage = null;
+        if (payout.freelancer_profile_image) {
+          const parts = payout.freelancer_profile_image.split('/');
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join('/');
+          profileImage = await createPresignedUrl(bucketName, objectName, 14400);
+        }
+        return {
+          ...payout,
+          freelancer_profile_image: profileImage
+        };
+      })
+    );
+
     res.json({
       count: total,
       page: parsedPage,
       limit: parsedLimit,
       total_pages: Math.ceil(total / parsedLimit),
-      payouts
+      payouts: enhancedPayouts
     });
   } catch (error) {
     console.error('Get all payouts error:', error);
