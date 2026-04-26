@@ -430,6 +430,47 @@ const chatController = (io) => {
       }
     });
 
+    // Admin view chat (read-only)
+    socket.on("admin-view-chat", async ({ user1Id, user2Id }) => {
+      try {
+        if (userRole !== 'admin') {
+          socket.emit("error", { message: "Access denied" });
+          return;
+        }
+
+        const [smallerId, largerId] = [parseInt(user1Id), parseInt(user2Id)].sort((a, b) => a - b);
+        const chatRoomId = `${smallerId}-${largerId}`;
+
+        socket.join(chatRoomId);
+
+        const [chatHistory, participants] = await Promise.all([
+          chatModel.getChatHistory(chatRoomId),
+          chatModel.getRoomParticipants(chatRoomId),
+        ]);
+
+        if (!participants) {
+          socket.emit("error", { message: "Chat not found" });
+          return;
+        }
+
+        [participants.user1_avatar, participants.user2_avatar] = await Promise.all([
+          createPresignedUrl(participants.user1_avatar),
+          createPresignedUrl(participants.user2_avatar),
+        ]);
+
+        socket.emit("chat-viewed", {
+          chatRoomId,
+          messages: chatHistory,
+          participants,
+        });
+
+        console.log(`Admin ${userId} viewing chat: ${chatRoomId}`);
+      } catch (error) {
+        console.error(`[admin-view-chat] ERROR:`, error);
+        socket.emit("error", { message: "Failed to view chat" });
+      }
+    });
+
     // Join a private chat room
     socket.on("join-chat", async ({ recipientId }) => {
       try {
@@ -1092,6 +1133,39 @@ const chatController = (io) => {
       } catch (error) {
         console.error("Error getting chat rooms:", error);
         socket.emit("error", { message: "Failed to get chat rooms" });
+      }
+    });
+
+    // Admin get chat rooms for specific user
+    socket.on("admin-get-user-chats", async ({ targetUserId }) => {
+      try {
+        if (userRole !== 'admin') {
+          socket.emit("error", { message: "Access denied" });
+          return;
+        }
+
+        const chatRooms = await chatModel.getUserChatRooms(targetUserId);
+
+        const enhancedChatRooms = await Promise.all(
+          chatRooms.map(async (room) => {
+            const [user1_avatar, user2_avatar] = await Promise.all([
+              createPresignedUrl(room.user1_profile_image_url),
+              createPresignedUrl(room.user2_profile_image_url),
+            ]);
+
+            return {
+              ...room,
+              user1_profile_image_url: user1_avatar,
+              user2_profile_image_url: user2_avatar,
+            };
+          })
+        );
+
+        socket.emit("user-chats-list", { chatRooms: enhancedChatRooms });
+        console.log(`Admin ${userId} fetched ${enhancedChatRooms.length} chats for user ${targetUserId}`);
+      } catch (error) {
+        console.error(`[admin-get-user-chats] ERROR:`, error);
+        socket.emit("error", { message: "Failed to get user chats" });
       }
     });
 
