@@ -272,16 +272,14 @@ const getPayoutDetails = async (req, res, next) => {
     const total = parseInt(countResult[0].total);
 
     // Generate presigned URLs for freelancer and creator images
-    const bucketName = process.env.BUCKET_NAME;
     const expirySeconds = 24 * 60 * 60; // 24 hours
 
     if (freelancerImage) {
       try {
-        const objectName = freelancerImage.replace(
-          `https://${process.env.MINIO_ENDPOINT}/${bucketName}/`,
-          ''
-        );
-        freelancerImage = await createPresignedUrl(bucketName, objectName, expirySeconds);
+        const parts = freelancerImage.split('/');
+        const bucket = parts[0];
+        const objectName = parts.slice(1).join('/');
+        freelancerImage = await createPresignedUrl(bucket, objectName, expirySeconds);
       } catch (err) {
         console.error('Error generating presigned URL for freelancer image:', err);
         freelancerImage = null;
@@ -291,15 +289,10 @@ const getPayoutDetails = async (req, res, next) => {
     for (const project of projects) {
       if (project.creator_image) {
         try {
-          const objectName = project.creator_image.replace(
-            `https://${process.env.MINIO_ENDPOINT}/${bucketName}/`,
-            ''
-          );
-          project.creator_image = await createPresignedUrl(
-            bucketName,
-            objectName,
-            expirySeconds
-          );
+          const parts = project.creator_image.split('/');
+          const bucket = parts[0];
+          const objectName = parts.slice(1).join('/');
+          project.creator_image = await createPresignedUrl(bucket, objectName, expirySeconds);
         } catch (err) {
           console.error('Error generating presigned URL:', err);
           project.creator_image = null;
