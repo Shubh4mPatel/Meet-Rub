@@ -187,9 +187,9 @@ const getPayoutDetails = async (req, res, next) => {
       search
     } = req.query;
 
-    // Get freelancer_id from payout
+    // Get freelancer_id, name, and image from payout
     const { rows: payoutInfo } = await db.query(
-      `SELECT f.freelancer_id
+      `SELECT f.freelancer_id, f.freelancer_full_name, f.profile_image_url AS freelancer_image
        FROM payouts po
        JOIN users u ON po.freelancer_id = u.id
        JOIN freelancer f ON f.user_id = u.id
@@ -202,6 +202,8 @@ const getPayoutDetails = async (req, res, next) => {
     }
 
     const freelancerId = payoutInfo[0].freelancer_id;
+    const freelancerName = payoutInfo[0].freelancer_full_name;
+    let freelancerImage = payoutInfo[0].freelancer_image;
     const parsedPage = Math.max(1, parseInt(page) || 1);
     const parsedLimit = Math.min(50, Math.max(1, parseInt(limit) || 10));
     const offset = (parsedPage - 1) * parsedLimit;
@@ -269,9 +271,22 @@ const getPayoutDetails = async (req, res, next) => {
 
     const total = parseInt(countResult[0].total);
 
-    // Generate presigned URLs for creator images
+    // Generate presigned URLs for freelancer and creator images
     const bucketName = process.env.BUCKET_NAME;
     const expirySeconds = 24 * 60 * 60; // 24 hours
+
+    if (freelancerImage) {
+      try {
+        const objectName = freelancerImage.replace(
+          `https://${process.env.MINIO_ENDPOINT}/${bucketName}/`,
+          ''
+        );
+        freelancerImage = await createPresignedUrl(bucketName, objectName, expirySeconds);
+      } catch (err) {
+        console.error('Error generating presigned URL for freelancer image:', err);
+        freelancerImage = null;
+      }
+    }
 
     for (const project of projects) {
       if (project.creator_image) {
@@ -295,6 +310,10 @@ const getPayoutDetails = async (req, res, next) => {
     return res.status(200).json({
       status: 'success',
       data: {
+        freelancer: {
+          name: freelancerName,
+          image: freelancerImage
+        },
         projects: projects,
         pagination: {
           total,
