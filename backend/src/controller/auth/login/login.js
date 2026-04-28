@@ -51,13 +51,19 @@ const loginUser = async (req, res, next) => {
                 [user.id]
             );
             roleWiseId = result.rows[0]?.freelancer_id || null;
-        } 
+        }
         if (user.user_role === 'creator') {
             const result = await query(
-                "SELECT creator_id FROM creators WHERE user_id = $1",
+                "SELECT creator_id, account_status FROM creators WHERE user_id = $1",
                 [user.id]
             );
             roleWiseId = result.rows[0]?.creator_id || null;
+
+            // Check if creator is suspended
+            if (result.rows[0]?.account_status === 'SUSPENDED') {
+                logger.warn(`Login blocked: Creator account suspended (creator_id=${roleWiseId})`);
+                return next(new AppError("Your account has been suspended. Please contact support for assistance.", 403));
+            }
         }
         if (user.user_role === 'admin') {
             const result = await query(
