@@ -808,6 +808,88 @@ const rejectPayout = async (req, res, next) => {
   }
 };
 
+const suspendCreatorByAdmin = async (req, res, next) => {
+  try {
+    const { reason_for_suspension, creator_id } = req.body;
+    const adminId = req.user.roleWiseId;
+
+    if (!creator_id) {
+      return next(new AppError('Creator ID is required', 400));
+    }
+
+    if (!reason_for_suspension) {
+      return next(new AppError('Reason for suspension is required', 400));
+    }
+
+    const { rows } = await query(
+      'SELECT creator_id, account_status FROM creators WHERE creator_id = $1',
+      [creator_id]
+    );
+
+    if (rows.length === 0) {
+      return next(new AppError('Creator not found', 404));
+    }
+
+    if (rows[0].account_status === 'SUSPENDED') {
+      return next(new AppError('Creator is already suspended', 400));
+    }
+
+    await query(
+      'UPDATE creators SET account_status = $1, reason_for_suspension = $2, suspended_by = $3, suspended_at = NOW() WHERE creator_id = $4',
+      ['SUSPENDED', reason_for_suspension, adminId, creator_id]
+    );
+
+    res.json({
+      message: 'Creator suspended successfully',
+      creator_id,
+      account_status: 'SUSPENDED',
+      reason_for_suspension,
+      suspended_by: adminId,
+      suspended_at: new Date()
+    });
+  } catch (error) {
+    console.error('Suspend Creator error:', error);
+    return next(new AppError('Failed to suspend creator', 500));
+  }
+}
+
+const revokeCreatorSuspension = async (req, res, next) => {
+  try {
+    const { creator_id } = req.body;
+
+    if (!creator_id) {
+      return next(new AppError('Creator ID is required', 400));
+    }
+
+    const { rows } = await query(
+      'SELECT creator_id, account_status FROM creators WHERE creator_id = $1',
+      [creator_id]
+    );
+
+    if (rows.length === 0) {
+      return next(new AppError('Creator not found', 404));
+    }
+
+    if (rows[0].account_status !== 'SUSPENDED') {
+      return next(new AppError('Creator is not suspended', 400));
+    }
+
+    await query(
+      'UPDATE creators SET account_status = $1, reason_for_suspension = NULL, suspended_by = NULL, suspended_at = NULL WHERE creator_id = $2',
+      ['ACTIVE', creator_id]
+    );
+
+    res.json({
+      message: 'Creator suspension revoked successfully',
+      creator_id,
+      account_status: 'ACTIVE'
+    });
+  } catch (error) {
+    console.error('Revoke Creator suspension error:', error);
+    return next(new AppError('Failed to revoke suspension', 500));
+  }
+}
+
 module.exports = {
   approvePayout,
   rejectPayout,
@@ -820,5 +902,7 @@ module.exports = {
   rejectKYCByAdmin,
   suspendFreelancerByAdmin,
   addFeaturedFreelancer,
-  removeFeaturedFreelancer
+  removeFeaturedFreelancer,
+  suspendCreatorByAdmin,
+  revokeCreatorSuspension
 }
