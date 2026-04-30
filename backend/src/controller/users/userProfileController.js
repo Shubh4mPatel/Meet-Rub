@@ -2180,7 +2180,11 @@ const getCreatorById = async (req, res, next) => {
         social_links,
         niche,
         about_me,
-        created_at
+        created_at,
+        account_status,
+        reason_for_suspension,
+        suspended_by,
+        suspended_at
       FROM creators
       WHERE creator_id = $1`,
       [creatorId]
@@ -2240,6 +2244,10 @@ const getCreatorById = async (req, res, next) => {
       niches: creator.niche || [],
       about_me: creator.about_me,
       date_of_joining: creator.created_at,
+      account_status: creator.account_status,
+      reason_for_suspension: creator.reason_for_suspension || null,
+      suspended_by: creator.suspended_by || null,
+      suspended_at: creator.suspended_at || null,
     };
 
     logger.info(`Creator profile fetched successfully for ID: ${creatorId}`);
