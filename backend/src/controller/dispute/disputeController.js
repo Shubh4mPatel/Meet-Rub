@@ -229,6 +229,7 @@ const getDisputes = async (req, res, next) => {
       SELECT
         d.id                       AS dispute_id,
         d.project_id,
+        d.freelancer_id,
         d.reason_of_dispute,
         d.description              AS dispute_description,
         d.admin_note ,
