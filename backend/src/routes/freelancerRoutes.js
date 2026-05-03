@@ -1,6 +1,6 @@
 const express = require('express');
 const upload = require('../../config/multer');
-const { getMyPayouts, requestPayout, getWalletDashboard, getTransactionHistory } = require('../controller/razor-pay-controllers/freelancerController');
+const { getMyPayouts, requestPayout, getWalletDashboard, getTransactionHistory, onboardLinkedAccount, getLinkedAccountStatus } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
 const { requireRole, authenticateUser } = require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
@@ -104,5 +104,9 @@ router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(
 router.post('/rate-creator/:projectId', authenticateUser, requireRole(['freelancer']), rateFreelancer);
 
 router.get('/my-reviews', authenticateUser, requireRole(['freelancer']), getMyReviews);
+
+// Razorpay Routes - Linked Account onboarding
+router.post('/onboard-linked-account', authenticateUser, requireRole(['freelancer']), onboardLinkedAccount);
+router.get('/linked-account-status', authenticateUser, requireRole(['freelancer']), getLinkedAccountStatus);
 
 module.exports = router

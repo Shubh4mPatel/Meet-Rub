@@ -1,5 +1,6 @@
 const { pool: db } = require('../../../config/dbConfig');
 const payoutService = require('../../razor-pay-services/payoutService');
+const linkedAccountService = require('../../razor-pay-services/linkedAccountService');
 const AppError = require("../../../utils/appError");
 
 // Add/Update bank account details
@@ -419,6 +420,52 @@ const getTransactionHistory = async (req, res, next) => {
   }
 };
 
+// Trigger Razorpay linked account onboarding for freelancer
+const onboardLinkedAccount = async (req, res, next) => {
+  try {
+    const freelancerId = req.user.roleWiseId;
+
+    const result = await linkedAccountService.onboardFreelancer(freelancerId);
+
+    return res.status(200).json({
+      status: 'success',
+      message: result.status === 'already_activated'
+        ? 'Linked account already activated.'
+        : 'Linked account onboarding initiated.',
+      data: result,
+    });
+  } catch (error) {
+    console.error('onboardLinkedAccount error:', error);
+    return next(new AppError(error.message || 'Failed to onboard linked account', 500));
+  }
+};
+
+// Get linked account status for the current freelancer
+const getLinkedAccountStatus = async (req, res, next) => {
+  try {
+    const freelancerId = req.user.roleWiseId;
+
+    const { rows } = await db.query(
+      `SELECT razorpay_linked_account_id, razorpay_stakeholder_id,
+              razorpay_product_id, razorpay_account_status
+       FROM freelancer WHERE freelancer_id = $1`,
+      [freelancerId]
+    );
+
+    if (rows.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: rows[0],
+    });
+  } catch (error) {
+    console.error('getLinkedAccountStatus error:', error);
+    return next(new AppError('Failed to get linked account status', 500));
+  }
+};
+
 module.exports = {
   addBankAccount,
   getBankAccount,
@@ -426,4 +473,6 @@ module.exports = {
   requestPayout,
   getWalletDashboard,
   getTransactionHistory,
+  onboardLinkedAccount,
+  getLinkedAccountStatus,
 }

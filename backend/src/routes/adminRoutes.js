@@ -1,6 +1,6 @@
 const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
-const {  approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, addFeaturedFreelancer, removeFeaturedFreelancer, suspendCreatorByAdmin, revokeCreatorSuspension } = require('../controller/razor-pay-controllers/adminController')
+const { approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, addFeaturedFreelancer, removeFeaturedFreelancer, suspendCreatorByAdmin, revokeCreatorSuspension, releaseTransfer, createFreelancerLinkedAccount, getFreelancerLinkedAccountStatus } = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches, AssignFreelancerToRequest, getServicesForAdmin, editServiceForAdmin, deleteServiceForAdmin } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
 const upload = require('../../config/multer')
@@ -83,5 +83,10 @@ router.delete('/services/:id', requireRole(['admin']), deleteServiceForAdmin);
 
 router.post('/featured-freelancers', requireRole(['admin']), addFeaturedFreelancer);
 router.delete('/featured-freelancers', requireRole(['admin']), removeFeaturedFreelancer);
+
+// Razorpay Routes - Transfer release & linked account management
+router.post('/transactions/:id/release', requireRole(['admin']), releaseTransfer);
+router.post('/freelancer/:freelancer_id/create-linked-account', requireRole(['admin']), createFreelancerLinkedAccount);
+router.get('/freelancer/:freelancer_id/linked-account-status', requireRole(['admin']), getFreelancerLinkedAccountStatus);
 
 module.exports = router

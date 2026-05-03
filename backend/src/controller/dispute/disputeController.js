@@ -2,6 +2,7 @@ const { pool: db } = require('../../../config/dbConfig');
 const AppError = require('../../../utils/appError');
 const { logger } = require('../../../utils/logger');
 const razorpay = require('../../../config/razorpay');
+const paymentService = require('../../razor-pay-services/paymentService');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
@@ -426,7 +427,7 @@ const resolveDispute = async (req, res, next) => {
     const { rows: disputes } = await client.query(
       `SELECT d.*, t.id AS transaction_id, t.status AS transaction_status,
               t.razorpay_payment_id, t.total_amount, t.freelancer_amount,
-              t.freelancer_id AS t_freelancer_id
+              t.freelancer_id AS t_freelancer_id, t.razorpay_transfer_id
        FROM disputes d
        LEFT JOIN LATERAL (
          SELECT * FROM transactions
@@ -484,15 +485,22 @@ const resolveDispute = async (req, res, next) => {
       // Just mark as resolved — no money movement
 
     } else if (resolution_action === 'release') {
-      // Release funds to freelancer — credit both balances
+      // Release funds to freelancer
+      if (dispute.razorpay_transfer_id) {
+        // Routes flow: release the on-hold transfer
+        await razorpay.transfers.edit(dispute.razorpay_transfer_id, { on_hold: 0 });
+        logger.info(`Dispute ${id}: Released transfer ${dispute.razorpay_transfer_id} via Routes`);
+      } else {
+        // Legacy flow: credit freelancer balances manually
+        await client.query(
+          `UPDATE freelancer SET earnings_balance = earnings_balance + $1, available_balance = available_balance + $1 WHERE freelancer_id = $2`,
+          [dispute.freelancer_amount, dispute.t_freelancer_id]
+        );
+      }
+
       await client.query(
         `UPDATE transactions SET status = 'COMPLETED', released_by = $1, released_at = NOW(), updated_at = NOW() WHERE id = $2`,
         [adminId, dispute.transaction_id]
-      );
-
-      await client.query(
-        `UPDATE freelancer SET earnings_balance = earnings_balance + $1, available_balance = available_balance + $1 WHERE freelancer_id = $2`,
-        [dispute.freelancer_amount, dispute.t_freelancer_id]
       );
 
       await client.query(
@@ -501,13 +509,22 @@ const resolveDispute = async (req, res, next) => {
       );
 
     } else {
-      // Refund full amount (including GST) to creator via Razorpay (including GST) to creator via Razorpay
+      // Refund full amount (including GST) to creator
       if (!dispute.razorpay_payment_id) {
         await client.query('ROLLBACK');
         return next(new AppError('No Razorpay payment ID found for this transaction', 400));
       }
 
       const refundAmountPaise = Math.round(parseFloat(dispute.total_amount) * 100);
+
+      // Routes flow: reverse transfer first, then refund
+      if (dispute.razorpay_transfer_id) {
+        const freelancerAmountPaise = Math.round(parseFloat(dispute.freelancer_amount) * 100);
+        await razorpay.transfers.reverse(dispute.razorpay_transfer_id, {
+          amount: freelancerAmountPaise,
+        });
+        logger.info(`Dispute ${id}: Reversed transfer ${dispute.razorpay_transfer_id} amount=${dispute.freelancer_amount}`);
+      }
 
       const refund = await razorpay.payments.refund(dispute.razorpay_payment_id, {
         amount: refundAmountPaise,

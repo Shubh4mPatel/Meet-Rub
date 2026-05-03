@@ -138,9 +138,11 @@ class PaymentService {
 
       logger.info(`[createServicePaymentOrder] Looking up project_id=${projectId} creator_id(clientId)=${clientId}`);
       const { rows: projects } = await client.query(
-        `SELECT p.*, so.service_name
+        `SELECT p.*, so.service_name,
+                f.razorpay_linked_account_id, f.razorpay_account_status
          FROM projects p
          LEFT JOIN service_options so ON p.service_id = so.id
+         LEFT JOIN freelancer f ON p.freelancer_id = f.freelancer_id
          WHERE p.id = $1 AND p.creator_id = $2`,
         [projectId, clientId]
       );
@@ -188,6 +190,25 @@ class PaymentService {
           description: project.service_name ? `Payment for ${project.service_name}` : `Payment for project ${projectId}`
         }
       };
+
+      // Razorpay Routes: Add transfer instructions if freelancer has activated linked account
+      if (project.razorpay_linked_account_id && project.razorpay_account_status === 'activated') {
+        const holdUntil = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days
+        orderOptions.transfers = [{
+          account: project.razorpay_linked_account_id,
+          amount: Math.round(amounts.freelancerAmount * 100),
+          currency: process.env.CURRENCY || 'INR',
+          on_hold: 1,
+          on_hold_until: holdUntil,
+          notes: {
+            project_id: String(projectId),
+            transaction_id: String(transactionId),
+          },
+        }];
+        logger.info(`[createServicePaymentOrder] Added transfer instructions: account=${project.razorpay_linked_account_id}, amount=${amounts.freelancerAmount}, on_hold_until=${new Date(holdUntil * 1000).toISOString()}`);
+      } else {
+        logger.info(`[createServicePaymentOrder] No linked account for freelancer — order without transfers (legacy flow)`);
+      }
 
       const razorpayOrder = await razorpay.orders.create(orderOptions);
 
@@ -343,6 +364,22 @@ class PaymentService {
         throw new Error(`Transaction ${order.reference_id} already processed (current status: ${currentStatus})`);
       }
 
+      // Razorpay Routes: fetch transfer ID from payment if transfers exist
+      try {
+        const paymentDetails = await razorpay.payments.fetch(paymentId);
+        if (paymentDetails.transfers && paymentDetails.transfers.items && paymentDetails.transfers.items.length > 0) {
+          const transferId = paymentDetails.transfers.items[0].id;
+          await client.query(
+            `UPDATE transactions SET razorpay_transfer_id = $1 WHERE id = $2`,
+            [transferId, order.reference_id]
+          );
+          logger.info(`[processServicePayment] Stored razorpay_transfer_id=${transferId} for transaction ${order.reference_id}`);
+        }
+      } catch (transferFetchErr) {
+        // Non-fatal: transfer ID can be fetched later via reconciliation
+        logger.warn(`[processServicePayment] Could not fetch transfer details: ${transferFetchErr.message}`);
+      }
+
       // Get project and custom_package_id from transaction
       const { rows: txRows } = await client.query(
         `SELECT p.id as project_id, p.custom_package_id
@@ -454,6 +491,71 @@ class PaymentService {
       [status]
     );
     return rows;
+  }
+
+  // Release a transfer on-hold — releases freelancer funds via Razorpay Routes
+  async releaseTransfer(transactionId, adminId) {
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: transactions } = await client.query(
+        `SELECT t.*, f.razorpay_linked_account_id
+         FROM transactions t
+         JOIN freelancer f ON t.freelancer_id = f.freelancer_id
+         WHERE t.id = $1 FOR UPDATE`,
+        [transactionId]
+      );
+
+      if (transactions.length === 0) {
+        throw new Error('Transaction not found');
+      }
+
+      const tx = transactions[0];
+
+      if (tx.status !== 'HELD') {
+        throw new Error(`Transaction is not in HELD status (current: ${tx.status})`);
+      }
+
+      if (!tx.razorpay_transfer_id) {
+        throw new Error('No transfer ID found — this transaction may be using the legacy payout flow');
+      }
+
+      // Release the hold on Razorpay
+      logger.info(`[releaseTransfer] Releasing transfer ${tx.razorpay_transfer_id} for transaction ${transactionId}`);
+      await razorpay.transfers.edit(tx.razorpay_transfer_id, {
+        on_hold: 0,
+      });
+
+      // Update transaction status
+      await client.query(
+        `UPDATE transactions SET status = 'COMPLETED', released_by = $1, released_at = NOW(), updated_at = NOW() WHERE id = $2`,
+        [adminId, transactionId]
+      );
+
+      // Update project status
+      await client.query(
+        `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+        [tx.project_id]
+      );
+
+      await client.query('COMMIT');
+
+      logger.info(`[releaseTransfer] Transfer ${tx.razorpay_transfer_id} released by admin ${adminId} for transaction ${transactionId}`);
+
+      return {
+        transactionId,
+        transferId: tx.razorpay_transfer_id,
+        status: 'COMPLETED',
+        freelancerAmount: tx.freelancer_amount,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error(`[releaseTransfer] Failed for transaction_id=${transactionId}:`, { errorMessage: error.message });
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 

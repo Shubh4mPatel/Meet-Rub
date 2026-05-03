@@ -1,5 +1,6 @@
 const paymentService = require('../../razor-pay-services/paymentService');
 const payoutService = require('../../razor-pay-services/payoutService');
+const linkedAccountService = require('../../razor-pay-services/linkedAccountService');
 const { pool: db } = require('../../../config/dbConfig');
 const { query } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
@@ -403,11 +404,10 @@ const approveKYCByAdmin = async (req, res, next) => {
 
     // Check if freelancer exists
     const queryResult = await query(
-      'SELECT freelancer_id, user_id, verification_status FROM freelancer WHERE freelancer_id = $1',
+      'SELECT freelancer_id, user_id, verification_status, razorpay_account_status FROM freelancer WHERE freelancer_id = $1',
       [freelancer_id]
     );
 
-    // This is where the error occurs - check if queryResult.rows exists
     const freelancers = queryResult.rows || [];
 
     if (freelancers.length === 0) {
@@ -418,6 +418,11 @@ const approveKYCByAdmin = async (req, res, next) => {
 
     if (freelancer.verification_status === 'VERIFIED') {
       return next(new AppError('Freelancer KYC is already verified', 400));
+    }
+
+    // Razorpay linked account must be activated before platform KYC approval
+    if (freelancer.razorpay_account_status !== 'activated') {
+      return next(new AppError('Razorpay linked account must be activated first. Create and verify the linked account on Razorpay before approving platform KYC.', 400));
     }
 
     // Update verification_status in freelancer table
@@ -902,6 +907,101 @@ const revokeCreatorSuspension = async (req, res, next) => {
   }
 }
 
+// Release transfer — release on-hold funds to freelancer via Razorpay Routes
+const releaseTransfer = async (req, res, next) => {
+  const transactionId = req.params.id;
+  const adminId = req.user.roleWiseId;
+
+  try {
+    const result = await paymentService.releaseTransfer(transactionId, adminId);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Transfer released. Funds will settle to freelancer bank in T+2 days.',
+      data: result,
+    });
+  } catch (error) {
+    console.error('releaseTransfer error:', error);
+    if (error.message.includes('not found') || error.message.includes('No transfer')) {
+      return next(new AppError(error.message, 404));
+    }
+    if (error.message.includes('not in HELD') || error.message.includes('already')) {
+      return next(new AppError(error.message, 400));
+    }
+    return next(new AppError('Failed to release transfer', 500));
+  }
+};
+
+// Create Razorpay linked account for a freelancer (admin button 2)
+const createFreelancerLinkedAccount = async (req, res, next) => {
+  try {
+    const { freelancer_id } = req.params;
+
+    if (!freelancer_id) {
+      return next(new AppError('Freelancer ID is required', 400));
+    }
+
+    // Check freelancer exists and has bank details (Razorpay verification happens BEFORE platform KYC)
+    const queryResult = await query(
+      `SELECT freelancer_id, verification_status, bank_account_no, bank_ifsc_code, razorpay_linked_account_id, razorpay_account_status
+       FROM freelancer WHERE freelancer_id = $1`,
+      [freelancer_id]
+    );
+
+    const freelancers = queryResult.rows || [];
+    if (freelancers.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    const freelancer = freelancers[0];
+
+    if (!freelancer.bank_account_no || !freelancer.bank_ifsc_code) {
+      return next(new AppError('Freelancer must have bank details before creating linked account', 400));
+    }
+
+    if (freelancer.razorpay_account_status === 'activated') {
+      return next(new AppError('Linked account already activated', 400));
+    }
+
+    const result = await linkedAccountService.onboardFreelancer(parseInt(freelancer_id));
+
+    return res.status(200).json({
+      status: 'success',
+      message: result.status === 'activated'
+        ? 'Linked account created and activated successfully.'
+        : `Linked account created. Status: ${result.status}. Razorpay may require additional review.`,
+      data: result,
+    });
+  } catch (error) {
+    console.error('createFreelancerLinkedAccount error:', error);
+    return next(new AppError(error.message || 'Failed to create linked account', 500));
+  }
+};
+
+// Get linked account status for a freelancer (admin)
+const getFreelancerLinkedAccountStatus = async (req, res, next) => {
+  try {
+    const { freelancer_id } = req.params;
+
+    if (!freelancer_id) {
+      return next(new AppError('Freelancer ID is required', 400));
+    }
+
+    const result = await linkedAccountService.syncAccountStatus(parseInt(freelancer_id));
+
+    return res.status(200).json({
+      status: 'success',
+      data: result,
+    });
+  } catch (error) {
+    console.error('getFreelancerLinkedAccountStatus error:', error);
+    if (error.message.includes('not found') || error.message.includes('no linked account')) {
+      return next(new AppError(error.message, 404));
+    }
+    return next(new AppError('Failed to get linked account status', 500));
+  }
+};
+
 module.exports = {
   approvePayout,
   rejectPayout,
@@ -916,5 +1016,8 @@ module.exports = {
   addFeaturedFreelancer,
   removeFeaturedFreelancer,
   suspendCreatorByAdmin,
-  revokeCreatorSuspension
+  revokeCreatorSuspension,
+  releaseTransfer,
+  createFreelancerLinkedAccount,
+  getFreelancerLinkedAccountStatus,
 }

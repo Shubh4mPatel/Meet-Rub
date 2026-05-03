@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { pool: db } = require('../../../config/dbConfig');
+const razorpay = require('../../../config/razorpay');
 const payoutService = require('../../razor-pay-services/payoutService');
 const AppError = require("../../../utils/appError");
 const { getLogger } = require('../../../utils/logger');
@@ -8,6 +9,8 @@ const logger = getLogger('webhook-controller');
 // Verify Razorpay webhook signature
 // Payout events come from Razorpay X and use RAZORPAY_X_WEBHOOK_SECRET
 const PAYOUT_EVENTS = new Set(['payout.processed', 'payout.failed', 'payout.reversed']);
+// Transfer events use the standard RAZORPAY_WEBHOOK_SECRET
+const TRANSFER_EVENTS = new Set(['transfer.processed', 'transfer.failed', 'transfer.reversed', 'transfer.settled']);
 
 const verifyWebhookSignature = (rawBody, signature, event) => {
   const secret = PAYOUT_EVENTS.has(event)
@@ -140,6 +143,31 @@ const handlePaymentCaptured = async (payload) => {
     }
 
     logger.info(`[handlePaymentCaptured] Transaction ${order.reference_id} updated to HELD via webhook`);
+
+    // Razorpay Routes: store transfer ID if present in payment entity or fetch from API
+    try {
+      if (payment.transfers && payment.transfers.items && payment.transfers.items.length > 0) {
+        const transferId = payment.transfers.items[0].id;
+        await client.query(
+          `UPDATE transactions SET razorpay_transfer_id = $1 WHERE id = $2`,
+          [transferId, order.reference_id]
+        );
+        logger.info(`[handlePaymentCaptured] Stored razorpay_transfer_id=${transferId} from webhook payload`);
+      } else {
+        // Try fetching from API
+        const paymentDetails = await razorpay.payments.fetch(paymentId);
+        if (paymentDetails.transfers && paymentDetails.transfers.items && paymentDetails.transfers.items.length > 0) {
+          const transferId = paymentDetails.transfers.items[0].id;
+          await client.query(
+            `UPDATE transactions SET razorpay_transfer_id = $1 WHERE id = $2`,
+            [transferId, order.reference_id]
+          );
+          logger.info(`[handlePaymentCaptured] Stored razorpay_transfer_id=${transferId} from API fetch`);
+        }
+      }
+    } catch (transferErr) {
+      logger.warn(`[handlePaymentCaptured] Could not fetch/store transfer ID: ${transferErr.message}`);
+    }
 
     // Mark the linked custom package as paid.
     // Use a subquery with LIMIT 1 (ORDER BY created_at DESC) so only the most-recent
@@ -311,6 +339,104 @@ const handlePayoutReversed = async (payload) => {
   logger.info(`[handlePayoutReversed] Successfully updated payout ${payout.id} to reversed`);
 }
 
+// Handle transfer processed event (Routes)
+const handleTransferProcessed = async (payload) => {
+  const transfer = payload.transfer.entity;
+  const transferId = transfer.id;
+
+  logger.info(`[handleTransferProcessed] Transfer processed: ${transferId}`);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rowCount } = await client.query(
+      `UPDATE transactions SET status = 'COMPLETED', updated_at = NOW()
+       WHERE razorpay_transfer_id = $1 AND status = 'HELD'`,
+      [transferId]
+    );
+
+    if (rowCount > 0) {
+      // Also update the project to COMPLETED
+      await client.query(
+        `UPDATE projects SET status = 'COMPLETED', updated_at = NOW()
+         WHERE id = (SELECT project_id FROM transactions WHERE razorpay_transfer_id = $1)`,
+        [transferId]
+      );
+      logger.info(`[handleTransferProcessed] Transaction and project updated to COMPLETED for transfer ${transferId}`);
+    } else {
+      logger.info(`[handleTransferProcessed] No HELD transaction found for transfer ${transferId} — may already be processed`);
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error(`[handleTransferProcessed] Error: ${error.message}`);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// Handle transfer failed event (Routes)
+const handleTransferFailed = async (payload) => {
+  const transfer = payload.transfer.entity;
+  const transferId = transfer.id;
+  const failureReason = transfer.error?.description || 'Unknown transfer failure';
+
+  logger.warn(`[handleTransferFailed] Transfer failed: ${transferId}, reason: ${failureReason}`);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `UPDATE transactions SET status = 'FAILED', updated_at = NOW()
+       WHERE razorpay_transfer_id = $1 AND status IN ('HELD', 'INITIATED')`,
+      [transferId]
+    );
+
+    logger.info(`[handleTransferFailed] Transaction marked FAILED for transfer ${transferId}`);
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error(`[handleTransferFailed] Error: ${error.message}`);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// Handle transfer reversed event (Routes)
+const handleTransferReversed = async (payload) => {
+  const transfer = payload.transfer.entity;
+  const transferId = transfer.id;
+
+  logger.warn(`[handleTransferReversed] Transfer reversed: ${transferId}`);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW()
+       WHERE razorpay_transfer_id = $1 AND status IN ('HELD', 'COMPLETED')`,
+      [transferId]
+    );
+
+    logger.info(`[handleTransferReversed] Transaction marked REFUNDED for transfer ${transferId}`);
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error(`[handleTransferReversed] Error: ${error.message}`);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 // Handle Razorpay webhooks
 const handleWebhook = async (req, res, next) => {
   try {
@@ -379,6 +505,25 @@ const handleWebhook = async (req, res, next) => {
       case 'payout.reversed':
         await handlePayoutReversed(payload);
         logger.info(`[handleWebhook] Successfully processed payout.reversed event`);
+        break;
+
+      case 'transfer.processed':
+        await handleTransferProcessed(payload);
+        logger.info(`[handleWebhook] Successfully processed transfer.processed event`);
+        break;
+
+      case 'transfer.failed':
+        await handleTransferFailed(payload);
+        logger.info(`[handleWebhook] Successfully processed transfer.failed event`);
+        break;
+
+      case 'transfer.reversed':
+        await handleTransferReversed(payload);
+        logger.info(`[handleWebhook] Successfully processed transfer.reversed event`);
+        break;
+
+      case 'transfer.settled':
+        logger.info(`[handleWebhook] Transfer settled event received — no action needed`);
         break;
 
       default:
