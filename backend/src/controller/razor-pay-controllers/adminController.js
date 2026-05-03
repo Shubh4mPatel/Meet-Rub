@@ -1002,6 +1002,67 @@ const getFreelancerLinkedAccountStatus = async (req, res, next) => {
   }
 };
 
+// Reset Razorpay linked account (allows freelancer to update bank/address details)
+const resetFreelancerLinkedAccount = async (req, res, next) => {
+  try {
+    const { freelancer_id } = req.params;
+    const adminId = req.user.roleWiseId;
+
+    if (!freelancer_id) {
+      return next(new AppError('Freelancer ID is required', 400));
+    }
+
+    const { rows: freelancers } = await db.query(
+      `SELECT razorpay_linked_account_id, razorpay_account_status, verification_status 
+       FROM freelancer WHERE freelancer_id = $1`,
+      [freelancer_id]
+    );
+
+    if (freelancers.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    const freelancer = freelancers[0];
+
+    if (!freelancer.razorpay_linked_account_id) {
+      return next(new AppError('No Razorpay linked account to reset', 400));
+    }
+
+    // Don't allow reset if account is activated and KYC is verified
+    if (freelancer.razorpay_account_status === 'activated' && freelancer.verification_status === 'VERIFIED') {
+      return next(new AppError(
+        'Cannot reset activated Razorpay account for verified freelancer. Reject KYC first if changes are needed.',
+        403
+      ));
+    }
+
+    // Reset Razorpay-related fields
+    await db.query(
+      `UPDATE freelancer 
+       SET razorpay_linked_account_id = NULL,
+           razorpay_stakeholder_id = NULL,
+           razorpay_product_id = NULL,
+           razorpay_account_status = NULL,
+           updated_at = NOW()
+       WHERE freelancer_id = $1`,
+      [freelancer_id]
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Razorpay linked account reset successfully. Freelancer can now update bank details and address.',
+      data: {
+        freelancer_id: parseInt(freelancer_id),
+        reset_by: adminId,
+        reset_at: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('resetFreelancerLinkedAccount error:', error);
+    return next(new AppError('Failed to reset linked account', 500));
+  }
+};
+
 module.exports = {
   approvePayout,
   rejectPayout,
@@ -1020,4 +1081,5 @@ module.exports = {
   releaseTransfer,
   createFreelancerLinkedAccount,
   getFreelancerLinkedAccountStatus,
+  resetFreelancerLinkedAccount,
 }

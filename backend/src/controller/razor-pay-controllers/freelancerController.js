@@ -34,8 +34,20 @@ const addBankAccount = async (req, res, next) => {
       return next(new AppError('Bank account holder name must be between 4 and 200 characters', 400));
     }
 
-    // freelancer row always exists — just update bank columns
-    // reset razorpay_account_id so a new fund account is created on next payout
+    // Check if Razorpay linked account exists
+    const { rows: checkRows } = await db.query(
+      'SELECT razorpay_linked_account_id, razorpay_account_status FROM freelancer WHERE user_id = $1',
+      [userId]
+    );
+
+    if (checkRows[0]?.razorpay_linked_account_id) {
+      return next(new AppError(
+        'Cannot update bank details after Razorpay account is created. Contact admin to reset your Razorpay account first.',
+        403
+      ));
+    }
+
+    // Update bank details and reset razorpay_account_id (legacy payout fund account)
     const { rowCount } = await db.query(
       `UPDATE freelancer
        SET bank_account_holder_name = $1,
@@ -511,6 +523,19 @@ const addAddress = async (req, res, next) => {
     // Razorpay validation: state (min 2, max 50 characters)
     if (state.trim().length < 2 || state.trim().length > 50) {
       return next(new AppError('State must be between 2 and 50 characters', 400));
+    }
+
+    // Check if Razorpay linked account exists
+    const { rows: checkRows } = await db.query(
+      'SELECT razorpay_linked_account_id, razorpay_account_status FROM freelancer WHERE user_id = $1',
+      [userId]
+    );
+
+    if (checkRows[0]?.razorpay_linked_account_id) {
+      return next(new AppError(
+        'Cannot update address after Razorpay account is created. Contact admin to reset your Razorpay account first.',
+        403
+      ));
     }
 
     const { rowCount } = await db.query(
