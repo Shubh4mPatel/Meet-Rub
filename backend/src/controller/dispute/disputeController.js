@@ -422,18 +422,20 @@ const resolveDispute = async (req, res, next) => {
   try {
     await client.query('BEGIN');
 
-    // Get dispute + linked transaction
+    // Get dispute + linked transaction (LEFT JOIN so disputes without transactions are still found)
     const { rows: disputes } = await client.query(
       `SELECT d.*, t.id AS transaction_id, t.status AS transaction_status,
               t.razorpay_payment_id, t.total_amount, t.freelancer_amount,
               t.freelancer_id AS t_freelancer_id
        FROM disputes d
-       JOIN transactions t ON t.project_id = d.project_id
+       LEFT JOIN LATERAL (
+         SELECT * FROM transactions
+         WHERE d.project_id IS NOT NULL AND project_id = d.project_id
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) t ON true
        WHERE d.id = $1
-       AND t.status IN ('HELD', 'COMPLETED')
-       ORDER BY t.created_at DESC
-       LIMIT 1
-       FOR UPDATE`,
+       FOR UPDATE OF d`,
       [id]
     );
 
@@ -452,7 +454,19 @@ const resolveDispute = async (req, res, next) => {
       });
     }
 
+    // Disputes without project_id can only be resolved (no payment actions)
+    if (!dispute.project_id && resolution_action !== 'resolve') {
+      await client.query('ROLLBACK');
+      return next(new AppError('This dispute has no linked project. Only "resolve" action is allowed (no payment operations).', 400));
+    }
+
     if (resolution_action !== 'resolve') {
+      // Require a linked transaction for release/refund actions
+      if (!dispute.transaction_id) {
+        await client.query('ROLLBACK');
+        return next(new AppError('No linked transaction found for this dispute. Use "resolve" to close it without a payment action.', 400));
+      }
+
       // Check if transaction already COMPLETED (funds already released)
       if (dispute.transaction_status === 'COMPLETED') {
         await client.query('ROLLBACK');
