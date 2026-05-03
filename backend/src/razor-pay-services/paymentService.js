@@ -193,19 +193,17 @@ class PaymentService {
 
       // Razorpay Routes: Add transfer instructions if freelancer has activated linked account
       if (project.razorpay_linked_account_id && project.razorpay_account_status === 'activated') {
-        const holdUntil = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days
         orderOptions.transfers = [{
           account: project.razorpay_linked_account_id,
           amount: Math.round(amounts.freelancerAmount * 100),
           currency: process.env.CURRENCY || 'INR',
           on_hold: 1,
-          on_hold_until: holdUntil,
           notes: {
             project_id: String(projectId),
             transaction_id: String(transactionId),
           },
         }];
-        logger.info(`[createServicePaymentOrder] Added transfer instructions: account=${project.razorpay_linked_account_id}, amount=${amounts.freelancerAmount}, on_hold_until=${new Date(holdUntil * 1000).toISOString()}`);
+        logger.info(`[createServicePaymentOrder] Added transfer instructions: account=${project.razorpay_linked_account_id}, amount=${amounts.freelancerAmount}, on_hold=indefinite`);
       } else {
         logger.info(`[createServicePaymentOrder] No linked account for freelancer — order without transfers (legacy flow)`);
       }

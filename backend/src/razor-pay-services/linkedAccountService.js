@@ -30,11 +30,11 @@ class LinkedAccountService {
                     subcategory: 'professional_services',
                     addresses: {
                         registered: {
-                            street1: 'Not Provided',
+                            street1: freelancer.street_address || 'Not Provided',
                             street2: 'Not Provided',
-                            city: 'Mumbai',
-                            state: 'MAHARASHTRA',
-                            postal_code: 400001,
+                            city: freelancer.city || 'Mumbai',
+                            state: (freelancer.state || 'MAHARASHTRA').toUpperCase(),
+                            postal_code: freelancer.postal_code ? Number(freelancer.postal_code) : 400001,
                             country: 'IN',
                         },
                     },
@@ -74,6 +74,17 @@ class LinkedAccountService {
                 name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
                 ...(phoneDigits ? { phone: { primary: Number(phoneDigits) } } : {}),
                 email: freelancer.freelancer_email || undefined,
+                ...(freelancer.street_address ? {
+                    addresses: {
+                        residential: {
+                            street: freelancer.street_address,
+                            city: freelancer.city || 'Mumbai',
+                            state: (freelancer.state || 'Maharashtra'),
+                            postal_code: String(freelancer.postal_code || '400001'),
+                            country: 'IN',
+                        },
+                    },
+                } : {}),
                 kyc: freelancer.pan_card_number ? {
                     pan: freelancer.pan_card_number,
                 } : undefined,
@@ -192,9 +203,12 @@ class LinkedAccountService {
 
         const freelancer = freelancers[0];
 
-        // Guard: must have bank details
+        // Guard: must have bank details and address
         if (!freelancer.bank_account_no || !freelancer.bank_ifsc_code) {
             throw new Error('Freelancer must have bank account details before onboarding');
+        }
+        if (!freelancer.street_address || !freelancer.city || !freelancer.state || !freelancer.postal_code) {
+            throw new Error('Freelancer must have complete address (street, city, state, postal_code) before onboarding');
         }
 
         // Guard: already onboarded and activated
