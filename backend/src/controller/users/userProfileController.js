@@ -215,14 +215,47 @@ const getUserProfile = async (req, res, next) => {
         );
 
         if (!rows[0]) {
-          logger.warn("No bank details found");
-          return next(new AppError("No bank details found", 404));
+          logger.warn("Freelancer not found");
+          return next(new AppError("Freelancer profile not found", 404));
         }
+
+        if (!rows[0].bank_account_no) {
+          logger.warn("No bank account added yet");
+          return next(new AppError("No bank account added yet", 404));
+        }
+
+        // Mask account number
+        const acc = rows[0].bank_account_no;
+        rows[0].bank_account_no = '****' + acc.slice(-4);
 
         return res.status(200).json({
           status: "success",
           message: "Bank details fetched successfully",
-          data: { userBankDetails: rows[0] },
+          data: rows[0],
+        });
+      }
+
+      if (type === "address") {
+        logger.info("Fetching: Freelancer Address");
+        const { rows } = await query(
+          "SELECT street_address, city, state, postal_code FROM freelancer WHERE user_id = $1",
+          [user.user_id]
+        );
+
+        if (!rows[0]) {
+          logger.warn("Freelancer not found");
+          return next(new AppError("Freelancer profile not found", 404));
+        }
+
+        if (!rows[0].street_address && !rows[0].city && !rows[0].state && !rows[0].postal_code) {
+          logger.warn("No address found");
+          return next(new AppError("No address added yet", 404));
+        }
+
+        return res.status(200).json({
+          status: "success",
+          message: "Address fetched successfully",
+          data: rows[0],
         });
       }
 
@@ -594,11 +627,39 @@ const editProfile = async (req, res, next) => {
           bank_account_holder_name,
         } = req.body;
 
+        // Razorpay validation: bank account number must be 5-35 characters
+        if (bank_account_no && (bank_account_no.length < 5 || bank_account_no.length > 35)) {
+          return next(new AppError('Bank account number must be between 5 and 35 characters', 400));
+        }
+
+        // Razorpay validation: IFSC code must be 11 characters (4 alpha + 0 + 6 alphanumeric)
+        if (bank_ifsc_code && !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(bank_ifsc_code)) {
+          return next(new AppError('Invalid IFSC code format. Must be 11 characters: 4 letters + 0 + 6 alphanumeric', 400));
+        }
+
+        // Razorpay validation: bank account holder name must be 4-200 characters
+        if (bank_account_holder_name && (bank_account_holder_name.length < 4 || bank_account_holder_name.length > 200)) {
+          return next(new AppError('Bank account holder name must be between 4 and 200 characters', 400));
+        }
+
+        // Check if Razorpay linked account exists
+        const { rows: checkRows } = await query(
+          'SELECT razorpay_linked_account_id, razorpay_account_status FROM freelancer WHERE user_id = $1',
+          [user.user_id]
+        );
+
+        if (checkRows[0]?.razorpay_linked_account_id) {
+          return next(new AppError(
+            'Cannot update bank details after Razorpay account is created. Contact admin to reset your Razorpay account first.',
+            403
+          ));
+        }
+
         // Start transaction
         await query("BEGIN");
         try {
           const { rows } = await query(
-            "UPDATE freelancer SET bank_account_no=$1, bank_name=$2, bank_ifsc_code=$3, bank_branch_name=$4, bank_account_holder_name = $5 WHERE user_id=$6 RETURNING *",
+            "UPDATE freelancer SET bank_account_no=$1, bank_name=$2, bank_ifsc_code=$3, bank_branch_name=$4, bank_account_holder_name = $5, razorpay_account_id = NULL WHERE user_id=$6 RETURNING bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, bank_account_holder_name",
             [
               bank_account_no,
               bank_name,
@@ -877,7 +938,7 @@ const editProfile = async (req, res, next) => {
             'SELECT razorpay_linked_account_id FROM freelancer WHERE user_id = $1',
             [user.user_id]
           );
-          
+
           if (razorpayCheck[0]?.razorpay_linked_account_id) {
             return next(new AppError(
               'Cannot update phone number after Razorpay account is created. Contact admin to reset your Razorpay account first.',
@@ -902,6 +963,88 @@ const editProfile = async (req, res, next) => {
             status: "success",
             message: "Profile updated successfully",
             data: { full_name: rows[0].freelancer_full_name, first_name: rows[0].first_name, last_name: rows[0].last_name, email: rows[0].freelancer_email, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, about_me: rows[0].about_me, joined_at: rows[0].created_at },
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
+        }
+      }
+
+      if (type === "address") {
+        // ✅ FREELANCER ADDRESS UPDATE
+        logger.info("Updating Freelancer Address");
+        const { street_address, city, state, postal_code } = req.body;
+
+        // Required fields validation
+        if (!street_address || !city || !state || !postal_code) {
+          return next(new AppError('street_address, city, state, and postal_code are required', 400));
+        }
+
+        // Razorpay validation: street address must be at least 10 characters (stakeholder requirement)
+        if (street_address.trim().length < 10) {
+          return next(new AppError('Street address must be at least 10 characters long', 400));
+        }
+
+        // Razorpay validation: postal code must be exactly 6 digits
+        const postalCodeStr = String(postal_code).trim();
+        if (!/^\d{6}$/.test(postalCodeStr)) {
+          return next(new AppError('Postal code must be exactly 6 digits', 400));
+        }
+
+        // Razorpay validation: city (min 2, max 100 characters)
+        if (city.trim().length < 2 || city.trim().length > 100) {
+          return next(new AppError('City must be between 2 and 100 characters', 400));
+        }
+
+        // Razorpay validation: state (min 2, max 50 characters)
+        if (state.trim().length < 2 || state.trim().length > 50) {
+          return next(new AppError('State must be between 2 and 50 characters', 400));
+        }
+
+        // Check if Razorpay linked account exists
+        const { rows: checkRows } = await query(
+          'SELECT razorpay_linked_account_id, razorpay_account_status FROM freelancer WHERE user_id = $1',
+          [user.user_id]
+        );
+
+        if (checkRows[0]?.razorpay_linked_account_id) {
+          return next(new AppError(
+            'Cannot update address after Razorpay account is created. Contact admin to reset your Razorpay account first.',
+            403
+          ));
+        }
+
+        // Start transaction
+        await query("BEGIN");
+        try {
+          const { rowCount } = await query(
+            `UPDATE freelancer
+             SET street_address = $1,
+                 city = $2,
+                 state = $3,
+                 postal_code = $4,
+                 updated_at = NOW()
+             WHERE user_id = $5`,
+            [street_address.trim(), city.trim(), state.trim(), postalCodeStr, user.user_id]
+          );
+
+          if (rowCount === 0) {
+            await query("ROLLBACK");
+            return next(new AppError('Freelancer not found', 404));
+          }
+
+          // Commit transaction
+          await query("COMMIT");
+          logger.info("Freelancer address updated successfully");
+          return res.status(200).json({
+            status: 'success',
+            message: 'Address updated successfully',
+            data: {
+              street_address: street_address.trim(),
+              city: city.trim(),
+              state: state.trim(),
+              postal_code: postalCodeStr
+            }
           });
         } catch (error) {
           await query("ROLLBACK");
