@@ -22,9 +22,8 @@ class LinkedAccountService {
                 type: 'route',
                 legal_business_name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
                 business_type: 'individual',
-                legal_info: freelancer.pan_card_number ? {
-                    pan: freelancer.pan_card_number,
-                } : undefined,
+                // Note: For business_type 'individual', PAN is provided in stakeholder, not here
+                // legal_info.pan is only for company/partnership/trust business types
                 profile: {
                     category: 'services',
                     subcategory: 'professional_services',
