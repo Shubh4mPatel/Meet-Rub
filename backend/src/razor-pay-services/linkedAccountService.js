@@ -211,6 +211,41 @@ class LinkedAccountService {
             throw new Error('Freelancer must have complete address (street, city, state, postal_code) before onboarding');
         }
 
+        // Razorpay validation: stakeholder street address must be minimum 10 characters
+        if (freelancer.street_address.trim().length < 10) {
+            throw new Error('Street address must be at least 10 characters long for Razorpay verification');
+        }
+
+        // Razorpay validation: postal code must be exactly 6 digits
+        const postalCodeStr = String(freelancer.postal_code).trim();
+        if (!/^\d{6}$/.test(postalCodeStr)) {
+            throw new Error('Postal code must be exactly 6 digits');
+        }
+
+        // Razorpay validation: phone number must be exactly 10 digits after stripping prefix
+        let phoneDigits = freelancer.phone_number ? freelancer.phone_number.replace(/\D/g, '') : null;
+        if (phoneDigits && phoneDigits.length > 11) {
+            phoneDigits = phoneDigits.replace(/^91/, '');
+        }
+        if (!phoneDigits || phoneDigits.length !== 10) {
+            throw new Error('Phone number must be exactly 10 digits');
+        }
+
+        // Razorpay validation: bank account number must be 5-35 characters
+        if (freelancer.bank_account_no.length < 5 || freelancer.bank_account_no.length > 35) {
+            throw new Error('Bank account number must be between 5 and 35 characters');
+        }
+
+        // Razorpay validation: IFSC code format
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(freelancer.bank_ifsc_code)) {
+            throw new Error('Invalid IFSC code format');
+        }
+
+        // Razorpay validation: PAN card (if provided) must have 4th character as 'P' for individuals
+        if (freelancer.pan_card_number && freelancer.pan_card_number.charAt(3) !== 'P') {
+            throw new Error('Invalid PAN format for individual. The 4th character must be "P"');
+        }
+
         // Guard: already onboarded and activated
         if (freelancer.razorpay_linked_account_id && freelancer.razorpay_account_status === 'activated') {
             logger.info(`[onboardFreelancer] Freelancer ${freelancerId} already onboarded and activated`);

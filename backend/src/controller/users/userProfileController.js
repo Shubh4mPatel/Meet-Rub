@@ -248,7 +248,20 @@ const freelancerGovInfoSchema = Joi.object({
 
 const freelancerPanCardSchema = Joi.object({
   type: Joi.string().valid("panCard").required(),
-  pan_card_number: Joi.string().pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/).required(),
+  pan_card_number: Joi.string()
+    .pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/)
+    .custom((value, helpers) => {
+      // 4th character must be 'P' for individuals (Razorpay requirement for business_type: 'individual')
+      if (value.charAt(3) !== 'P') {
+        return helpers.error('any.invalid');
+      }
+      return value;
+    })
+    .required()
+    .messages({
+      'string.pattern.base': 'PAN must be in format: AAAPL1234C (10 alphanumeric characters)',
+      'any.invalid': 'Invalid PAN format for individual. The 4th character must be "P".'
+    }),
 });
 
 const freelancerBankDetailsSchema = Joi.object({
@@ -701,6 +714,12 @@ const editProfile = async (req, res, next) => {
 
         const { pan_card_number } = req.body;
 
+        // Validate PAN format for individual (4th character must be 'P' for Razorpay Routes)
+        if (pan_card_number && pan_card_number.charAt(3) !== 'P') {
+          logger.warn("Invalid PAN format - 4th character must be P for individuals");
+          return next(new AppError("Invalid PAN format for individual. The 4th character must be 'P'.", 400));
+        }
+
         const panFile = Array.isArray(req.files)
           ? req.files.find((f) => f.fieldname === "panCardImage")
           : req.file;
@@ -842,6 +861,18 @@ const editProfile = async (req, res, next) => {
           profileTitle,
           about_me
         } = req.body;
+
+        // Razorpay validation: phone number must be exactly 10 digits (after stripping country code)
+        if (phoneNumber) {
+          let phoneDigits = phoneNumber.replace(/\D/g, '');
+          if (phoneDigits.startsWith('91') && phoneDigits.length > 11) {
+            phoneDigits = phoneDigits.substring(2);
+          }
+          if (phoneDigits.length !== 10) {
+            await query("ROLLBACK");
+            return next(new AppError('Phone number must be exactly 10 digits', 400));
+          }
+        }
 
         // Start transaction
         await query("BEGIN");

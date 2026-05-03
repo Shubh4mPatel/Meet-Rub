@@ -19,6 +19,21 @@ const addBankAccount = async (req, res, next) => {
       return next(new AppError('bank_account_holder_name, bank_account_no, and bank_ifsc_code are required', 400));
     }
 
+    // Razorpay validation: bank account number must be 5-35 characters
+    if (bank_account_no.length < 5 || bank_account_no.length > 35) {
+      return next(new AppError('Bank account number must be between 5 and 35 characters', 400));
+    }
+
+    // Razorpay validation: IFSC code must be 11 characters (4 alpha + 0 + 6 alphanumeric)
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(bank_ifsc_code)) {
+      return next(new AppError('Invalid IFSC code format. Must be 11 characters: 4 letters + 0 + 6 alphanumeric', 400));
+    }
+
+    // Razorpay validation: bank account holder name must be 4-200 characters
+    if (bank_account_holder_name.length < 4 || bank_account_holder_name.length > 200) {
+      return next(new AppError('Bank account holder name must be between 4 and 200 characters', 400));
+    }
+
     // freelancer row always exists — just update bank columns
     // reset razorpay_account_id so a new fund account is created on next payout
     const { rowCount } = await db.query(
@@ -466,6 +481,101 @@ const getLinkedAccountStatus = async (req, res, next) => {
   }
 };
 
+// Add/Update address details (for Razorpay Routes onboarding)
+const addAddress = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+    const { street_address, city, state, postal_code } = req.body;
+
+    // Required fields validation
+    if (!street_address || !city || !state || !postal_code) {
+      return next(new AppError('street_address, city, state, and postal_code are required', 400));
+    }
+
+    // Razorpay validation: street address must be at least 10 characters (stakeholder requirement)
+    if (street_address.trim().length < 10) {
+      return next(new AppError('Street address must be at least 10 characters long', 400));
+    }
+
+    // Razorpay validation: postal code must be exactly 6 digits
+    const postalCodeStr = String(postal_code).trim();
+    if (!/^\d{6}$/.test(postalCodeStr)) {
+      return next(new AppError('Postal code must be exactly 6 digits', 400));
+    }
+
+    // Razorpay validation: city (min 2, max 100 characters)
+    if (city.trim().length < 2 || city.trim().length > 100) {
+      return next(new AppError('City must be between 2 and 100 characters', 400));
+    }
+
+    // Razorpay validation: state (min 2, max 50 characters)
+    if (state.trim().length < 2 || state.trim().length > 50) {
+      return next(new AppError('State must be between 2 and 50 characters', 400));
+    }
+
+    const { rowCount } = await db.query(
+      `UPDATE freelancer
+       SET street_address = $1,
+           city = $2,
+           state = $3,
+           postal_code = $4,
+           updated_at = NOW()
+       WHERE user_id = $5`,
+      [street_address.trim(), city.trim(), state.trim(), postalCodeStr, userId]
+    );
+
+    if (rowCount === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    return res.json({ 
+      status: 'success',
+      message: 'Address updated successfully',
+      data: {
+        street_address: street_address.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        postal_code: postalCodeStr
+      }
+    });
+  } catch (error) {
+    console.error('Add address error:', error);
+    return next(new AppError('Failed to add address', 500));
+  }
+};
+
+// Get address details
+const getAddress = async (req, res, next) => {
+  try {
+    const userId = req.user.user_id;
+
+    const { rows } = await db.query(
+      `SELECT street_address, city, state, postal_code
+       FROM freelancer
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    const address = rows[0];
+
+    if (!address.street_address && !address.city && !address.state && !address.postal_code) {
+      return next(new AppError('No address added yet', 404));
+    }
+
+    return res.json({
+      status: 'success',
+      data: address
+    });
+  } catch (error) {
+    console.error('Get address error:', error);
+    return next(new AppError('Failed to get address', 500));
+  }
+};
+
 module.exports = {
   addBankAccount,
   getBankAccount,
@@ -475,4 +585,6 @@ module.exports = {
   getTransactionHistory,
   onboardLinkedAccount,
   getLinkedAccountStatus,
+  addAddress,
+  getAddress,
 }

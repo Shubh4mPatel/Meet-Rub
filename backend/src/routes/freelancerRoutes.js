@@ -1,6 +1,17 @@
 const express = require('express');
 const upload = require('../../config/multer');
-const { getMyPayouts, requestPayout, getWalletDashboard, getTransactionHistory, onboardLinkedAccount, getLinkedAccountStatus } = require('../controller/razor-pay-controllers/freelancerController');
+const { 
+  getMyPayouts, 
+  requestPayout, 
+  getWalletDashboard, 
+  getTransactionHistory, 
+  onboardLinkedAccount, 
+  getLinkedAccountStatus,
+  addBankAccount,
+  getBankAccount,
+  addAddress,
+  getAddress
+} = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
 const { requireRole, authenticateUser } = require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
@@ -104,6 +115,14 @@ router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(
 router.post('/rate-creator/:projectId', authenticateUser, requireRole(['freelancer']), rateFreelancer);
 
 router.get('/my-reviews', authenticateUser, requireRole(['freelancer']), getMyReviews);
+
+// Bank account management (required for Razorpay Routes)
+router.put('/bank-account', authenticateUser, requireRole(['freelancer']), addBankAccount);
+router.get('/bank-account', authenticateUser, requireRole(['freelancer']), getBankAccount);
+
+// Address management (required for Razorpay Routes onboarding)
+router.put('/address', authenticateUser, requireRole(['freelancer']), addAddress);
+router.get('/address', authenticateUser, requireRole(['freelancer']), getAddress);
 
 // Razorpay Routes - Linked Account onboarding
 router.post('/onboard-linked-account', authenticateUser, requireRole(['freelancer']), onboardLinkedAccount);

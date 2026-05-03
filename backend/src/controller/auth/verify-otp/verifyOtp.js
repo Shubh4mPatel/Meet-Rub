@@ -37,7 +37,31 @@ const freelancerSchema = Joi.object({
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .optional(),
   govIdType: Joi.string().required(),
-  panCardNumber: Joi.string().pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/).required(),
+  panCardNumber: Joi.string()
+    .pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/)
+    .custom((value, helpers) => {
+      // 4th character must be 'P' for individuals (Razorpay requirement)
+      if (value.charAt(3) !== 'P') {
+        return helpers.error('any.invalid');
+      }
+      return value;
+    })
+    .required()
+    .messages({
+      'string.pattern.base': 'PAN must be in format: AAAPL1234C',
+      'any.invalid': 'Invalid PAN format for individual. The 4th character must be "P".'
+    }),
+  // Address fields (required for Razorpay Routes onboarding)
+  streetAddress: Joi.string().min(10).max(255).required().messages({
+    'string.min': 'Street address must be at least 10 characters long',
+    'any.required': 'Street address is required'
+  }),
+  city: Joi.string().min(2).max(100).required(),
+  state: Joi.string().min(2).max(50).required(),
+  postalCode: Joi.string().pattern(/^\d{6}$/).required().messages({
+    'string.pattern.base': 'Postal code must be exactly 6 digits',
+    'any.required': 'Postal code is required'
+  }),
 });
 
 // Creator-specific schema
@@ -181,6 +205,10 @@ const verifyOtpAndProcess = async (req, res, next) => {
           phoneNumber,
           govIdType,
           panCardNumber,
+          streetAddress,
+          city,
+          state,
+          postalCode,
         } = req.body;
 
         // Parse JSON strings from FormData
@@ -268,8 +296,8 @@ const verifyOtpAndProcess = async (req, res, next) => {
             (user_id, profile_title, gov_id_type, gov_id_url, first_name, last_name,
              date_of_birth, phone_number, created_at, updated_at, freelancer_full_name,
              freelancer_email, gov_id_number, niche, verification_status, user_name, interested_service,
-             pan_card_number, pan_card_image_url)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'PENDING', $15, $16, $17, $18)
+             pan_card_number, pan_card_image_url, street_address, city, state, postal_code)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'PENDING', $15, $16, $17, $18, $19, $20, $21, $22)
             RETURNING *`,
             [
               newUserResMeetRub[0].id,
@@ -290,6 +318,10 @@ const verifyOtpAndProcess = async (req, res, next) => {
               parsedServiceOffered,
               panCardNumber,
               panCardImageUrl,
+              streetAddress,
+              city,
+              state,
+              postalCode,
             ]
           );
 
