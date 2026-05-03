@@ -485,6 +485,7 @@ class PaymentService {
       JOIN freelancer f ON t.freelancer_id = f.freelancer_id
       JOIN projects p ON t.project_id = p.id
       WHERE t.status = $1
+        AND p.status = 'COMPLETED'
       ORDER BY t.created_at DESC`,
       [status]
     );
@@ -525,16 +526,22 @@ class PaymentService {
         on_hold: 0,
       });
 
-      // Update transaction status
+      // Update transaction status to COMPLETED
       await client.query(
         `UPDATE transactions SET status = 'COMPLETED', released_by = $1, released_at = NOW(), updated_at = NOW() WHERE id = $2`,
         [adminId, transactionId]
       );
 
-      // Update project status
+      // Update project status to COMPLETED
       await client.query(
         `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
         [tx.project_id]
+      );
+
+      // Credit freelancer balance (earnings + available for withdrawal)
+      await client.query(
+        `UPDATE freelancer SET earnings_balance = earnings_balance + $1, available_balance = available_balance + $1, updated_at = NOW() WHERE freelancer_id = $2`,
+        [tx.freelancer_amount, tx.freelancer_id]
       );
 
       await client.query('COMMIT');

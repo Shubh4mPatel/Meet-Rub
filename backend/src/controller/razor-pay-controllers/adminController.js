@@ -907,6 +907,31 @@ const revokeCreatorSuspension = async (req, res, next) => {
   }
 }
 
+// Get all escrow transactions (admin)
+const getEscrowTransactions = async (req, res, next) => {
+  try {
+    const { status = 'HELD' } = req.query;
+
+    const validStatuses = ['INITIATED', 'HELD', 'COMPLETED', 'REFUNDED', 'FAILED'];
+    if (!validStatuses.includes(status)) {
+      return next(new AppError(`Invalid status. Valid values: ${validStatuses.join(', ')}`, 400));
+    }
+
+    const transactions = await paymentService.getEscrowTransactions(status);
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        transactions,
+        count: transactions.length,
+      },
+    });
+  } catch (error) {
+    console.error('getEscrowTransactions error:', error);
+    return next(new AppError('Failed to get escrow transactions', 500));
+  }
+};
+
 // Release transfer — release on-hold funds to freelancer via Razorpay Routes
 const releaseTransfer = async (req, res, next) => {
   const transactionId = req.params.id;
@@ -1078,6 +1103,7 @@ module.exports = {
   removeFeaturedFreelancer,
   suspendCreatorByAdmin,
   revokeCreatorSuspension,
+  getEscrowTransactions,
   releaseTransfer,
   createFreelancerLinkedAccount,
   getFreelancerLinkedAccountStatus,

@@ -1129,31 +1129,24 @@ const approveProject = async (req, res, next) => {
 
     const transaction = transactions[0];
 
-    // Change project status from SUBMITTED to COMPLETED after approval
+    // Change project status from SUBMITTED to COMPLETED (creator accepted, but funds stay in escrow until admin releases)
     await client.query(
       `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
       [projectId]
     );
 
-    await client.query(
-      `UPDATE transactions SET status = 'COMPLETED', released_at = NOW(), updated_at = NOW() WHERE id = $1`,
-      [transaction.id]
-    );
-
-    await client.query(
-      `UPDATE freelancer SET earnings_balance = earnings_balance + $1 , available_balance = available_balance + $1 WHERE freelancer_id = $2`,
-      [transaction.freelancer_amount, transaction.freelancer_id]
-    );
+    // Transaction stays in HELD status - admin will release it later
 
     await client.query('COMMIT');
 
     return res.status(200).json({
       status: 'success',
-      message: 'Project approved. Earnings credited to freelancer.',
+      message: 'Project approved. Admin must now release payment to freelancer.',
       data: {
         project_id: projectId,
         transaction_id: transaction.id,
-        freelancer_amount: transaction.freelancer_amount
+        freelancer_amount: transaction.freelancer_amount,
+        next_action: 'Admin must release transfer to complete payment'
       }
     });
   } catch (error) {
