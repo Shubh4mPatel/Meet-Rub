@@ -344,28 +344,31 @@ const handleTransferProcessed = async (payload) => {
   const transfer = payload.transfer.entity;
   const transferId = transfer.id;
 
-  logger.info(`[handleTransferProcessed] Transfer processed: ${transferId}`);
+  logger.info(`[handleTransferProcessed] Transfer processed: ${transferId}, on_hold=${transfer.on_hold}`);
 
+  // If transfer is on_hold, it means payment was successful but funds are in escrow.
+  // Mark transaction as HELD and project as IN_PROGRESS.
+  // Admin will release the hold later via releaseTransfer.
   const client = await db.connect();
   try {
     await client.query('BEGIN');
 
     const { rowCount } = await client.query(
-      `UPDATE transactions SET status = 'COMPLETED', updated_at = NOW()
-       WHERE razorpay_transfer_id = $1 AND status = 'HELD'`,
+      `UPDATE transactions SET status = 'HELD', updated_at = NOW()
+       WHERE razorpay_transfer_id = $1 AND status = 'INITIATED'`,
       [transferId]
     );
 
     if (rowCount > 0) {
-      // Also update the project to COMPLETED
+      // Payment succeeded — update project to IN_PROGRESS
       await client.query(
-        `UPDATE projects SET status = 'COMPLETED', updated_at = NOW()
+        `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW()
          WHERE id = (SELECT project_id FROM transactions WHERE razorpay_transfer_id = $1)`,
         [transferId]
       );
-      logger.info(`[handleTransferProcessed] Transaction and project updated to COMPLETED for transfer ${transferId}`);
+      logger.info(`[handleTransferProcessed] Transaction marked HELD, project marked IN_PROGRESS for transfer ${transferId}`);
     } else {
-      logger.info(`[handleTransferProcessed] No HELD transaction found for transfer ${transferId} — may already be processed`);
+      logger.info(`[handleTransferProcessed] No INITIATED transaction found for transfer ${transferId} — may already be processed`);
     }
 
     await client.query('COMMIT');
@@ -390,13 +393,21 @@ const handleTransferFailed = async (payload) => {
   try {
     await client.query('BEGIN');
 
-    await client.query(
+    const { rowCount } = await client.query(
       `UPDATE transactions SET status = 'FAILED', updated_at = NOW()
        WHERE razorpay_transfer_id = $1 AND status IN ('HELD', 'INITIATED')`,
       [transferId]
     );
 
-    logger.info(`[handleTransferFailed] Transaction marked FAILED for transfer ${transferId}`);
+    if (rowCount > 0) {
+      // Payment failed — revert project back to CREATED
+      await client.query(
+        `UPDATE projects SET status = 'CREATED', updated_at = NOW()
+         WHERE id = (SELECT project_id FROM transactions WHERE razorpay_transfer_id = $1)`,
+        [transferId]
+      );
+      logger.info(`[handleTransferFailed] Transaction marked FAILED, project reverted to CREATED for transfer ${transferId}`);
+    }
 
     await client.query('COMMIT');
   } catch (error) {

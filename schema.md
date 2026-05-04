@@ -388,6 +388,14 @@ CREATE TABLE IF NOT EXISTS public.freelancer
     available_balance numeric(15,2) DEFAULT 0.00,
     pan_card_number character varying(20) COLLATE pg_catalog."default",
     pan_card_image_url text COLLATE pg_catalog."default",
+    razorpay_linked_account_id character varying(50) COLLATE pg_catalog."default",
+    razorpay_stakeholder_id character varying(50) COLLATE pg_catalog."default",
+    razorpay_product_id character varying(50) COLLATE pg_catalog."default",
+    razorpay_account_status character varying(20) COLLATE pg_catalog."default" DEFAULT 'pending'::character varying,
+    street_address character varying(255) COLLATE pg_catalog."default",
+    city character varying(100) COLLATE pg_catalog."default",
+    state character varying(50) COLLATE pg_catalog."default",
+    postal_code character varying(10) COLLATE pg_catalog."default",
     CONSTRAINT influencer_pkey PRIMARY KEY (freelancer_id),
     CONSTRAINT unique_freelancer_user_name UNIQUE (user_name),
     CONSTRAINT influencer_user_id_fkey FOREIGN KEY (user_id)
@@ -408,11 +416,7 @@ ALTER TABLE IF EXISTS public.freelancer
 CREATE INDEX IF NOT EXISTS idx_freelancer_verified_active
     ON public.freelancer USING btree
     (verification_status COLLATE pg_catalog."default" ASC NULLS LAST, is_active ASC NULLS LAST)
-    WITH (fillfactor=100, deduplicate_items=True)
     TABLESPACE pg_default;
-
-ALTER TABLE IF EXISTS public.freelancer
-    OWNER to postgres;
 
 
     -- Table: public.gov_ids

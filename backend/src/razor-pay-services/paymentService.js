@@ -368,23 +368,23 @@ class PaymentService {
       try {
         logger.info(`[processServicePayment] 🔍 Fetching payment details for payment_id=${paymentId} to extract transfer ID...`);
         const paymentDetails = await razorpay.payments.fetch(paymentId);
-        
+
         logger.info(`[processServicePayment] Payment details received: status=${paymentDetails.status}, amount=${paymentDetails.amount}, has_transfers=${!!paymentDetails.transfers}`);
-        
+
         if (paymentDetails.transfers) {
           logger.info(`[processServicePayment] Transfer object found: count=${paymentDetails.transfers.count || 0}, items_length=${paymentDetails.transfers.items?.length || 0}`);
           logger.info(`[processServicePayment] Full transfer details: ${JSON.stringify(paymentDetails.transfers)}`);
         } else {
           logger.warn(`[processServicePayment] ⚠️ No transfers object in payment details for payment_id=${paymentId}`);
         }
-        
+
         if (paymentDetails.transfers && paymentDetails.transfers.items && paymentDetails.transfers.items.length > 0) {
           const transferId = paymentDetails.transfers.items[0].id;
           const transferAmount = paymentDetails.transfers.items[0].amount;
           const transferStatus = paymentDetails.transfers.items[0].on_hold;
-          
+
           logger.info(`[processServicePayment] ✅ Transfer found: id=${transferId}, amount=${transferAmount}, on_hold=${transferStatus}`);
-          
+
           await client.query(
             `UPDATE transactions SET razorpay_transfer_id = $1 WHERE id = $2`,
             [transferId, order.reference_id]
