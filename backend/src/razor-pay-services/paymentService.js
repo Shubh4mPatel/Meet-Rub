@@ -203,12 +203,14 @@ class PaymentService {
             transaction_id: String(transactionId),
           },
         }];
-        logger.info(`[createServicePaymentOrder] Added transfer instructions: account=${project.razorpay_linked_account_id}, amount=${amounts.freelancerAmount}, on_hold=indefinite`);
+        logger.info(`[createServicePaymentOrder] ✅ Added transfer instructions for transaction_id=${transactionId}: account=${project.razorpay_linked_account_id}, amount=${amounts.freelancerAmount}, on_hold=indefinite, freelancer_id=${project.freelancer_id}`);
       } else {
-        logger.info(`[createServicePaymentOrder] No linked account for freelancer — order without transfers (legacy flow)`);
+        logger.warn(`[createServicePaymentOrder] ⚠️ No linked account for freelancer_id=${project.freelancer_id} — order without transfers (legacy flow). linked_account=${project.razorpay_linked_account_id}, status=${project.razorpay_account_status}`);
       }
 
+      logger.info(`[createServicePaymentOrder] 📤 Creating Razorpay order with options: ${JSON.stringify({ ...orderOptions, transfers: orderOptions.transfers ? `[${orderOptions.transfers.length} transfer(s)]` : 'none' })}`);
       const razorpayOrder = await razorpay.orders.create(orderOptions);
+      logger.info(`[createServicePaymentOrder] ✅ Razorpay order created: id=${razorpayOrder.id}, amount=${razorpayOrder.amount}, status=${razorpayOrder.status}`);
 
       await client.query(
         'UPDATE transactions SET razorpay_order_id = $1 WHERE id = $2',
@@ -364,18 +366,37 @@ class PaymentService {
 
       // Razorpay Routes: fetch transfer ID from payment if transfers exist
       try {
+        logger.info(`[processServicePayment] 🔍 Fetching payment details for payment_id=${paymentId} to extract transfer ID...`);
         const paymentDetails = await razorpay.payments.fetch(paymentId);
+        
+        logger.info(`[processServicePayment] Payment details received: status=${paymentDetails.status}, amount=${paymentDetails.amount}, has_transfers=${!!paymentDetails.transfers}`);
+        
+        if (paymentDetails.transfers) {
+          logger.info(`[processServicePayment] Transfer object found: count=${paymentDetails.transfers.count || 0}, items_length=${paymentDetails.transfers.items?.length || 0}`);
+          logger.info(`[processServicePayment] Full transfer details: ${JSON.stringify(paymentDetails.transfers)}`);
+        } else {
+          logger.warn(`[processServicePayment] ⚠️ No transfers object in payment details for payment_id=${paymentId}`);
+        }
+        
         if (paymentDetails.transfers && paymentDetails.transfers.items && paymentDetails.transfers.items.length > 0) {
           const transferId = paymentDetails.transfers.items[0].id;
+          const transferAmount = paymentDetails.transfers.items[0].amount;
+          const transferStatus = paymentDetails.transfers.items[0].on_hold;
+          
+          logger.info(`[processServicePayment] ✅ Transfer found: id=${transferId}, amount=${transferAmount}, on_hold=${transferStatus}`);
+          
           await client.query(
             `UPDATE transactions SET razorpay_transfer_id = $1 WHERE id = $2`,
             [transferId, order.reference_id]
           );
-          logger.info(`[processServicePayment] Stored razorpay_transfer_id=${transferId} for transaction ${order.reference_id}`);
+          logger.info(`[processServicePayment] ✅ Successfully stored razorpay_transfer_id=${transferId} for transaction ${order.reference_id}`);
+        } else {
+          logger.error(`[processServicePayment] ❌ No transfer items found for payment_id=${paymentId}, transaction_id=${order.reference_id}. This payment was likely created without transfer instructions.`);
         }
       } catch (transferFetchErr) {
         // Non-fatal: transfer ID can be fetched later via reconciliation
-        logger.warn(`[processServicePayment] Could not fetch transfer details: ${transferFetchErr.message}`);
+        logger.error(`[processServicePayment] ❌ Failed to fetch transfer details for payment_id=${paymentId}: ${transferFetchErr.message}`);
+        logger.error(`[processServicePayment] Stack trace: ${transferFetchErr.stack}`);
       }
 
       // Get project and custom_package_id from transaction

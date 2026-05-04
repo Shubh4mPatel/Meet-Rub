@@ -103,8 +103,8 @@ const getProject = async (req, res, next) => {
     const { rows: deliverables } = await db.query(
       `SELECT id, deliverable_url, project_description
        FROM deliverables
-       WHERE service_id = $1 AND creator_id = $2 AND freelancer_id = $3`,
-      [project.service_id, project.creator_id, project.freelancer_id]
+       WHERE project_id = $1`,
+      [projectId]
     );
 
     // Resolve deliverable files — s3 gets a presigned URL, google_drive is returned as-is
