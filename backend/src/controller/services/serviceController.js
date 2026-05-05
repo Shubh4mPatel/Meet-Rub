@@ -193,7 +193,7 @@ const addServicesByFreelancer = async (req, res, next) => {
   let uploadedObjectName = null;
 
   try {
-    const { service, price, description, deliveryDuration, planType } = req.body;
+    const { service, price, description, deliveryDuration, planType, serviceTitle, aboutService } = req.body;
     const user = req.user;
     logger.info("Freelancer user info:", user);
     const freelancer_id = user?.roleWiseId;
@@ -224,6 +224,18 @@ const addServicesByFreelancer = async (req, res, next) => {
     if (!['basic', 'pro', 'premium'].includes(normalizedPlanType)) {
       logger.warn("Invalid plan type provided");
       return next(new AppError("Plan type must be 'basic', 'pro', or 'premium'", 400));
+    }
+
+    // service_title and about_service are required for basic plan
+    if (normalizedPlanType === 'basic') {
+      if (!serviceTitle || !serviceTitle.trim()) {
+        logger.warn("serviceTitle is required for basic plan");
+        return next(new AppError("Service title is required when creating the basic plan", 400));
+      }
+      if (!aboutService || !aboutService.trim()) {
+        logger.warn("aboutService is required for basic plan");
+        return next(new AppError("About service is required when creating the basic plan", 400));
+      }
     }
 
     // Check duplicate for this specific plan type
@@ -289,11 +301,23 @@ const addServicesByFreelancer = async (req, res, next) => {
       logger.info(`Reusing basic plan thumbnail for ${normalizedPlanType} plan: ${thumbnailFileUrl}`);
     }
 
+    // For non-basic plans, reuse service_title and about_service from basic if not provided
+    let resolvedServiceTitle = serviceTitle?.trim() || null;
+    let resolvedAboutService = aboutService?.trim() || null;
+    if (normalizedPlanType !== 'basic' && (!resolvedServiceTitle || !resolvedAboutService)) {
+      const { rows: basicPlanMeta } = await query(
+        `SELECT service_title, about_service FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type='basic'`,
+        [freelancer_id, service]
+      );
+      if (!resolvedServiceTitle) resolvedServiceTitle = basicPlanMeta[0]?.service_title || null;
+      if (!resolvedAboutService) resolvedAboutService = basicPlanMeta[0]?.about_service || null;
+    }
+
     const { rows } = await query(
-      `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at, min_delivery_days, max_delivery_days, plan_type, thumbnail_file)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at, min_delivery_days, max_delivery_days, plan_type, thumbnail_file, service_title, about_service)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [freelancer_id, service, description, price, new Date(), new Date(), minDeliveryDays, maxDeliveryDays, normalizedPlanType, thumbnailFileUrl]
+      [freelancer_id, service, description, price, new Date(), new Date(), minDeliveryDays, maxDeliveryDays, normalizedPlanType, thumbnailFileUrl, resolvedServiceTitle, resolvedAboutService]
     );
 
     logger.info("Service added successfully");
@@ -350,7 +374,7 @@ const updateServiceByFreelancer = async (req, res, next) => {
   let uploadedObjectName = null;
 
   try {
-    const { service, price, description, serviceId, deliveryDuration, planType } = req.body;
+    const { service, price, description, serviceId, deliveryDuration, planType, serviceTitle, aboutService } = req.body;
     const user = req.user;
     const freelancer_id = user?.roleWiseId;
 
@@ -432,10 +456,11 @@ const updateServiceByFreelancer = async (req, res, next) => {
 
     const { rows } = await client.query(
       `UPDATE services
-       SET service_name=$1, service_price=$2, service_description=$3, updated_at=$4, min_delivery_days=$5, max_delivery_days=$6, plan_type=$7, thumbnail_file=$8
+       SET service_name=$1, service_price=$2, service_description=$3, updated_at=$4, min_delivery_days=$5, max_delivery_days=$6, plan_type=$7, thumbnail_file=$8,
+           service_title=COALESCE($11, service_title), about_service=COALESCE($12, about_service)
        WHERE id=$9 AND freelancer_id=$10
        RETURNING *`,
-      [service, price, description, new Date(), minDeliveryDays, maxDeliveryDays, planType || null, thumbnailFileUrl, serviceId, freelancer_id]
+      [service, price, description, new Date(), minDeliveryDays, maxDeliveryDays, planType || null, thumbnailFileUrl, serviceId, freelancer_id, serviceTitle?.trim() || null, aboutService?.trim() || null]
     );
 
     if (!rows.length) {

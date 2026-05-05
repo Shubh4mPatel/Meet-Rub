@@ -1418,7 +1418,7 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerServices } = await query(
-      `SELECT id, service_name, service_description, service_price,
+      `SELECT id, service_name, service_title, about_service, service_description, service_price,
               min_delivery_days::text || '-' || max_delivery_days::text AS delivery_time, thumbnail_file
      FROM services WHERE freelancer_id = $1`,
       [freelancerId]
@@ -3519,7 +3519,7 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
     }
 
     const { rows: serviceRows } = await query(
-      `SELECT id, service_name, service_description, service_price,
+      `SELECT id, service_name, service_title, about_service, service_description, service_price,
               min_delivery_days::text || '-' || max_delivery_days::text AS delivery_time,
               plan_type, thumbnail_file, is_active, created_at, updated_at
        FROM services
