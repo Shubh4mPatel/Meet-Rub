@@ -198,17 +198,17 @@ class PaymentService {
       }
 
       orderOptions.transfers = [{
-          account: project.razorpay_linked_account_id,
-          amount: Math.round(amounts.freelancerAmount * 100),
-          currency: process.env.CURRENCY || 'INR',
-          on_hold: 1,
-          notes: {
-            project_id: String(projectId),
-            transaction_id: String(transactionId),
-          },
-          linked_account_notes: ['project_id', 'transaction_id'],
-        }];
-        logger.info(`[createServicePaymentOrder] ✅ Added transfer instructions for transaction_id=${transactionId}: account=${project.razorpay_linked_account_id}, amount=${amounts.freelancerAmount}, on_hold=indefinite, freelancer_id=${project.freelancer_id}`);
+        account: project.razorpay_linked_account_id,
+        amount: Math.round(amounts.freelancerAmount * 100),
+        currency: process.env.CURRENCY || 'INR',
+        on_hold: 1,
+        notes: {
+          project_id: String(projectId),
+          transaction_id: String(transactionId),
+        },
+        linked_account_notes: ['project_id', 'transaction_id'],
+      }];
+      logger.info(`[createServicePaymentOrder] ✅ Added transfer instructions for transaction_id=${transactionId}: account=${project.razorpay_linked_account_id}, amount=${amounts.freelancerAmount}, on_hold=indefinite, freelancer_id=${project.freelancer_id}`);
 
       logger.info(`[createServicePaymentOrder] 📤 Creating Razorpay order with options: ${JSON.stringify({ ...orderOptions, transfers: orderOptions.transfers ? `[${orderOptions.transfers.length} transfer(s)]` : 'none' })}`);
       const razorpayOrder = await razorpay.orders.create(orderOptions);
