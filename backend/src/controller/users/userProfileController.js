@@ -2111,15 +2111,15 @@ const getUserProfileProgress = async (req, res, next) => {
       Portfolio: 0,
     };
     const { rows: freelancerRows } = await query(
-      "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_url, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, verification_status, reason_for_suspension FROM freelancer WHERE user_id=$1",
+      "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_url, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, verification_status, reason_for_rejection FROM freelancer WHERE user_id=$1",
       [user.user_id]
     );
     let verificationStatus = null;
-    let reasonForSuspension = null;
+    let reasonForRejection = null;
     if (freelancerRows.length > 0) {
       const freelancer = freelancerRows[0];
       verificationStatus = freelancer.verification_status;
-      reasonForSuspension = freelancer.reason_for_suspension;
+      reasonForRejection = freelancer.reason_for_rejection;
       if (
         freelancer.date_of_birth &&
         freelancer.phone_number &&
@@ -2168,7 +2168,7 @@ const getUserProfileProgress = async (req, res, next) => {
         profileCompletionPercentage: totalProgress,
         freelancerProgressWeights: freelancerProgressWeights,
         verificationStatus: verificationStatus,
-        reasonForSuspension: reasonForSuspension,
+        reasonForRejection: reasonForRejection,
       },
     });
   } catch (error) {
@@ -2612,6 +2612,7 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
         f.verification_status,
         f.razorpay_account_status,
         f.razorpay_linked_account_id,
+        f.reason_for_rejection,
         CASE 
           WHEN f.bank_account_no IS NOT NULL AND f.bank_ifsc_code IS NOT NULL THEN true
           ELSE false
@@ -2624,7 +2625,7 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
       FROM freelancer f
       WHERE f.verification_status != 'VERIFIED' ${whereClause}
       GROUP BY f.freelancer_id, f.freelancer_full_name, f.created_at, f.gov_id_number, f.verification_status, 
-               f.razorpay_account_status, f.razorpay_linked_account_id, f.bank_account_no, f.bank_ifsc_code,
+               f.razorpay_account_status, f.razorpay_linked_account_id, f.reason_for_rejection, f.bank_account_no, f.bank_ifsc_code,
                f.street_address, f.city, f.state, f.postal_code
       ORDER BY f.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
