@@ -2111,13 +2111,15 @@ const getUserProfileProgress = async (req, res, next) => {
       Portfolio: 0,
     };
     const { rows: freelancerRows } = await query(
-      "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_url, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, verification_status FROM freelancer WHERE user_id=$1",
+      "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_url, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, verification_status, reason_for_suspension FROM freelancer WHERE user_id=$1",
       [user.user_id]
     );
     let verificationStatus = null;
+    let reasonForSuspension = null;
     if (freelancerRows.length > 0) {
       const freelancer = freelancerRows[0];
       verificationStatus = freelancer.verification_status;
+      reasonForSuspension = freelancer.reason_for_suspension;
       if (
         freelancer.date_of_birth &&
         freelancer.phone_number &&
@@ -2166,6 +2168,7 @@ const getUserProfileProgress = async (req, res, next) => {
         profileCompletionPercentage: totalProgress,
         freelancerProgressWeights: freelancerProgressWeights,
         verificationStatus: verificationStatus,
+        reasonForSuspension: reasonForSuspension,
       },
     });
   } catch (error) {
