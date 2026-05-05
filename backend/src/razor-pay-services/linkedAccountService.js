@@ -18,9 +18,10 @@ class LinkedAccountService {
 
             const accountData = {
                 email: freelancer.freelancer_email,
-                phone: phoneDigits ? Number(phoneDigits) : undefined,
+                phone: Number(phoneDigits),
                 type: 'route',
                 legal_business_name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
+                contact_name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
                 business_type: 'individual',
                 // Note: For business_type 'individual', PAN is provided in stakeholder, not here
                 // legal_info.pan is only for company/partnership/trust business types
@@ -29,11 +30,10 @@ class LinkedAccountService {
                     subcategory: 'professional_services',
                     addresses: {
                         registered: {
-                            street1: freelancer.street_address || 'Not Provided',
-                            street2: 'Not Provided',
-                            city: freelancer.city || 'Mumbai',
-                            state: (freelancer.state || 'MAHARASHTRA').toUpperCase(),
-                            postal_code: freelancer.postal_code ? Number(freelancer.postal_code) : 400001,
+                            street1: freelancer.street_address,
+                            city: freelancer.city,
+                            state: freelancer.state.toUpperCase(),
+                            postal_code: Number(freelancer.postal_code),
                             country: 'IN',
                         },
                     },
@@ -71,22 +71,20 @@ class LinkedAccountService {
 
             const stakeholderData = {
                 name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
-                ...(phoneDigits ? { phone: { primary: Number(phoneDigits) } } : {}),
-                email: freelancer.freelancer_email || undefined,
-                ...(freelancer.street_address ? {
-                    addresses: {
-                        residential: {
-                            street: freelancer.street_address,
-                            city: freelancer.city || 'Mumbai',
-                            state: (freelancer.state || 'Maharashtra'),
-                            postal_code: String(freelancer.postal_code || '400001'),
-                            country: 'IN',
-                        },
+                phone: { primary: Number(phoneDigits) },
+                email: freelancer.freelancer_email,
+                addresses: {
+                    residential: {
+                        street: freelancer.street_address,
+                        city: freelancer.city,
+                        state: freelancer.state.toUpperCase(),
+                        postal_code: String(freelancer.postal_code),
+                        country: 'IN',
                     },
-                } : {}),
-                kyc: freelancer.pan_card_number ? {
+                },
+                kyc: {
                     pan: freelancer.pan_card_number,
-                } : undefined,
+                },
                 notes: {
                     freelancer_id: String(freelancer.freelancer_id),
                 },
@@ -112,6 +110,7 @@ class LinkedAccountService {
         try {
             const productData = {
                 product_name: 'route',
+                tnc_accepted: true,
             };
 
             logger.info(`[requestProductConfig] Requesting route product config for account_id=${accountId}`);
@@ -202,47 +201,50 @@ class LinkedAccountService {
 
         const freelancer = freelancers[0];
 
-        // Guard: must have bank details and address
-        if (!freelancer.bank_account_no || !freelancer.bank_ifsc_code) {
-            throw new Error('Freelancer must have bank account details before onboarding');
-        }
-        if (!freelancer.street_address || !freelancer.city || !freelancer.state || !freelancer.postal_code) {
-            throw new Error('Freelancer must have complete address (street, city, state, postal_code) before onboarding');
+        // --- Comprehensive upfront validation ---
+        const missingFields = [];
+
+        if (!freelancer.freelancer_email)          missingFields.push('freelancer_email');
+        if (!freelancer.phone_number)              missingFields.push('phone_number');
+        if (!freelancer.bank_account_no)           missingFields.push('bank_account_no');
+        if (!freelancer.bank_ifsc_code)            missingFields.push('bank_ifsc_code');
+        if (!freelancer.bank_account_holder_name && !freelancer.freelancer_full_name)
+                                                   missingFields.push('bank_account_holder_name');
+        if (!freelancer.pan_card_number)           missingFields.push('pan_card_number');
+        if (!freelancer.street_address)            missingFields.push('street_address');
+        if (!freelancer.city)                      missingFields.push('city');
+        if (!freelancer.state)                     missingFields.push('state');
+        if (!freelancer.postal_code)               missingFields.push('postal_code');
+
+        if (missingFields.length > 0) {
+            throw new Error(`Onboarding failed — missing required fields: ${missingFields.join(', ')}`);
         }
 
-        // Razorpay validation: stakeholder street address must be minimum 10 characters
-        if (freelancer.street_address.trim().length < 10) {
-            throw new Error('Street address must be at least 10 characters long for Razorpay verification');
-        }
+        // --- Format validations ---
+        const formatErrors = [];
 
-        // Razorpay validation: postal code must be exactly 6 digits
-        const postalCodeStr = String(freelancer.postal_code).trim();
-        if (!/^\d{6}$/.test(postalCodeStr)) {
-            throw new Error('Postal code must be exactly 6 digits');
-        }
+        if (freelancer.street_address.trim().length < 10)
+            formatErrors.push('street_address must be at least 10 characters');
 
-        // Razorpay validation: phone number must be exactly 10 digits after stripping prefix
-        let phoneDigits = freelancer.phone_number ? freelancer.phone_number.replace(/\D/g, '') : null;
-        if (phoneDigits && phoneDigits.length > 11) {
-            phoneDigits = phoneDigits.replace(/^91/, '');
-        }
-        if (!phoneDigits || phoneDigits.length !== 10) {
-            throw new Error('Phone number must be exactly 10 digits');
-        }
+        if (!/^\d{6}$/.test(String(freelancer.postal_code).trim()))
+            formatErrors.push('postal_code must be exactly 6 digits');
 
-        // Razorpay validation: bank account number must be 5-35 characters
-        if (freelancer.bank_account_no.length < 5 || freelancer.bank_account_no.length > 35) {
-            throw new Error('Bank account number must be between 5 and 35 characters');
-        }
+        let phoneDigits = freelancer.phone_number.replace(/\D/g, '');
+        if (phoneDigits.length > 11) phoneDigits = phoneDigits.replace(/^91/, '');
+        if (phoneDigits.length !== 10)
+            formatErrors.push('phone_number must be exactly 10 digits after stripping country code');
 
-        // Razorpay validation: IFSC code format
-        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(freelancer.bank_ifsc_code)) {
-            throw new Error('Invalid IFSC code format');
-        }
+        if (freelancer.bank_account_no.length < 5 || freelancer.bank_account_no.length > 35)
+            formatErrors.push('bank_account_no must be between 5 and 35 characters');
 
-        // Razorpay validation: PAN card (if provided) must have 4th character as 'P' for individuals
-        if (freelancer.pan_card_number && freelancer.pan_card_number.charAt(3) !== 'P') {
-            throw new Error('Invalid PAN format for individual. The 4th character must be "P"');
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(freelancer.bank_ifsc_code))
+            formatErrors.push('bank_ifsc_code format is invalid');
+
+        if (!/^[A-Z]{3}P[A-Z]\d{4}[A-Z]$/i.test(freelancer.pan_card_number))
+            formatErrors.push('pan_card_number format is invalid (expected format: AAAPANNNN A)');
+
+        if (formatErrors.length > 0) {
+            throw new Error(`Onboarding failed — validation errors: ${formatErrors.join('; ')}`);
         }
 
         // Guard: already onboarded and activated
