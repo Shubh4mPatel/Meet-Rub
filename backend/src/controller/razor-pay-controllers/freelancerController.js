@@ -394,6 +394,5 @@ module.exports = {
   requestPayout,
   getWalletDashboard,
   getTransactionHistory,
-  onboardLinkedAccount,
   getLinkedAccountStatus,
 }

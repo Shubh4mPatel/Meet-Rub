@@ -36,7 +36,8 @@ const createPaymentOrder = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Create payment order error:', error);
-    return next(new AppError(error.message, 500));
+    const statusCode = error.message.includes('not activated') ? 400 : 500;
+    return next(new AppError(error.message, statusCode));
   }
 }
 

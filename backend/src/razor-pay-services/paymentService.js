@@ -192,8 +192,12 @@ class PaymentService {
       };
 
       // Razorpay Routes: Add transfer instructions if freelancer has activated linked account
-      if (project.razorpay_linked_account_id && project.razorpay_account_status === 'activated') {
-        orderOptions.transfers = [{
+      if (!project.razorpay_linked_account_id || project.razorpay_account_status !== 'activated') {
+        const status = project.razorpay_account_status || 'not_started';
+        throw new Error(`Payment cannot be processed: freelancer's Razorpay account is not activated (status: ${status}). Please contact support.`);
+      }
+
+      orderOptions.transfers = [{
           account: project.razorpay_linked_account_id,
           amount: Math.round(amounts.freelancerAmount * 100),
           currency: process.env.CURRENCY || 'INR',
@@ -202,11 +206,9 @@ class PaymentService {
             project_id: String(projectId),
             transaction_id: String(transactionId),
           },
+          linked_account_notes: ['project_id', 'transaction_id'],
         }];
         logger.info(`[createServicePaymentOrder] ✅ Added transfer instructions for transaction_id=${transactionId}: account=${project.razorpay_linked_account_id}, amount=${amounts.freelancerAmount}, on_hold=indefinite, freelancer_id=${project.freelancer_id}`);
-      } else {
-        logger.warn(`[createServicePaymentOrder] ⚠️ No linked account for freelancer_id=${project.freelancer_id} — order without transfers (legacy flow). linked_account=${project.razorpay_linked_account_id}, status=${project.razorpay_account_status}`);
-      }
 
       logger.info(`[createServicePaymentOrder] 📤 Creating Razorpay order with options: ${JSON.stringify({ ...orderOptions, transfers: orderOptions.transfers ? `[${orderOptions.transfers.length} transfer(s)]` : 'none' })}`);
       const razorpayOrder = await razorpay.orders.create(orderOptions);

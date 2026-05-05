@@ -185,11 +185,10 @@ class LinkedAccountService {
     /**
      * Full onboarding orchestrator — creates Linked Account, Stakeholder,
      * requests product config, updates with bank details.
-     * Saves all IDs to the freelancer table.
+     * All Razorpay API calls run first; DB is updated atomically in a single
+     * transaction at the end so partial state is never written.
      */
     async onboardFreelancer(freelancerId) {
-        // Fetch freelancer (no transaction — each step commits independently
-        // so progress is preserved if a later step fails)
         const { rows: freelancers } = await db.query(
             `SELECT * FROM freelancer WHERE freelancer_id = $1`,
             [freelancerId]
@@ -204,17 +203,17 @@ class LinkedAccountService {
         // --- Comprehensive upfront validation ---
         const missingFields = [];
 
-        if (!freelancer.freelancer_email)          missingFields.push('freelancer_email');
-        if (!freelancer.phone_number)              missingFields.push('phone_number');
-        if (!freelancer.bank_account_no)           missingFields.push('bank_account_no');
-        if (!freelancer.bank_ifsc_code)            missingFields.push('bank_ifsc_code');
+        if (!freelancer.freelancer_email) missingFields.push('freelancer_email');
+        if (!freelancer.phone_number) missingFields.push('phone_number');
+        if (!freelancer.bank_account_no) missingFields.push('bank_account_no');
+        if (!freelancer.bank_ifsc_code) missingFields.push('bank_ifsc_code');
         if (!freelancer.bank_account_holder_name && !freelancer.freelancer_full_name)
-                                                   missingFields.push('bank_account_holder_name');
-        if (!freelancer.pan_card_number)           missingFields.push('pan_card_number');
-        if (!freelancer.street_address)            missingFields.push('street_address');
-        if (!freelancer.city)                      missingFields.push('city');
-        if (!freelancer.state)                     missingFields.push('state');
-        if (!freelancer.postal_code)               missingFields.push('postal_code');
+            missingFields.push('bank_account_holder_name');
+        if (!freelancer.pan_card_number) missingFields.push('pan_card_number');
+        if (!freelancer.street_address) missingFields.push('street_address');
+        if (!freelancer.city) missingFields.push('city');
+        if (!freelancer.state) missingFields.push('state');
+        if (!freelancer.postal_code) missingFields.push('postal_code');
 
         if (missingFields.length > 0) {
             throw new Error(`Onboarding failed — missing required fields: ${missingFields.join(', ')}`);
@@ -253,19 +252,20 @@ class LinkedAccountService {
             return { status: 'already_activated', accountId: freelancer.razorpay_linked_account_id };
         }
 
+        // --- Run all Razorpay API calls BEFORE touching the DB ---
+        // Track which IDs already exist (idempotency) vs which are newly created
         let accountId = freelancer.razorpay_linked_account_id;
         let stakeholderId = freelancer.razorpay_stakeholder_id;
         let productId = freelancer.razorpay_product_id;
+
+        const newIds = {}; // only fields that changed this run
 
         // Step 1: Create Linked Account (if not already created)
         if (!accountId) {
             const account = await this.createLinkedAccount(freelancer);
             accountId = account.id;
-
-            await db.query(
-                `UPDATE freelancer SET razorpay_linked_account_id = $1, razorpay_account_status = 'created' WHERE freelancer_id = $2`,
-                [accountId, freelancerId]
-            );
+            newIds.razorpay_linked_account_id = accountId;
+            newIds.razorpay_account_status_created = true;
             logger.info(`[onboardFreelancer] Step 1 complete: account_id=${accountId}`);
         }
 
@@ -273,11 +273,7 @@ class LinkedAccountService {
         if (!stakeholderId) {
             const stakeholder = await this.createStakeholder(accountId, freelancer);
             stakeholderId = stakeholder.id;
-
-            await db.query(
-                `UPDATE freelancer SET razorpay_stakeholder_id = $1 WHERE freelancer_id = $2`,
-                [stakeholderId, freelancerId]
-            );
+            newIds.razorpay_stakeholder_id = stakeholderId;
             logger.info(`[onboardFreelancer] Step 2 complete: stakeholder_id=${stakeholderId}`);
         }
 
@@ -285,19 +281,14 @@ class LinkedAccountService {
         if (!productId) {
             const product = await this.requestProductConfig(accountId);
             productId = product.id;
-
-            await db.query(
-                `UPDATE freelancer SET razorpay_product_id = $1 WHERE freelancer_id = $2`,
-                [productId, freelancerId]
-            );
+            newIds.razorpay_product_id = productId;
             logger.info(`[onboardFreelancer] Step 3 complete: product_id=${productId}`);
         }
 
-        // Step 4: Update Product Config with bank details
+        // Step 4: Update Product Config with bank details (always run to get latest status)
         const productConfig = await this.updateProductConfig(accountId, productId, freelancer);
         const activationStatus = productConfig.activation_status || 'pending';
 
-        // Map Razorpay activation_status to our status
         let accountStatus = 'pending';
         if (activationStatus === 'activated') {
             accountStatus = 'activated';
@@ -306,11 +297,46 @@ class LinkedAccountService {
         } else if (activationStatus === 'under_review') {
             accountStatus = 'pending';
         }
+        newIds.razorpay_account_status = accountStatus;
+        logger.info(`[onboardFreelancer] Step 4 complete: activation_status=${activationStatus}`);
 
-        await db.query(
-            `UPDATE freelancer SET razorpay_account_status = $1 WHERE freelancer_id = $2`,
-            [accountStatus, freelancerId]
-        );
+        // --- All Razorpay calls succeeded — commit all new IDs atomically ---
+        const client = await db.connect();
+        try {
+            await client.query('BEGIN');
+
+            if (newIds.razorpay_linked_account_id) {
+                await client.query(
+                    `UPDATE freelancer SET razorpay_linked_account_id = $1, razorpay_account_status = 'created' WHERE freelancer_id = $2`,
+                    [newIds.razorpay_linked_account_id, freelancerId]
+                );
+            }
+            if (newIds.razorpay_stakeholder_id) {
+                await client.query(
+                    `UPDATE freelancer SET razorpay_stakeholder_id = $1 WHERE freelancer_id = $2`,
+                    [newIds.razorpay_stakeholder_id, freelancerId]
+                );
+            }
+            if (newIds.razorpay_product_id) {
+                await client.query(
+                    `UPDATE freelancer SET razorpay_product_id = $1 WHERE freelancer_id = $2`,
+                    [newIds.razorpay_product_id, freelancerId]
+                );
+            }
+            await client.query(
+                `UPDATE freelancer SET razorpay_account_status = $1 WHERE freelancer_id = $2`,
+                [accountStatus, freelancerId]
+            );
+
+            await client.query('COMMIT');
+            logger.info(`[onboardFreelancer] DB transaction committed for freelancer ${freelancerId}, status=${accountStatus}`);
+        } catch (dbErr) {
+            await client.query('ROLLBACK');
+            logger.error(`[onboardFreelancer] DB transaction rolled back for freelancer ${freelancerId}: ${dbErr.message}`);
+            throw new Error(`Onboarding Razorpay steps succeeded but DB update failed: ${dbErr.message}`);
+        } finally {
+            client.release();
+        }
 
         logger.info(`[onboardFreelancer] Freelancer ${freelancerId} onboarding complete: status=${accountStatus}`);
 

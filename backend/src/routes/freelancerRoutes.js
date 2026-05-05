@@ -5,7 +5,6 @@ const {
     requestPayout,
     getWalletDashboard,
     getTransactionHistory,
-    onboardLinkedAccount,
     getLinkedAccountStatus
 } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
@@ -112,8 +111,7 @@ router.post('/rate-creator/:projectId', authenticateUser, requireRole(['freelanc
 
 router.get('/my-reviews', authenticateUser, requireRole(['freelancer']), getMyReviews);
 
-// Razorpay Routes - Linked Account onboarding
-router.post('/onboard-linked-account', authenticateUser, requireRole(['freelancer']), onboardLinkedAccount);
+// Razorpay Routes - Linked Account status
 router.get('/linked-account-status', authenticateUser, requireRole(['freelancer']), getLinkedAccountStatus);
 
 module.exports = router
