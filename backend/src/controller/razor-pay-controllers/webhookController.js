@@ -154,10 +154,10 @@ const handlePaymentCaptured = async (payload) => {
         );
         logger.info(`[handlePaymentCaptured] Stored razorpay_transfer_id=${transferId} from webhook payload`);
       } else {
-        // Try fetching from API
-        const paymentDetails = await razorpay.payments.fetch(paymentId);
-        if (paymentDetails.transfers && paymentDetails.transfers.items && paymentDetails.transfers.items.length > 0) {
-          const transferId = paymentDetails.transfers.items[0].id;
+        // Try fetching transfers for this payment
+        const transfersResponse = await razorpay.payments.fetchTransfer(paymentId);
+        if (transfersResponse.items && transfersResponse.items.length > 0) {
+          const transferId = transfersResponse.items[0].id;
           await client.query(
             `UPDATE transactions SET razorpay_transfer_id = $1 WHERE id = $2`,
             [transferId, order.reference_id]
@@ -430,18 +430,93 @@ const handleTransferReversed = async (payload) => {
   try {
     await client.query('BEGIN');
 
-    await client.query(
-      `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW()
-       WHERE razorpay_transfer_id = $1 AND status IN ('HELD', 'COMPLETED')`,
+    // Get the transaction before updating — need to check if balance was credited
+    const { rows: txRows } = await client.query(
+      `SELECT t.id, t.status, t.freelancer_amount, t.freelancer_id
+       FROM transactions t
+       WHERE t.razorpay_transfer_id = $1 AND t.status IN ('HELD', 'COMPLETED')
+       FOR UPDATE`,
       [transferId]
     );
 
-    logger.info(`[handleTransferReversed] Transaction marked REFUNDED for transfer ${transferId}`);
+    if (txRows.length === 0) {
+      logger.info(`[handleTransferReversed] No HELD/COMPLETED transaction found for transfer ${transferId}`);
+      await client.query('COMMIT');
+      return;
+    }
+
+    const tx = txRows[0];
+
+    // If transaction was COMPLETED, the freelancer's balance was credited — revert it
+    if (tx.status === 'COMPLETED' && tx.freelancer_amount && tx.freelancer_id) {
+      await client.query(
+        `UPDATE freelancer
+         SET earnings_balance = earnings_balance - $1,
+             available_balance = available_balance - $1,
+             updated_at = NOW()
+         WHERE freelancer_id = $2`,
+        [tx.freelancer_amount, tx.freelancer_id]
+      );
+      logger.info(`[handleTransferReversed] Reverted balance ${tx.freelancer_amount} for freelancer ${tx.freelancer_id}`);
+    }
+
+    await client.query(
+      `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW() WHERE id = $1`,
+      [tx.id]
+    );
+
+    // Revert project status
+    await client.query(
+      `UPDATE projects SET status = 'CANCELLED', updated_at = NOW()
+       WHERE id = (SELECT project_id FROM transactions WHERE id = $1)`,
+      [tx.id]
+    );
+
+    logger.info(`[handleTransferReversed] Transaction ${tx.id} marked REFUNDED for transfer ${transferId}`);
 
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error(`[handleTransferReversed] Error: ${error.message}`);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// Handle transfer settled event (Routes) — funds settled to linked account's bank
+const handleTransferSettled = async (payload) => {
+  const transfer = payload.transfer.entity;
+  const transferId = transfer.id;
+
+  logger.info(`[handleTransferSettled] Transfer settled: ${transferId}, amount=${transfer.amount}`);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `SELECT t.id, t.freelancer_id, t.freelancer_amount
+       FROM transactions t
+       WHERE t.razorpay_transfer_id = $1 AND t.status = 'COMPLETED'`,
+      [transferId]
+    );
+
+    if (rows.length > 0) {
+      // Mark that settlement is done — credit available_balance for tracking
+      await client.query(
+        `UPDATE freelancer SET available_balance = available_balance + $1, updated_at = NOW() WHERE freelancer_id = $2`,
+        [rows[0].freelancer_amount, rows[0].freelancer_id]
+      );
+      logger.info(`[handleTransferSettled] Credited available_balance ${rows[0].freelancer_amount} for freelancer ${rows[0].freelancer_id}`);
+    } else {
+      logger.info(`[handleTransferSettled] No COMPLETED transaction for transfer ${transferId}`);
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error(`[handleTransferSettled] Error: ${error.message}`);
     throw error;
   } finally {
     client.release();
@@ -534,7 +609,8 @@ const handleWebhook = async (req, res, next) => {
         break;
 
       case 'transfer.settled':
-        logger.info(`[handleWebhook] Transfer settled event received — no action needed`);
+        await handleTransferSettled(payload);
+        logger.info(`[handleWebhook] Successfully processed transfer.settled event`);
         break;
 
       default:

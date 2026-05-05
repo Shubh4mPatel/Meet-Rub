@@ -517,22 +517,18 @@ const resolveDispute = async (req, res, next) => {
 
       const refundAmountPaise = Math.round(parseFloat(dispute.total_amount) * 100);
 
-      // Routes flow: reverse transfer first, then refund
-      if (dispute.razorpay_transfer_id) {
-        const freelancerAmountPaise = Math.round(parseFloat(dispute.freelancer_amount) * 100);
-        await razorpay.transfers.reverse(dispute.razorpay_transfer_id, {
-          amount: freelancerAmountPaise,
-        });
-        logger.info(`Dispute ${id}: Reversed transfer ${dispute.razorpay_transfer_id} amount=${dispute.freelancer_amount}`);
-      }
-
+      // Routes flow: refund with reverse_all to atomically reverse transfer + refund
       const refund = await razorpay.payments.refund(dispute.razorpay_payment_id, {
         amount: refundAmountPaise,
+        reverse_all: dispute.razorpay_transfer_id ? 1 : undefined,
         notes: {
           dispute_id: id,
           reason: 'Dispute resolved in creator favour',
         },
       });
+      if (dispute.razorpay_transfer_id) {
+        logger.info(`Dispute ${id}: Refund with reverse_all for transfer ${dispute.razorpay_transfer_id}`);
+      }
 
       await client.query(
         `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW() WHERE id = $1`,

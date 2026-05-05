@@ -984,13 +984,14 @@ const releaseTransfer = async (req, res, next) => {
     });
   } catch (error) {
     console.error('releaseTransfer error:', error);
-    if (error.message.includes('not found') || error.message.includes('No transfer')) {
-      return next(new AppError(error.message, 404));
+    const msg = error?.error?.description || error?.message || 'Failed to release transfer';
+    if (msg.includes('not found') || msg.includes('No transfer') || msg.includes('No db records')) {
+      return next(new AppError(msg, 404));
     }
-    if (error.message.includes('not in HELD') || error.message.includes('already')) {
-      return next(new AppError(error.message, 400));
+    if (msg.includes('not in HELD') || msg.includes('already')) {
+      return next(new AppError(msg, 400));
     }
-    return next(new AppError('Failed to release transfer', 500));
+    return next(new AppError(msg, 500));
   }
 };
 

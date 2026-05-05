@@ -366,26 +366,19 @@ class PaymentService {
         throw new Error(`Transaction ${order.reference_id} already processed (current status: ${currentStatus})`);
       }
 
-      // Razorpay Routes: fetch transfer ID from payment if transfers exist
+      // Razorpay Routes: fetch transfer ID from payment using dedicated transfers endpoint
       try {
-        logger.info(`[processServicePayment] 🔍 Fetching payment details for payment_id=${paymentId} to extract transfer ID...`);
-        const paymentDetails = await razorpay.payments.fetch(paymentId);
+        logger.info(`[processServicePayment] 🔍 Fetching transfers for payment_id=${paymentId}...`);
+        const transfersResponse = await razorpay.payments.fetchTransfer(paymentId);
 
-        logger.info(`[processServicePayment] Payment details received: status=${paymentDetails.status}, amount=${paymentDetails.amount}, has_transfers=${!!paymentDetails.transfers}`);
+        logger.info(`[processServicePayment] Transfers response: count=${transfersResponse.count || 0}, items_length=${transfersResponse.items?.length || 0}`);
 
-        if (paymentDetails.transfers) {
-          logger.info(`[processServicePayment] Transfer object found: count=${paymentDetails.transfers.count || 0}, items_length=${paymentDetails.transfers.items?.length || 0}`);
-          logger.info(`[processServicePayment] Full transfer details: ${JSON.stringify(paymentDetails.transfers)}`);
-        } else {
-          logger.warn(`[processServicePayment] ⚠️ No transfers object in payment details for payment_id=${paymentId}`);
-        }
+        if (transfersResponse.items && transfersResponse.items.length > 0) {
+          const transferId = transfersResponse.items[0].id;
+          const transferAmount = transfersResponse.items[0].amount;
+          const transferOnHold = transfersResponse.items[0].on_hold;
 
-        if (paymentDetails.transfers && paymentDetails.transfers.items && paymentDetails.transfers.items.length > 0) {
-          const transferId = paymentDetails.transfers.items[0].id;
-          const transferAmount = paymentDetails.transfers.items[0].amount;
-          const transferStatus = paymentDetails.transfers.items[0].on_hold;
-
-          logger.info(`[processServicePayment] ✅ Transfer found: id=${transferId}, amount=${transferAmount}, on_hold=${transferStatus}`);
+          logger.info(`[processServicePayment] ✅ Transfer found: id=${transferId}, amount=${transferAmount}, on_hold=${transferOnHold}`);
 
           await client.query(
             `UPDATE transactions SET razorpay_transfer_id = $1 WHERE id = $2`,
@@ -561,9 +554,10 @@ class PaymentService {
         [tx.project_id]
       );
 
-      // Credit freelancer balance (earnings + available for withdrawal)
+      // Credit freelancer earnings tracking balance.
+      // Actual funds are auto-settled by Razorpay to the linked account's bank.
       await client.query(
-        `UPDATE freelancer SET earnings_balance = earnings_balance + $1, available_balance = available_balance + $1, updated_at = NOW() WHERE freelancer_id = $2`,
+        `UPDATE freelancer SET earnings_balance = earnings_balance + $1, updated_at = NOW() WHERE freelancer_id = $2`,
         [tx.freelancer_amount, tx.freelancer_id]
       );
 

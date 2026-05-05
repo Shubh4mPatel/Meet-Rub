@@ -31,6 +31,7 @@ class LinkedAccountService {
                     addresses: {
                         registered: {
                             street1: freelancer.street_address,
+                            street2: freelancer.street_address_2 || 'N/A',
                             city: freelancer.city,
                             state: freelancer.state.toUpperCase(),
                             postal_code: Number(freelancer.postal_code),
