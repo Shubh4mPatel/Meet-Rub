@@ -1,6 +1,6 @@
 const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
-const { approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, addFeaturedFreelancer, removeFeaturedFreelancer, suspendCreatorByAdmin, revokeCreatorSuspension, getEscrowTransactions, releaseTransfer, createFreelancerLinkedAccount, getFreelancerLinkedAccountStatus, resetFreelancerLinkedAccount } = require('../controller/razor-pay-controllers/adminController')
+const {  approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, revokeFreelancerSuspension, addFeaturedFreelancer, removeFeaturedFreelancer, suspendCreatorByAdmin, revokeCreatorSuspension, getEscrowTransactions, releaseTransfer, createFreelancerLinkedAccount, getFreelancerLinkedAccountStatus, resetFreelancerLinkedAccount } = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches, AssignFreelancerToRequest, getServicesForAdmin, editServiceForAdmin, deleteServiceForAdmin } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
 const upload = require('../../config/multer')
@@ -64,6 +64,8 @@ router.post('/reject-kyc/', requireRole(['admin']), rejectKYCByAdmin);
 router.post('/suspend-freelancer', requireRole(['admin']), suspendFreelancerByAdmin)
 
 router.post('/suspend-creator', requireRole(['admin']), suspendCreatorByAdmin)
+
+router.post('/revoke-freelancer-suspension', requireRole(['admin']), revokeFreelancerSuspension)
 
 router.post('/revoke-creator-suspension', requireRole(['admin']), revokeCreatorSuspension)
 

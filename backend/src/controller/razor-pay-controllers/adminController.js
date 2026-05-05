@@ -907,6 +907,43 @@ const revokeCreatorSuspension = async (req, res, next) => {
   }
 }
 
+const revokeFreelancerSuspension = async (req, res, next) => {
+  try {
+    const { freelancer_id } = req.body;
+
+    if (!freelancer_id) {
+      return next(new AppError('Freelancer ID is required', 400));
+    }
+
+    const { rows } = await query(
+      'SELECT freelancer_id, verification_status FROM freelancer WHERE freelancer_id = $1',
+      [freelancer_id]
+    );
+
+    if (rows.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    if (rows[0].verification_status !== 'SUSPENDED') {
+      return next(new AppError('Freelancer is not suspended', 400));
+    }
+
+    await query(
+      'UPDATE freelancer SET verification_status = $1, reason_for_suspension = NULL WHERE freelancer_id = $2',
+      ['VERIFIED', freelancer_id]
+    );
+
+    res.json({
+      message: 'Freelancer suspension revoked successfully',
+      freelancer_id,
+      verification_status: 'VERIFIED'
+    });
+  } catch (error) {
+    console.error('Revoke Freelancer suspension error:', error);
+    return next(new AppError('Failed to revoke suspension', 500));
+  }
+}
+
 // Get all escrow transactions (admin)
 const getEscrowTransactions = async (req, res, next) => {
   try {
@@ -1099,6 +1136,7 @@ module.exports = {
   approveKYCByAdmin,
   rejectKYCByAdmin,
   suspendFreelancerByAdmin,
+  revokeFreelancerSuspension,
   addFeaturedFreelancer,
   removeFeaturedFreelancer,
   suspendCreatorByAdmin,

@@ -2750,6 +2750,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
         f.created_at as joining_date,
         f.gov_id_number,
         f.verification_status,
+        f.reason_for_suspension,
         f.rating,
         f.worked_with,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
@@ -2775,7 +2776,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
       WHERE ${whereClause}
       GROUP BY f.freelancer_id, f.user_id, f.profile_image_url, f.freelancer_full_name, 
                f.phone_number, f.freelancer_email, f.created_at, f.gov_id_number, 
-               f.verification_status, f.rating, f.worked_with
+               f.verification_status, f.reason_for_suspension, f.rating, f.worked_with
       ORDER BY is_featured DESC, f.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
