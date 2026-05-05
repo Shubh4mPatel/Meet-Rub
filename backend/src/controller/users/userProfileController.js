@@ -2713,7 +2713,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
     let paramIndex = serviceTypes.length > 0 ? 2 : 1;
 
     const serviceSubquery = serviceTypes.length > 0 ? `AND s2.service_name = ANY($1::text[])` : ``;
-    const conditions = [`f.verification_status = 'VERIFIED'`];
+    const conditions = [`f.verification_status IN ('VERIFIED', 'SUSPENDED')`];
 
     if (search) {
       conditions.push(`f.freelancer_full_name ILIKE $${paramIndex}`);
