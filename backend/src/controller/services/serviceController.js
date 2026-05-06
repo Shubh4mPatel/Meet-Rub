@@ -663,6 +663,8 @@ const getServicesByFreelaner = async (req, res, next) => {
           ? `${service.min_delivery_days}-${service.max_delivery_days}`
           : null,
         thumbnail_file: service.thumbnail_file,
+        service_title: service.service_title,
+        about_service: service.about_service,
         is_active: service.is_active,
         created_at: service.created_at,
         updated_at: service.updated_at
