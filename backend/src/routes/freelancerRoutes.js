@@ -11,7 +11,7 @@ const router = express.Router();
 const { requireRole, authenticateUser } = require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
-const { getUserProfileProgress, getCreatorByUserId } = require('../controller/users/userProfileController');
+const { getUserProfileProgress, getCreatorByUserId, getCreatorByCreatorId } = require('../controller/users/userProfileController');
 const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/portfolioController");
 const { getFreelancerOverview } = require("../controller/users/freelancerOverviewController");
 const { getNiches } = require('../controller/services/serviceController');
@@ -106,6 +106,8 @@ router.post('/dispute-raise', authenticateUser, requireRole(['freelancer']), rai
 router.get('/disputes', authenticateUser, requireRole(['freelancer']), getDisputes);
 
 router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(['freelancer']), getCreatorByUserId);
+
+router.get('/get-creator-by-creator-id/:creator_id', authenticateUser, requireRole(['freelancer']), getCreatorByCreatorId);
 
 router.post('/rate-creator/:projectId', authenticateUser, requireRole(['freelancer']), rateFreelancer);
 

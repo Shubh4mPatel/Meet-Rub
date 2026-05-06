@@ -2618,6 +2618,111 @@ const getCreatorByUserId = async (req, res, next) => {
   }
 }
 
+const getCreatorByCreatorId = async (req, res, next) => {
+  logger.info("Fetching creator by creator ID");
+
+  try {
+    const creatorId = req.params?.creator_id;
+
+    // Validate creator ID parameter
+    if (!creatorId) {
+      logger.warn("Creator ID parameter is missing");
+      return next(new AppError("Creator ID is required", 400));
+    }
+
+    const { rows: creatorData } = await query(
+      `SELECT
+        creator_id,
+        first_name,
+        last_name,
+        full_name,
+        user_name,
+        phone_number,
+        email,
+        profile_image_url,
+        social_platform_type,
+        social_links,
+        niche,
+        about_me,
+        rating,
+        worked_with,
+        created_at
+      FROM creators
+      WHERE creator_id = $1`,
+      [creatorId]
+    );
+
+    // Check if creator exists
+    if (!creatorData[0]) {
+      logger.warn(`Creator not found with creator_id: ${creatorId}`);
+      return next(new AppError("Creator not found", 404));
+    }
+
+    logger.debug("Creator data fetched:", creatorData[0]);
+
+    const creator = creatorData[0];
+
+    // Generate presigned URL for profile image if it exists
+    if (creator.profile_image_url) {
+      try {
+        const profileImagePath = creator.profile_image_url;
+
+        // Extract bucket name and object key
+        // Assuming format: "bucket-name/path/to/object"
+        const firstSlashIndex = profileImagePath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = profileImagePath.substring(0, firstSlashIndex);
+          const objectName = profileImagePath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          creator.profile_image_url = signedUrl;
+        } else {
+          logger.warn(`Invalid profile image URL format: ${profileImagePath}`);
+          creator.profile_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for profile image: ${error}`);
+        creator.profile_image_url = null;
+      }
+    }
+
+    // Format response
+    const response = {
+      creator_id: creator.creator_id,
+      name: creator.full_name || `${creator.first_name || ""} ${creator.last_name || ""}`.trim(),
+      user_name: creator.user_name,
+      role: "Creator",
+      first_name: creator.first_name,
+      last_name: creator.last_name,
+      phone_number: creator.phone_number,
+      email: creator.email,
+      profile_image_url: creator.profile_image_url,
+      social_platform_type: creator.social_platform_type,
+      social_links: creator.social_links,
+      niches: creator.niche || [],
+      about_me: creator.about_me,
+      rating: creator.rating,
+      worked_with: creator.worked_with,
+      date_of_joining: creator.created_at,
+    };
+
+    logger.info(`Creator profile fetched successfully for creator_id: ${creatorId}`);
+    return res.status(200).json({
+      status: "success",
+      message: "Creator profile fetched successfully",
+      data: response,
+    });
+  } catch (error) {
+    logger.error("Error fetching creator profile:", error);
+    return next(new AppError("Failed to fetch creator profile", 500));
+  }
+}
+
 const editCreatorByAdmin = async (req, res, next) => {
   // Implementation for editing creator profile by admin goes here
 }
@@ -3985,6 +4090,7 @@ const sendContactEmailToAdmin = async (req, res, next) => {
 
 module.exports = {
   getCreatorByUserId,
+  getCreatorByCreatorId,
   getFreeLancerByUserId,
   getFreelancerForAdmin,
   getFreelancerByIdForCreator,
