@@ -3,6 +3,9 @@ const { pool: db } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const { getLogger } = require('../../../utils/logger');
 const logger = getLogger('payment-controller');
+const { createPresignedUrl } = require('../../../utils/helper');
+
+const expirySeconds = 4 * 60 * 60; // 4 hours
 
 // Create Razorpay order for service payment
 const createPaymentOrder = async (req, res, next) => {
@@ -170,6 +173,7 @@ const getMyTransactions = async (req, res, next) => {
         s.service_name,
         f.freelancer_full_name as freelancer_name,
         f.user_name as freelancer_username,
+        f.profile_image_url as freelancer_profile_image,
         c.full_name as creator_name,
         c.user_name as creator_username
       FROM transactions t
@@ -189,10 +193,37 @@ const getMyTransactions = async (req, res, next) => {
 
     const total = parseInt(countResult.rows[0].total);
 
+    // Generate presigned URLs for freelancer profile images
+    const transactionsWithSignedUrls = await Promise.all(
+      dataResult.rows.map(async (transaction) => {
+        if (transaction.freelancer_profile_image) {
+          try {
+            const parts = transaction.freelancer_profile_image.split("/");
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join("/");
+
+            const signedUrl = await createPresignedUrl(
+              bucketName,
+              objectName,
+              expirySeconds
+            );
+            transaction.freelancer_profile_image = signedUrl;
+          } catch (error) {
+            logger.error(
+              `Error generating signed URL for freelancer profile image:`,
+              error
+            );
+            transaction.freelancer_profile_image = null;
+          }
+        }
+        return transaction;
+      })
+    );
+
     return res.json({
       status: 'success',
       data: {
-        transactions: dataResult.rows,
+        transactions: transactionsWithSignedUrls,
         pagination: {
           total,
           total_pages: Math.ceil(total / limitNum),
