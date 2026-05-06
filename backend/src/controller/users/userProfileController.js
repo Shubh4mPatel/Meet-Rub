@@ -2646,7 +2646,6 @@ const getCreatorByCreatorId = async (req, res, next) => {
         about_me,
         rating,
         worked_with,
-        date_of_birth,
         created_at
       FROM creators
       WHERE creator_id = $1`,
@@ -2709,7 +2708,6 @@ const getCreatorByCreatorId = async (req, res, next) => {
       about_me: creator.about_me,
       rating: creator.rating,
       worked_with: creator.worked_with,
-      date_of_birth: creator.date_of_birth,
       date_of_joining: creator.created_at,
     };
 
