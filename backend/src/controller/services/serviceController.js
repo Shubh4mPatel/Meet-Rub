@@ -653,6 +653,9 @@ const getServicesByFreelaner = async (req, res, next) => {
         };
       }
 
+      // Debug: Log service_title and about_service values
+      logger.debug(`Service ${service.id}: service_title=${service.service_title}, about_service=${service.about_service}`);
+
       // Add service details to service_options array
       acc[serviceName].service_options.push({
         id: service.id,
@@ -677,6 +680,9 @@ const getServicesByFreelaner = async (req, res, next) => {
     const formattedServices = Object.values(groupedServices);
 
     logger.info(`Services grouped by name: ${formattedServices.length} unique services`);
+    
+    // Debug: Log the complete formatted response
+    logger.debug("Formatted services response:", JSON.stringify(formattedServices, null, 2));
 
     return res.status(200).json({
       status: "success",
