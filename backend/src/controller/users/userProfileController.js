@@ -275,8 +275,13 @@ const getUserProfile = async (req, res, next) => {
 // Validation Schemas
 const freelancerGovInfoSchema = Joi.object({
   type: Joi.string().valid("govtId").required(),
-  gov_id_type: Joi.string().required(),
-  gov_id_number: Joi.string().required(),
+  userData: Joi.alternatives().try(
+    Joi.string().required(), // Accept JSON string
+    Joi.object({              // Or parsed object
+      gov_id_type: Joi.string().required(),
+      gov_id_number: Joi.string().required(),
+    }).required()
+  ).required(),
 });
 
 const freelancerPanCardSchema = Joi.object({
@@ -299,25 +304,35 @@ const freelancerPanCardSchema = Joi.object({
 
 const freelancerBankDetailsSchema = Joi.object({
   type: Joi.string().valid("bankDetails").required(),
-  bank_account_no: Joi.string().required(),
-  bank_name: Joi.string().required(),
-  bank_ifsc_code: Joi.string().required(),
-  bank_branch_name: Joi.string().required(),
-  bank_account_holder_name: Joi.string().required(),
+  userData: Joi.alternatives().try(
+    Joi.string().required(), // Accept JSON string
+    Joi.object({              // Or parsed object
+      bank_account_no: Joi.string().required(),
+      bank_name: Joi.string().required(),
+      bank_ifsc_code: Joi.string().required(),
+      bank_branch_name: Joi.string().required(),
+      bank_account_holder_name: Joi.string().required(),
+    }).required()
+  ).required(),
 });
 
 const freelancerBasicInfoSchema = Joi.object({
   type: Joi.string().valid("basicInfo").required(),
-  first_name: Joi.string().required(),
-  last_name: Joi.string().required(),
-  email: Joi.string().email().required(),
-  freelancerFullName: Joi.string().required(),
-  dateOfBirth: Joi.string().required(),
-  about_me: Joi.string().optional().allow(""),
-  phoneNumber: Joi.string()
-    .pattern(/^\+?[1-9]\d{1,14}$/)
-    .required(),
-  profileTitle: Joi.string().required()
+  userData: Joi.alternatives().try(
+    Joi.string().required(), // Accept JSON string
+    Joi.object({              // Or parsed object
+      first_name: Joi.string().required(),
+      last_name: Joi.string().required(),
+      email: Joi.string().email().required(),
+      freelancerFullName: Joi.string().required(),
+      dateOfBirth: Joi.string().required(),
+      about_me: Joi.string().optional().allow(""),
+      phoneNumber: Joi.string()
+        .pattern(/^\+?[1-9]\d{1,14}$/)
+        .required(),
+      profileTitle: Joi.string().required()
+    }).required()
+  ).required(),
 });
 
 const ProfileImageSchema = Joi.object({
@@ -619,13 +634,27 @@ const editProfile = async (req, res, next) => {
       if (type === "bankDetails") {
         logger.info("Updating Freelancer Bank Details");
 
-        const {
-          bank_account_no,
-          bank_name,
-          bank_ifsc_code,
-          bank_branch_name,
-          bank_account_holder_name,
-        } = req.body;
+        // Parse userData JSON string
+        let bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, bank_account_holder_name;
+        try {
+          const userData = typeof req.body.userData === 'string' 
+            ? JSON.parse(req.body.userData) 
+            : req.body.userData;
+          
+          if (!userData || !userData.bank_account_no || !userData.bank_name || !userData.bank_ifsc_code || !userData.bank_branch_name || !userData.bank_account_holder_name) {
+            logger.warn("Missing required fields in userData");
+            return next(new AppError("All bank details fields are required in userData", 400));
+          }
+          
+          bank_account_no = userData.bank_account_no;
+          bank_name = userData.bank_name;
+          bank_ifsc_code = userData.bank_ifsc_code;
+          bank_branch_name = userData.bank_branch_name;
+          bank_account_holder_name = userData.bank_account_holder_name;
+        } catch (error) {
+          logger.error("Failed to parse userData:", error);
+          return next(new AppError("Invalid userData format. Must be valid JSON", 400));
+        }
 
         // Razorpay validation: bank account number must be 5-35 characters
         if (bank_account_no && (bank_account_no.length < 5 || bank_account_no.length > 35)) {
@@ -691,7 +720,24 @@ const editProfile = async (req, res, next) => {
           return next(new AppError("Your government ID is currently under review and cannot be changed", 403));
         }
 
-        const { gov_id_type, gov_id_number } = req.body;
+        // Parse userData JSON string
+        let gov_id_type, gov_id_number;
+        try {
+          const userData = typeof req.body.userData === 'string' 
+            ? JSON.parse(req.body.userData) 
+            : req.body.userData;
+          
+          if (!userData || !userData.gov_id_type || !userData.gov_id_number) {
+            logger.warn("Missing required fields in userData");
+            return next(new AppError("gov_id_type and gov_id_number are required in userData", 400));
+          }
+          
+          gov_id_type = userData.gov_id_type;
+          gov_id_number = userData.gov_id_number;
+        } catch (error) {
+          logger.error("Failed to parse userData:", error);
+          return next(new AppError("Invalid userData format. Must be valid JSON", 400));
+        }
 
         // Validate only single file upload
         if (req.files && Array.isArray(req.files) && req.files.length > 1) {
@@ -912,16 +958,31 @@ const editProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         // ✅ FREELANCER BASIC DETAILS UPDATE
         logger.info("Updating Freelancer Basic Info");
-        const {
-          freelancerFullName,
-          email,
-          first_name,
-          last_name,
-          dateOfBirth,
-          phoneNumber,
-          profileTitle,
-          about_me
-        } = req.body;
+        
+        // Parse userData JSON string
+        let freelancerFullName, email, first_name, last_name, dateOfBirth, phoneNumber, profileTitle, about_me;
+        try {
+          const userData = typeof req.body.userData === 'string' 
+            ? JSON.parse(req.body.userData) 
+            : req.body.userData;
+          
+          if (!userData || !userData.first_name || !userData.last_name || !userData.email || !userData.freelancerFullName || !userData.dateOfBirth || !userData.phoneNumber || !userData.profileTitle) {
+            logger.warn("Missing required fields in userData");
+            return next(new AppError("All required basic info fields must be provided in userData", 400));
+          }
+          
+          freelancerFullName = userData.freelancerFullName;
+          email = userData.email;
+          first_name = userData.first_name;
+          last_name = userData.last_name;
+          dateOfBirth = userData.dateOfBirth;
+          phoneNumber = userData.phoneNumber;
+          profileTitle = userData.profileTitle;
+          about_me = userData.about_me || '';
+        } catch (error) {
+          logger.error("Failed to parse userData:", error);
+          return next(new AppError("Invalid userData format. Must be valid JSON", 400));
+        }
 
         // Razorpay validation: phone number must be exactly 10 digits (after stripping country code)
         if (phoneNumber) {
