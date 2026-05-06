@@ -286,6 +286,7 @@ const getDisputes = async (req, res, next) => {
     const disputes = await Promise.all(
       dataResult.rows.map(async (d) => ({
         ...d,
+        creator_id: d.creator_id,
         creator_avatar: await signAvatarUrl(d.creator_avatar),
         freelancer_avatar: await signAvatarUrl(d.freelancer_avatar),
       }))
