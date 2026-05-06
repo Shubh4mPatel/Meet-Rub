@@ -230,6 +230,7 @@ const getDisputes = async (req, res, next) => {
       SELECT
         d.id                       AS dispute_id,
         d.project_id,
+        d.creator_id,
         d.freelancer_id,
         d.reason_of_dispute,
         d.description              AS dispute_description,
@@ -286,7 +287,6 @@ const getDisputes = async (req, res, next) => {
     const disputes = await Promise.all(
       dataResult.rows.map(async (d) => ({
         ...d,
-        creator_id: d.creator_id,
         creator_avatar: await signAvatarUrl(d.creator_avatar),
         freelancer_avatar: await signAvatarUrl(d.freelancer_avatar),
       }))
