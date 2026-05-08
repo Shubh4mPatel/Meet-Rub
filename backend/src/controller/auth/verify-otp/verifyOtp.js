@@ -193,7 +193,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
       }
 
       if (role === "freelancer") {
-        const {
+        let {
           firstName,
           lastName,
           dateOfBirth,
@@ -210,6 +210,11 @@ const verifyOtpAndProcess = async (req, res, next) => {
           state,
           postalCode,
         } = req.body;
+
+        // Convert PAN to uppercase for validation
+        if (panCardNumber) {
+          panCardNumber = panCardNumber.toUpperCase().trim();
+        }
 
         // Parse JSON strings from FormData
         const parsedServiceOffered = JSON.parse(serviceOffered);
