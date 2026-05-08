@@ -327,7 +327,7 @@ const freelancerBasicInfoSchema = Joi.object({
   phoneNumber: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .required(),
-  profileTitle: Joi.string().required()
+  profileTitle: Joi.string().optional().allow("")
 });
 
 const ProfileImageSchema = Joi.object({
