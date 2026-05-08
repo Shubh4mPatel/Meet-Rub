@@ -978,15 +978,23 @@ const editProfile = async (req, res, next) => {
 
           // Check if Razorpay linked account exists and prevent phone number change
           const { rows: razorpayCheck } = await query(
-            'SELECT razorpay_linked_account_id FROM freelancer WHERE user_id = $1',
+            'SELECT razorpay_linked_account_id, phone_number FROM freelancer WHERE user_id = $1',
             [user.user_id]
           );
 
+          // Only block if Razorpay account exists AND phone number is actually changing
           if (razorpayCheck[0]?.razorpay_linked_account_id) {
-            return next(new AppError(
-              'Cannot update phone number after Razorpay account is created. Contact admin to reset your Razorpay account first.',
-              403
-            ));
+            const currentPhone = razorpayCheck[0].phone_number;
+            // Compare phone numbers (normalize both by removing non-digits)
+            const currentPhoneDigits = currentPhone ? currentPhone.replace(/\D/g, '') : '';
+            const newPhoneDigits = phoneNumber.replace(/\D/g, '');
+            
+            if (currentPhoneDigits !== newPhoneDigits) {
+              return next(new AppError(
+                'Cannot update phone number after Razorpay account is created. Contact admin to reset your Razorpay account first.',
+                403
+              ));
+            }
           }
         }
 
