@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS public.services
     thumbnail_file text COLLATE pg_catalog."default",
     min_delivery_days integer,
     max_delivery_days integer,
+    service_title character varying(255) COLLATE pg_catalog."default",
+    about_service text COLLATE pg_catalog."default",
     CONSTRAINT services_pkey PRIMARY KEY (id),
     CONSTRAINT services_freelancer_id_fkey FOREIGN KEY (freelancer_id)
         REFERENCES public.freelancer (freelancer_id) MATCH SIMPLE
@@ -28,6 +30,14 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.services
     OWNER to postgres;
+-- Index: idx_services_name_price
+
+-- DROP INDEX IF EXISTS public.idx_services_name_price;
+
+CREATE INDEX IF NOT EXISTS idx_services_name_price
+    ON public.services USING btree
+    (service_name COLLATE pg_catalog."default" ASC NULLS LAST, freelancer_id ASC NULLS LAST)
+    TABLESPACE pg_default;
 
 
     -- Table: public.admin

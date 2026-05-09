@@ -893,6 +893,13 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     logger.debug(`Total suggested freelancer IDs: ${suggestedFreelancerIds.length}`);
 
     // Build the query — return all suggested freelancers by ID (no service matching filter)
+    // For this endpoint, we match by desiredService from the request
+    // Fallback to freelancer.profile_title if service_title is NULL
+    const serviceFilter = desiredService ? `AND s2.service_name = '${desiredService}'` : '';
+    const profileTitleSubquery = desiredService
+      ? `COALESCE((SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceFilter} ORDER BY s2.created_at DESC LIMIT 1), f.profile_title)`
+      : "f.profile_title";
+
     let queryText = `
       SELECT
         f.freelancer_id,
@@ -900,13 +907,12 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
-        f.profile_title,
+        ${profileTitleSubquery} as profile_title,
         f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist,
-        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as service_banner
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1

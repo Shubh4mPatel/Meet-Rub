@@ -1168,11 +1168,17 @@ const getAllFreelancers = async (req, res, next) => {
           AND ff.is_active = true`
       : ``;
 
+    // Conditional profile_title: use service_title when filtered, else freelancer.profile_title
+    // Fallback to freelancer.profile_title if service_title is NULL
+    const profileTitleSubquery = serviceTypes.length > 0
+      ? `COALESCE((SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1), f.profile_title)`
+      : "f.profile_title";
+
     let queryText = `
       SELECT
         f.freelancer_id,
         f.freelancer_full_name,
-        f.profile_title,
+        ${profileTitleSubquery} as profile_title,
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
@@ -1180,7 +1186,6 @@ const getAllFreelancers = async (req, res, next) => {
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
         (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
         ${featuredSelect}
       FROM freelancer f
@@ -1930,11 +1935,17 @@ const getWishlistFreelancers = async (req, res, next) => {
     const maxDays = req.query.maxDays ? parseInt(req.query.maxDays) : null;
 
     // Build the query based on filters
+    // Conditional profile_title: use service_title when filtered, else freelancer.profile_title
+    // Fallback to freelancer.profile_title if service_title is NULL
+    const profileTitleSubquery = serviceTypes.length > 0
+      ? "COALESCE((SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1), f.profile_title)"
+      : "f.profile_title";
+
     let queryText = `
       SELECT
         f.freelancer_id,
         f.freelancer_full_name,
-        f.profile_title,
+        ${profileTitleSubquery} as profile_title,
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
@@ -1943,7 +1954,6 @@ const getWishlistFreelancers = async (req, res, next) => {
         MIN(s.service_price) as lowest_price,
         w.created_at as wishlist_added_at,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
         (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
       FROM freelancer f
       INNER JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
@@ -3359,11 +3369,18 @@ const getFreelancerForSuggestion = async (req, res, next) => {
 
     // Build the query based on filters
     const serviceSubquery = serviceTypes.length > 0 ? `AND s2.service_name = ANY($1::text[])` : ``;
+
+    // Conditional profile_title: use service_title when filtered, else freelancer.profile_title
+    // Fallback to freelancer.profile_title if service_title is NULL
+    const profileTitleSubquery = serviceTypes.length > 0
+      ? `COALESCE((SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1), f.profile_title)`
+      : "f.profile_title";
+
     let queryText = `
       SELECT
         f.freelancer_id,
         f.freelancer_full_name,
-        f.profile_title,
+        ${profileTitleSubquery} as profile_title,
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
@@ -3371,7 +3388,6 @@ const getFreelancerForSuggestion = async (req, res, next) => {
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
         (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
       FROM freelancer f
       LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
@@ -3892,11 +3908,16 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     logger.info("[getAllFreelancers] Featured join active?", { hasFeatured });
 
     // --- Main query ---
+    // Conditional profile_title: use service_title when filtered, else freelancer.profile_title
+    const profileTitleSelect = serviceTypes.length > 0
+      ? "COALESCE(ls.service_title, f.profile_title) AS profile_title"
+      : "f.profile_title";
+
     const mainQuery = `
       SELECT
         f.freelancer_id,
         f.freelancer_full_name,
-        f.profile_title,
+        ${profileTitleSelect},
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
@@ -3905,7 +3926,6 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         MIN(s.service_price) AS lowest_price,
         (w.freelancer_id IS NOT NULL) AS in_wishlist,
         ls.thumbnail_file AS service_banner,
-        ls.service_name AS matched_service_title,
         ls.min_delivery_days,
         ls.max_delivery_days
         ${featuredSelect}
@@ -3913,7 +3933,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       JOIN services s ON f.freelancer_id = s.freelancer_id
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       LEFT JOIN LATERAL (
-        SELECT s2.thumbnail_file, s2.service_name, s2.min_delivery_days, s2.max_delivery_days
+        SELECT s2.thumbnail_file, s2.service_title, s2.min_delivery_days, s2.max_delivery_days
         FROM services s2
         WHERE s2.freelancer_id = f.freelancer_id
           ${lateralServiceFilter}
@@ -3928,7 +3948,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         f.freelancer_id, f.freelancer_full_name, f.profile_title,
         f.profile_image_url, f.freelancer_thumbnail_image, f.rating,
         f.worked_with, w.freelancer_id,
-        ls.thumbnail_file, ls.service_name, ls.min_delivery_days, ls.max_delivery_days
+        ls.thumbnail_file, ls.service_title, ls.min_delivery_days, ls.max_delivery_days
       ORDER BY ${featuredOrderBy}${wishlistOrderBy}${orderByClause}
       LIMIT $${paginationIdx} OFFSET $${paginationIdx + 1}
     `;
