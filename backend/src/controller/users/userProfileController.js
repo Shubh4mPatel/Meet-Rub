@@ -3848,9 +3848,14 @@ const getAllfreelancersForcreator = async (req, res, next) => {
 
     // --- Build sort clause ---
     let orderByClause;
+    let wishlistOrderBy = "(w.freelancer_id IS NOT NULL) DESC, ";
+
     switch (sortBy) {
       case "toprated":
-        orderByClause = "f.rating DESC NULLS LAST, f.freelancer_full_name";
+        // Top rated: sort by rating, then worked_with count, then name
+        // Don't prioritize wishlist for toprated sorting
+        orderByClause = "f.rating DESC NULLS LAST, f.worked_with DESC, f.freelancer_full_name";
+        wishlistOrderBy = ""; // Remove wishlist priority for toprated
         break;
       case "newest":
       default:
@@ -3920,7 +3925,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         f.profile_image_url, f.freelancer_thumbnail_image, f.rating,
         f.worked_with, w.freelancer_id,
         ls.thumbnail_file, ls.service_name, ls.min_delivery_days, ls.max_delivery_days
-      ORDER BY ${featuredOrderBy}(w.freelancer_id IS NOT NULL) DESC, ${orderByClause}
+      ORDER BY ${featuredOrderBy}${wishlistOrderBy}${orderByClause}
       LIMIT $${paginationIdx} OFFSET $${paginationIdx + 1}
     `;
 
