@@ -1234,12 +1234,16 @@ const getAllFreelancers = async (req, res, next) => {
     switch (sortBy) {
       case "toprated":
         orderByClause =
-          ` ORDER BY ${featuredOrderBy}f.rating DESC NULLS LAST, f.freelancer_full_name`;
+          ` ORDER BY ${featuredOrderBy}f.rating DESC NULLS LAST, f.worked_with DESC, f.freelancer_full_name`;
+        break;
+      case "name":
+        orderByClause =
+          ` ORDER BY ${featuredOrderBy}f.freelancer_full_name`;
         break;
       case "newest":
       default:
         orderByClause =
-          ` ORDER BY ${featuredOrderBy}MAX(s.created_at) DESC NULLS LAST, f.freelancer_full_name`;
+          ` ORDER BY ${featuredOrderBy}f.created_at DESC NULLS LAST, f.freelancer_full_name`;
         break;
     }
 
@@ -1996,12 +2000,16 @@ const getWishlistFreelancers = async (req, res, next) => {
     switch (sortBy) {
       case "toprated":
         orderByClause =
-          " ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name";
+          " ORDER BY f.rating DESC NULLS LAST, f.worked_with DESC, f.freelancer_full_name";
+        break;
+      case "name":
+        orderByClause =
+          " ORDER BY f.freelancer_full_name";
         break;
       case "newest":
       default:
         orderByClause =
-          " ORDER BY w.created_at DESC NULLS LAST, f.freelancer_full_name";
+          " ORDER BY f.created_at DESC NULLS LAST, f.freelancer_full_name";
         break;
     }
 
@@ -3415,12 +3423,16 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     switch (sortBy) {
       case "toprated":
         orderByClause =
-          " ORDER BY f.rating DESC NULLS LAST, f.freelancer_full_name";
+          " ORDER BY f.rating DESC NULLS LAST, f.worked_with DESC, f.freelancer_full_name";
+        break;
+      case "name":
+        orderByClause =
+          " ORDER BY f.freelancer_full_name";
         break;
       case "newest":
       default:
         orderByClause =
-          " ORDER BY MAX(s.created_at) DESC NULLS LAST, f.freelancer_full_name";
+          " ORDER BY f.created_at DESC NULLS LAST, f.freelancer_full_name";
         break;
     }
 
@@ -3838,18 +3850,20 @@ const getAllfreelancersForcreator = async (req, res, next) => {
 
     // --- Build sort clause ---
     let orderByClause;
-    let wishlistOrderBy = "(w.freelancer_id IS NOT NULL) DESC, ";
+    let wishlistOrderBy = ""; // No wishlist priority for any sort
 
     switch (sortBy) {
       case "toprated":
         // Top rated: sort by rating, then worked_with count, then name
-        // Don't prioritize wishlist for toprated sorting
         orderByClause = "f.rating DESC NULLS LAST, f.worked_with DESC, f.freelancer_full_name";
-        wishlistOrderBy = ""; // Remove wishlist priority for toprated
+        break;
+      case "name":
+        orderByClause = "f.freelancer_full_name";
         break;
       case "newest":
       default:
-        orderByClause = "MAX(s.created_at) DESC NULLS LAST, f.freelancer_full_name";
+        // Newest: sort by freelancer joining date (created_at)
+        orderByClause = "f.created_at DESC NULLS LAST, f.freelancer_full_name";
         break;
     }
 

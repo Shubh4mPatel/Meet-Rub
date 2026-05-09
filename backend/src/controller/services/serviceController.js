@@ -864,7 +864,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
 
     // Search and filter parameters
     const searchTerm = req.query.search?.trim() || '';
-    const sortBy = req.query.sortBy || 'rating'; // rating, name
+    const sortBy = req.query.sortBy || 'rating'; // rating, name, newest, toprated
     const sortOrder = req.query.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
     // First, get the suggested freelancer IDs for this request
@@ -935,7 +935,13 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     let orderByClause = '';
     switch (sortBy) {
       case 'name':
-        orderByClause = `ORDER BY f.freelancer_full_name ${sortOrder}`;
+        orderByClause = `ORDER BY f.freelancer_full_name`;
+        break;
+      case 'toprated':
+        orderByClause = `ORDER BY f.rating DESC NULLS LAST, f.worked_with DESC, f.freelancer_full_name`;
+        break;
+      case 'newest':
+        orderByClause = `ORDER BY f.created_at DESC NULLS LAST, f.freelancer_full_name`;
         break;
       case 'rating':
       default:
@@ -1012,18 +1018,12 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
       })
     );
 
-    // Sort to put wishlisted freelancers at the top
-    const sortedFreelancers = freelancersWithSignedUrls.sort((a, b) => {
-      if (a.in_wishlist && !b.in_wishlist) return -1;
-      if (!a.in_wishlist && b.in_wishlist) return 1;
-      return 0;
-    });
-
-    logger.info(`Suggestions fetched successfully. Total: ${totalCount}, Wishlisted: ${sortedFreelancers.filter(f => f.in_wishlist).length}`);
+    // Return freelancers in the order specified by sortBy query param (no wishlist priority)
+    logger.info(`Suggestions fetched successfully. Total: ${totalCount}, Wishlisted: ${freelancersWithSignedUrls.filter(f => f.in_wishlist).length}`);
     return res.status(200).json({
       status: "success",
       message: "Suggestions fetched successfully",
-      data: sortedFreelancers,
+      data: freelancersWithSignedUrls,
       pagination: {
         currentPage: page,
         totalPages: Math.ceil(totalCount / limit),
