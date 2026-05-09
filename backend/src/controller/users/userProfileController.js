@@ -113,7 +113,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Freelancer Basic Info");
         const { rows } = await query(
-          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, profile_title, freelancer_email,about_me,created_at FROM freelancer WHERE user_id = $1",
+          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, freelancer_email,about_me,created_at FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -126,7 +126,7 @@ const getUserProfile = async (req, res, next) => {
         return res.status(200).json({
           status: "success",
           message: "Freelancer basic info fetched successfully",
-          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name, user_name: rows[0].user_name, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, email: rows[0].freelancer_email, about_me: rows[0].about_me, joined_at: rows[0].created_at },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name, user_name: rows[0].user_name, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, email: rows[0].freelancer_email, about_me: rows[0].about_me, joined_at: rows[0].created_at },
         });
       }
 
@@ -318,21 +318,16 @@ const freelancerBankDetailsSchema = Joi.object({
 
 const freelancerBasicInfoSchema = Joi.object({
   type: Joi.string().valid("basicInfo").required(),
-  userData: Joi.alternatives().try(
-    Joi.string().required(), // Accept JSON string
-    Joi.object({              // Or parsed object
-      first_name: Joi.string().required(),
-      last_name: Joi.string().required(),
-      email: Joi.string().email().required(),
-      freelancerFullName: Joi.string().required(),
-      dateOfBirth: Joi.string().required(),
-      about_me: Joi.string().optional().allow(""),
-      phoneNumber: Joi.string()
-        .pattern(/^\+?[1-9]\d{1,14}$/)
-        .required(),
-      profileTitle: Joi.string().required()
-    }).required()
-  ).required(),
+  first_name: Joi.string().required(),
+  last_name: Joi.string().required(),
+  email: Joi.string().email().required(),
+  freelancerFullName: Joi.string().required(),
+  dateOfBirth: Joi.string().required(),
+  about_me: Joi.string().optional().allow(""),
+  phoneNumber: Joi.string()
+    .pattern(/^\+?[1-9]\d{1,14}$/)
+    .required(),
+  profileTitle: Joi.string().optional().allow("")
 });
 
 const ProfileImageSchema = Joi.object({
@@ -959,30 +954,17 @@ const editProfile = async (req, res, next) => {
         // ✅ FREELANCER BASIC DETAILS UPDATE
         logger.info("Updating Freelancer Basic Info");
         
-        // Parse userData JSON string
-        let freelancerFullName, email, first_name, last_name, dateOfBirth, phoneNumber, profileTitle, about_me;
-        try {
-          const userData = typeof req.body.userData === 'string' 
-            ? JSON.parse(req.body.userData) 
-            : req.body.userData;
-          
-          if (!userData || !userData.first_name || !userData.last_name || !userData.email || !userData.freelancerFullName || !userData.dateOfBirth || !userData.phoneNumber || !userData.profileTitle) {
-            logger.warn("Missing required fields in userData");
-            return next(new AppError("All required basic info fields must be provided in userData", 400));
-          }
-          
-          freelancerFullName = userData.freelancerFullName;
-          email = userData.email;
-          first_name = userData.first_name;
-          last_name = userData.last_name;
-          dateOfBirth = userData.dateOfBirth;
-          phoneNumber = userData.phoneNumber;
-          profileTitle = userData.profileTitle;
-          about_me = userData.about_me || '';
-        } catch (error) {
-          logger.error("Failed to parse userData:", error);
-          return next(new AppError("Invalid userData format. Must be valid JSON", 400));
-        }
+        // Extract fields directly from req.body
+        const {
+          freelancerFullName,
+          email,
+          first_name,
+          last_name,
+          dateOfBirth,
+          phoneNumber,
+          profileTitle,
+          about_me = ''
+        } = req.body;
 
         // Razorpay validation: phone number must be exactly 10 digits (after stripping country code)
         if (phoneNumber) {
@@ -996,15 +978,23 @@ const editProfile = async (req, res, next) => {
 
           // Check if Razorpay linked account exists and prevent phone number change
           const { rows: razorpayCheck } = await query(
-            'SELECT razorpay_linked_account_id FROM freelancer WHERE user_id = $1',
+            'SELECT razorpay_linked_account_id, phone_number FROM freelancer WHERE user_id = $1',
             [user.user_id]
           );
 
+          // Only block if Razorpay account exists AND phone number is actually changing
           if (razorpayCheck[0]?.razorpay_linked_account_id) {
-            return next(new AppError(
-              'Cannot update phone number after Razorpay account is created. Contact admin to reset your Razorpay account first.',
-              403
-            ));
+            const currentPhone = razorpayCheck[0].phone_number;
+            // Compare phone numbers (normalize both by removing non-digits)
+            const currentPhoneDigits = currentPhone ? currentPhone.replace(/\D/g, '') : '';
+            const newPhoneDigits = phoneNumber.replace(/\D/g, '');
+            
+            if (currentPhoneDigits !== newPhoneDigits) {
+              return next(new AppError(
+                'Cannot update phone number after Razorpay account is created. Contact admin to reset your Razorpay account first.',
+                403
+              ));
+            }
           }
         }
 
