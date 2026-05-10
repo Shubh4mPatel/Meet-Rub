@@ -327,7 +327,11 @@ const freelancerBasicInfoSchema = Joi.object({
   phoneNumber: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .required(),
-  profileTitle: Joi.string().optional().allow("")
+  profileTitle: Joi.string().optional().allow(""),
+  street_address: Joi.string().optional().allow(""),
+  city: Joi.string().optional().allow(""),
+  state: Joi.string().optional().allow(""),
+  postal_code: Joi.string().optional().allow("")
 });
 
 const ProfileImageSchema = Joi.object({
@@ -963,7 +967,11 @@ const editProfile = async (req, res, next) => {
           dateOfBirth,
           phoneNumber,
           profileTitle,
-          about_me = ''
+          about_me = '',
+          street_address = '',
+          city = '',
+          state = '',
+          postal_code = ''
         } = req.body;
 
         // Razorpay validation: phone number must be exactly 10 digits (after stripping country code)
@@ -1002,9 +1010,9 @@ const editProfile = async (req, res, next) => {
         await query("BEGIN");
         try {
           const { rows } = await query(
-            `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, first_name=$5, last_name=$6, freelancer_email=$7, about_me=$8 WHERE user_id=$9
-             RETURNING freelancer_full_name, first_name, last_name, freelancer_email, date_of_birth, phone_number, profile_title, about_me, created_at`,
-            [freelancerFullName, dateOfBirth, phoneNumber, profileTitle, first_name, last_name, email, about_me, user.user_id]
+            `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, first_name=$5, last_name=$6, freelancer_email=$7, about_me=$8, street_address=$10, city=$11, state=$12, postal_code=$13 WHERE user_id=$9
+             RETURNING freelancer_full_name, first_name, last_name, freelancer_email, date_of_birth, phone_number, profile_title, about_me, created_at, street_address, city, state, postal_code`,
+            [freelancerFullName, dateOfBirth, phoneNumber, profileTitle, first_name, last_name, email, about_me, user.user_id, street_address, city, state, postal_code]
           );
 
           // Commit transaction
@@ -1013,7 +1021,7 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Profile updated successfully",
-            data: { full_name: rows[0].freelancer_full_name, first_name: rows[0].first_name, last_name: rows[0].last_name, email: rows[0].freelancer_email, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, about_me: rows[0].about_me, joined_at: rows[0].created_at },
+            data: { full_name: rows[0].freelancer_full_name, first_name: rows[0].first_name, last_name: rows[0].last_name, email: rows[0].freelancer_email, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, about_me: rows[0].about_me, joined_at: rows[0].created_at, street_address: rows[0].street_address, city: rows[0].city, state: rows[0].state, postal_code: rows[0].postal_code },
           });
         } catch (error) {
           await query("ROLLBACK");
