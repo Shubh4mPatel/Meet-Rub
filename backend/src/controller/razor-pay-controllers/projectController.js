@@ -1202,10 +1202,10 @@ const rejectProject = async (req, res, next) => {
       [projectId]
     );
 
-    // Create dispute
+    // Create dispute with 'rejected' status (trigger will auto-set is_rejected=true)
     const { rows: disputeResult } = await client.query(
-      `INSERT INTO disputes (creator_id, freelancer_id, reason_of_dispute, description, raised_by, project_id)
-       VALUES ($1, $2, $3, $4, 'creator', $5)
+      `INSERT INTO disputes (creator_id, freelancer_id, reason_of_dispute, description, raised_by, project_id, status)
+       VALUES ($1, $2, $3, $4, 'creator', $5, 'rejected')
        RETURNING id`,
       [creatorId, project.freelancer_id, reason_of_dispute, description || null, projectId]
     );

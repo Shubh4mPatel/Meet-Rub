@@ -1062,7 +1062,7 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
     const orderByClause = sortField === 'creator_name' ? `c.full_name ${sortOrder}` : `sr.${sortField} ${sortOrder}`;
 
     const filterParams = [];
-    const conditions = [`sr.status NOT IN ('assigned','completed')`];
+    const conditions = [];
 
     if (searchTerm) {
       filterParams.push(`%${searchTerm}%`);
@@ -1077,7 +1077,7 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
       conditions.push(`sr.created_at < ($${filterParams.length}::date + INTERVAL '1 day')`);
     }
 
-    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countResult = await query(
       `SELECT COUNT(*) FROM service_requests sr
@@ -1215,6 +1215,12 @@ const AssignFreelancerToRequest = async (req, res, next) => {
          updated_at = $6
        RETURNING *`,
       [requestId, freelancerIds, adminNotes || null, adminId, new Date().toISOString(), new Date().toISOString()]
+    );
+
+    // Mark service request as completed
+    await query(
+      `UPDATE service_requests SET status = 'completed', updated_at = NOW() WHERE request_id = $1`,
+      [requestId]
     );
 
     logger.info(`Freelancers assigned to request ${requestId} successfully`);

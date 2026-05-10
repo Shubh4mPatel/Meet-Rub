@@ -319,6 +319,7 @@ CREATE TABLE IF NOT EXISTS public.disputes
     raised_by text COLLATE pg_catalog."default" NOT NULL,
     admin_id integer,
     project_id integer,
+    is_rejected boolean DEFAULT false,
     CONSTRAINT disputes_pkey PRIMARY KEY (id),
     CONSTRAINT fk_admin FOREIGN KEY (admin_id)
         REFERENCES public.admin (id) MATCH SIMPLE
@@ -333,6 +334,7 @@ CREATE TABLE IF NOT EXISTS public.disputes
         ON UPDATE NO ACTION
         ON DELETE CASCADE,
     CONSTRAINT disputes_raised_by_check CHECK (raised_by = ANY (ARRAY['creator'::text, 'freelancer'::text])),
+    CONSTRAINT disputes_status_check CHECK (status = ANY (ARRAY['pending'::text, 'resolved'::text, 'rejected'::text, 'in_review'::text])),
     CONSTRAINT disputes_reason_check CHECK (reason_of_dispute = ANY (ARRAY[
         'Partial Work Done',
         'Report Abuse',
@@ -349,6 +351,35 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.disputes
     OWNER to postgres;
+
+-- Trigger function to auto-set is_rejected when creator rejects
+CREATE OR REPLACE FUNCTION set_dispute_rejected()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- If status is 'rejected' and raised_by is 'creator', set is_rejected to true
+    IF NEW.status = 'rejected' AND NEW.raised_by = 'creator' THEN
+        NEW.is_rejected := true;
+    END IF;
+
+    -- Update the updated_at timestamp
+    NEW.updated_at := now();
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger
+DROP TRIGGER IF EXISTS trigger_set_dispute_rejected ON public.disputes;
+CREATE TRIGGER trigger_set_dispute_rejected
+    BEFORE INSERT OR UPDATE ON public.disputes
+    FOR EACH ROW
+    EXECUTE FUNCTION set_dispute_rejected();
+
+-- Index for better query performance on common lookups
+CREATE INDEX IF NOT EXISTS idx_disputes_status ON public.disputes(status);
+CREATE INDEX IF NOT EXISTS idx_disputes_creator_id ON public.disputes(creator_id);
+CREATE INDEX IF NOT EXISTS idx_disputes_freelancer_id ON public.disputes(freelancer_id);
+CREATE INDEX IF NOT EXISTS idx_disputes_project_id ON public.disputes(project_id);
 
 
     -- Table: public.freelancer
