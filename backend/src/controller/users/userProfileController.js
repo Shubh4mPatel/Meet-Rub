@@ -113,7 +113,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Freelancer Basic Info");
         const { rows } = await query(
-          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, freelancer_email,about_me,created_at FROM freelancer WHERE user_id = $1",
+          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, freelancer_email,about_me,created_at, street_address, city, state, postal_code FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -126,7 +126,7 @@ const getUserProfile = async (req, res, next) => {
         return res.status(200).json({
           status: "success",
           message: "Freelancer basic info fetched successfully",
-          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name, user_name: rows[0].user_name, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, email: rows[0].freelancer_email, about_me: rows[0].about_me, joined_at: rows[0].created_at },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name, user_name: rows[0].user_name, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, email: rows[0].freelancer_email, about_me: rows[0].about_me, joined_at: rows[0].created_at, street_address: rows[0].street_address, city: rows[0].city, state: rows[0].state, postal_code: rows[0].postal_code },
         });
       }
 
@@ -632,15 +632,15 @@ const editProfile = async (req, res, next) => {
         // Parse userData JSON string
         let bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, bank_account_holder_name;
         try {
-          const userData = typeof req.body.userData === 'string' 
-            ? JSON.parse(req.body.userData) 
+          const userData = typeof req.body.userData === 'string'
+            ? JSON.parse(req.body.userData)
             : req.body.userData;
-          
+
           if (!userData || !userData.bank_account_no || !userData.bank_name || !userData.bank_ifsc_code || !userData.bank_branch_name || !userData.bank_account_holder_name) {
             logger.warn("Missing required fields in userData");
             return next(new AppError("All bank details fields are required in userData", 400));
           }
-          
+
           bank_account_no = userData.bank_account_no;
           bank_name = userData.bank_name;
           bank_ifsc_code = userData.bank_ifsc_code;
@@ -718,15 +718,15 @@ const editProfile = async (req, res, next) => {
         // Parse userData JSON string
         let gov_id_type, gov_id_number;
         try {
-          const userData = typeof req.body.userData === 'string' 
-            ? JSON.parse(req.body.userData) 
+          const userData = typeof req.body.userData === 'string'
+            ? JSON.parse(req.body.userData)
             : req.body.userData;
-          
+
           if (!userData || !userData.gov_id_type || !userData.gov_id_number) {
             logger.warn("Missing required fields in userData");
             return next(new AppError("gov_id_type and gov_id_number are required in userData", 400));
           }
-          
+
           gov_id_type = userData.gov_id_type;
           gov_id_number = userData.gov_id_number;
         } catch (error) {
@@ -953,7 +953,7 @@ const editProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         // ✅ FREELANCER BASIC DETAILS UPDATE
         logger.info("Updating Freelancer Basic Info");
-        
+
         // Extract fields directly from req.body
         const {
           freelancerFullName,
@@ -988,7 +988,7 @@ const editProfile = async (req, res, next) => {
             // Compare phone numbers (normalize both by removing non-digits)
             const currentPhoneDigits = currentPhone ? currentPhone.replace(/\D/g, '') : '';
             const newPhoneDigits = phoneNumber.replace(/\D/g, '');
-            
+
             if (currentPhoneDigits !== newPhoneDigits) {
               return next(new AppError(
                 'Cannot update phone number after Razorpay account is created. Contact admin to reset your Razorpay account first.',
@@ -1788,8 +1788,8 @@ const addFreelancerToWishlist = async (req, res, next) => {
 
     // Insert into wishlist
     const result = await query(
-      `INSERT INTO wishlist (creator_id, freelancer_id, created_at) 
-       VALUES ($1, $2, $3) 
+      `INSERT INTO wishlist (creator_id, freelancer_id, created_at)
+       VALUES ($1, $2, $3)
        ON CONFLICT (creator_id, freelancer_id) DO NOTHING
        RETURNING *`,
       [user.roleWiseId, freelancerId, new Date()]
@@ -1862,7 +1862,7 @@ const removeFreelancerFromWishlist = async (req, res, next) => {
 
     // Delete from wishlist
     const result = await query(
-      `DELETE FROM wishlist 
+      `DELETE FROM wishlist
        WHERE creator_id = $1 AND freelancer_id = $2
        RETURNING *`,
       [user.roleWiseId, freelancerId]
@@ -2787,18 +2787,18 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
         f.razorpay_account_status,
         f.razorpay_linked_account_id,
         f.reason_for_rejection,
-        CASE 
+        CASE
           WHEN f.bank_account_no IS NOT NULL AND f.bank_ifsc_code IS NOT NULL THEN true
           ELSE false
         END as has_bank_details,
-        CASE 
-          WHEN f.street_address IS NOT NULL AND f.city IS NOT NULL 
+        CASE
+          WHEN f.street_address IS NOT NULL AND f.city IS NOT NULL
                AND f.state IS NOT NULL AND f.postal_code IS NOT NULL THEN true
           ELSE false
         END as has_address
       FROM freelancer f
       WHERE f.verification_status != 'VERIFIED' ${whereClause}
-      GROUP BY f.freelancer_id, f.freelancer_full_name, f.created_at, f.gov_id_number, f.verification_status, 
+      GROUP BY f.freelancer_id, f.freelancer_full_name, f.created_at, f.gov_id_number, f.verification_status,
                f.razorpay_account_status, f.razorpay_linked_account_id, f.reason_for_rejection, f.bank_account_no, f.bank_ifsc_code,
                f.street_address, f.city, f.state, f.postal_code
       ORDER BY f.created_at DESC
@@ -2934,7 +2934,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
         (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
         (SELECT COALESCE(array_agg(DISTINCT s3.service_name), ARRAY[]::text[])
-        FROM services s3 
+        FROM services s3
         WHERE s3.freelancer_id = f.freelancer_id) as all_services,
         COALESCE(
           json_agg(
@@ -2943,7 +2943,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
               'priority', ff.priority,
               'featured_at', ff.featured_at
             )
-          ) FILTER (WHERE ff.is_active = true), 
+          ) FILTER (WHERE ff.is_active = true),
           '[]'
         ) AS featured_services,
         CASE WHEN COUNT(ff.id) FILTER (WHERE ff.is_active = true) > 0 THEN true ELSE false END AS is_featured
@@ -2952,8 +2952,8 @@ const getFreelancerForAdmin = async (req, res, next) => {
       LEFT JOIN featured_freelancers ff ON f.freelancer_id = ff.freelancer_id AND ff.is_active = true
       LEFT JOIN service_options so ON ff.service_option_id = so.id
       WHERE ${whereClause}
-      GROUP BY f.freelancer_id, f.user_id, f.profile_image_url, f.freelancer_full_name, 
-               f.phone_number, f.freelancer_email, f.created_at, f.gov_id_number, 
+      GROUP BY f.freelancer_id, f.user_id, f.profile_image_url, f.freelancer_full_name,
+               f.phone_number, f.freelancer_email, f.created_at, f.gov_id_number,
                f.verification_status, f.reason_for_suspension, f.rating, f.worked_with
       ORDER BY is_featured DESC, f.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -3061,12 +3061,12 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         worked_with,
         razorpay_account_status,
         razorpay_linked_account_id,
-        CASE 
+        CASE
           WHEN bank_account_no IS NOT NULL AND bank_ifsc_code IS NOT NULL THEN true
           ELSE false
         END as has_bank_details,
-        CASE 
-          WHEN street_address IS NOT NULL AND city IS NOT NULL 
+        CASE
+          WHEN street_address IS NOT NULL AND city IS NOT NULL
                AND state IS NOT NULL AND postal_code IS NOT NULL THEN true
           ELSE false
         END as has_address,
