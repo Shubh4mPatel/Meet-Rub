@@ -288,44 +288,17 @@ const handlePayoutFailed = async (payload) => {
 
   logger.warn(`[handlePayoutFailed] Payout failed: ${payout.id}`);
 
-  const client = await db.connect();
   try {
-    await client.query('BEGIN');
-
-    // Get payout details to refund earnings_balance
-    const { rows: payouts } = await client.query(
-      `SELECT po.amount, f.freelancer_id AS f_id
-       FROM payouts po
-       JOIN users u ON po.freelancer_id = u.id
-       JOIN freelancer f ON f.user_id = u.id
-       WHERE po.razorpay_payout_id = $1`,
-      [payout.id]
-    );
-
     // Update payout status and failure reason
     const failureReason = payout.status_details?.reason || 'Unknown error';
-    await client.query(
+    await db.query(
       `UPDATE payouts SET status = 'FAILED', failure_reason = $1, updated_at = NOW() WHERE razorpay_payout_id = $2`,
       [failureReason, payout.id]
     );
     logger.info(`[handlePayoutFailed] Updated payout status to FAILED, reason: ${failureReason}`);
-
-    // Refund to available_balance (requestPayout deducted from available_balance)
-    if (payouts.length > 0) {
-      await client.query(
-        `UPDATE freelancer SET available_balance = available_balance + $1 WHERE freelancer_id = $2`,
-        [payouts[0].amount, payouts[0].f_id]
-      );
-      logger.info(`[handlePayoutFailed] Refunded ${payouts[0].amount} to freelancer ${payouts[0].f_id}`);
-    }
-
-    await client.query('COMMIT');
   } catch (error) {
-    await client.query('ROLLBACK');
     logger.error(`[handlePayoutFailed] Error processing failed payout ${payout.id}:`, error);
     throw error;
-  } finally {
-    client.release();
   }
 }
 
@@ -452,12 +425,11 @@ const handleTransferReversed = async (payload) => {
       await client.query(
         `UPDATE freelancer
          SET earnings_balance = earnings_balance - $1,
-             available_balance = available_balance - $1,
              updated_at = NOW()
          WHERE freelancer_id = $2`,
         [tx.freelancer_amount, tx.freelancer_id]
       );
-      logger.info(`[handleTransferReversed] Reverted balance ${tx.freelancer_amount} for freelancer ${tx.freelancer_id}`);
+      logger.info(`[handleTransferReversed] Reverted earnings_balance ${tx.freelancer_amount} for freelancer ${tx.freelancer_id}`);
     }
 
     await client.query(
@@ -503,12 +475,12 @@ const handleTransferSettled = async (payload) => {
     );
 
     if (rows.length > 0) {
-      // Mark that settlement is done — credit available_balance for tracking
+      // Mark that settlement is done — credit earnings_balance for tracking
       await client.query(
-        `UPDATE freelancer SET available_balance = available_balance + $1, updated_at = NOW() WHERE freelancer_id = $2`,
+        `UPDATE freelancer SET earnings_balance = earnings_balance + $1, updated_at = NOW() WHERE freelancer_id = $2`,
         [rows[0].freelancer_amount, rows[0].freelancer_id]
       );
-      logger.info(`[handleTransferSettled] Credited available_balance ${rows[0].freelancer_amount} for freelancer ${rows[0].freelancer_id}`);
+      logger.info(`[handleTransferSettled] Credited earnings_balance ${rows[0].freelancer_amount} for freelancer ${rows[0].freelancer_id}`);
     } else {
       logger.info(`[handleTransferSettled] No COMPLETED transaction for transfer ${transferId}`);
     }

@@ -174,7 +174,7 @@ class PayoutService {
 
       await client.query('ROLLBACK');
 
-      // Get payout details and refund to available_balance
+      // Get payout details for failure reason
       const { rows: payoutDetails } = await db.query(
         `SELECT po.amount, po.freelancer_id, f.freelancer_id AS f_id,
                 f.freelancer_full_name, f.bank_account_no, f.bank_ifsc_code,
@@ -211,16 +211,6 @@ class PayoutService {
       );
 
       logger.error(`[processPayout] Updated payout status to FAILED with reason: ${detailedReason}`);
-
-      // Refund to available_balance
-      if (payoutDetails.length > 0) {
-        await db.query(
-          `UPDATE freelancer SET available_balance = available_balance + $1
-           WHERE freelancer_id = $2`,
-          [payoutDetails[0].amount, payoutDetails[0].f_id]
-        );
-        logger.warn(`[processPayout] Refunded ${payoutDetails[0].amount} to freelancer ${payoutDetails[0].f_id} (user_id: ${payoutDetails[0].freelancer_id}) due to processing failure`);
-      }
 
       throw error;
     } finally {
@@ -363,6 +353,26 @@ class PayoutService {
         `UPDATE payouts SET ${setClause} WHERE razorpay_payout_id = $${paramIdx}`,
         params
       );
+
+      // If payout is successfully processed, add to earnings_balance
+      if (status === 'processed') {
+        const { rows: payouts } = await client.query(
+          `SELECT po.amount, f.freelancer_id
+           FROM payouts po
+           JOIN users u ON po.freelancer_id = u.id
+           JOIN freelancer f ON f.user_id = u.id
+           WHERE po.razorpay_payout_id = $1`,
+          [razorpayPayoutId]
+        );
+
+        if (payouts.length > 0) {
+          await client.query(
+            `UPDATE freelancer SET earnings_balance = earnings_balance + $1 WHERE freelancer_id = $2`,
+            [payouts[0].amount, payouts[0].freelancer_id]
+          );
+          logger.info(`[updatePayoutStatus] Added ${payouts[0].amount} to earnings_balance for freelancer ${payouts[0].freelancer_id}`);
+        }
+      }
 
       await client.query('COMMIT');
     } catch (error) {

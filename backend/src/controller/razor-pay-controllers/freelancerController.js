@@ -57,9 +57,9 @@ const requestPayout = async (req, res, next) => {
   try {
     await client.query('BEGIN');
 
-    // Get freelancer with balance (locked)
+    // Get freelancer verification status (locked)
     const { rows: freelancers } = await client.query(
-      `SELECT user_id AS freelancer_id, available_balance, verification_status FROM freelancer WHERE user_id = $1 FOR UPDATE`,
+      `SELECT user_id AS freelancer_id, verification_status FROM freelancer WHERE user_id = $1 FOR UPDATE`,
       [freelancerId]
     );
 
@@ -75,11 +75,6 @@ const requestPayout = async (req, res, next) => {
       return next(new AppError('Your account must be verified before requesting a payout', 400));
     }
 
-    if (requestedAmount > parseFloat(freelancer.available_balance)) {
-      await client.query('ROLLBACK');
-      return next(new AppError(`Insufficient balance. Available: ₹${freelancer.available_balance}`, 400));
-    }
-
     // Check no active payout request already exists
     const { rows: activePayout } = await client.query(
       `SELECT id FROM payouts WHERE freelancer_id = $1 AND status IN ('REQUESTED', 'QUEUED', 'PENDING', 'PROCESSING')`,
@@ -90,12 +85,6 @@ const requestPayout = async (req, res, next) => {
       await client.query('ROLLBACK');
       return next(new AppError('You already have a payout request in progress', 400));
     }
-
-    // Deduct from available_balance
-    await client.query(
-      `UPDATE freelancer SET available_balance = available_balance - $1 WHERE user_id = $2`,
-      [requestedAmount, freelancerId]
-    );
 
     // Create payout request
     const { rows: payoutResult } = await client.query(
@@ -112,8 +101,7 @@ const requestPayout = async (req, res, next) => {
       message: 'Payout request submitted successfully.',
       data: {
         payout_id: payoutResult[0].id,
-        amount: requestedAmount,
-        remaining_balance: parseFloat(freelancer.available_balance) - requestedAmount
+        amount: requestedAmount
       }
     });
   } catch (error) {
@@ -139,9 +127,9 @@ const getWalletDashboard = async (req, res, next) => {
          FROM transactions WHERE freelancer_id = $1 AND status = 'HELD'`,
         [freelancerId]
       ),
-      // available_balance + earnings_balance + bank details directly from freelancer table
+      // earnings_balance + bank details directly from freelancer table
       db.query(
-        `SELECT earnings_balance, available_balance, bank_name, bank_account_no 
+        `SELECT earnings_balance, bank_name, bank_account_no
          FROM freelancer WHERE freelancer_id = $1`,
         [freelancerId]
       ),
@@ -204,7 +192,6 @@ const getWalletDashboard = async (req, res, next) => {
         wallet_summary: {
           pending_release: parseFloat(pendingRows.rows[0].total),
           pending_orders_count: parseInt(pendingRows.rows[0].count),
-          available_balance: parseFloat(freelancerData?.available_balance || 0),
           earnings_balance: parseFloat(freelancerData?.earnings_balance || 0),
           total_lifetime_earnings: parseFloat(completedRows.rows[0].total),
           currency: process.env.CURRENCY || 'INR',

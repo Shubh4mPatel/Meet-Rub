@@ -801,19 +801,11 @@ const rejectPayout = async (req, res, next) => {
       [rejection_reason.trim(), adminId, payoutId]
     );
 
-    // Refund amount back to available_balance (requestPayout deducted from available_balance)
-    await client.query(
-      `UPDATE freelancer
-       SET available_balance = available_balance + $1, updated_at = NOW()
-       WHERE user_id = $2`,
-      [payout.amount, payout.freelancer_user_id]
-    );
-
     await client.query('COMMIT');
 
     return res.status(200).json({
       status: 'success',
-      message: 'Payout rejected and amount credited back to freelancer balance.',
+      message: 'Payout rejected successfully.',
       data: { payout_id: payoutId, rejection_reason: rejection_reason.trim() }
     });
   } catch (error) {

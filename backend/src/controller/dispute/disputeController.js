@@ -492,11 +492,12 @@ const resolveDispute = async (req, res, next) => {
         await razorpay.transfers.edit(dispute.razorpay_transfer_id, { on_hold: 0 });
         logger.info(`Dispute ${id}: Released transfer ${dispute.razorpay_transfer_id} via Routes`);
       } else {
-        // Legacy flow: credit freelancer balances manually
+        // Legacy flow: credit freelancer earnings_balance manually
         await client.query(
-          `UPDATE freelancer SET earnings_balance = earnings_balance + $1, available_balance = available_balance + $1 WHERE freelancer_id = $2`,
+          `UPDATE freelancer SET earnings_balance = earnings_balance + $1 WHERE freelancer_id = $2`,
           [dispute.freelancer_amount, dispute.t_freelancer_id]
         );
+        logger.info(`Dispute ${id}: Added ${dispute.freelancer_amount} to earnings_balance for freelancer ${dispute.t_freelancer_id}`);
       }
 
       await client.query(
