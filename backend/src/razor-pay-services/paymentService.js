@@ -548,11 +548,11 @@ class PaymentService {
         [adminId, transactionId]
       );
 
-      // Update project status to COMPLETED
-      await client.query(
-        `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
-        [tx.project_id]
-      );
+      // // Update project status to COMPLETED
+      // await client.query(
+      //   `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+      //   [tx.project_id]
+      // );
 
       // Credit freelancer earnings tracking balance.
       // Actual funds are auto-settled by Razorpay to the linked account's bank.

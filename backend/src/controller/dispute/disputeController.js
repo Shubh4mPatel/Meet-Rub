@@ -506,7 +506,7 @@ const resolveDispute = async (req, res, next) => {
       );
 
       await client.query(
-        `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+        `UPDATE projects SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [dispute.project_id]
       );
 

@@ -47,10 +47,10 @@ async function reconcileTransfers() {
                         `UPDATE transactions SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1 AND status = 'HELD'`,
                         [tx.id]
                     );
-                    await db.query(
-                        `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
-                        [tx.project_id]
-                    );
+                    // await db.query(
+                    //     `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+                    //     [tx.project_id]
+                    // );
                     logger.info(`[reconcileTransfers] Transaction ${tx.id} synced to COMPLETED (transfer ${tx.razorpay_transfer_id} already released)`);
                     synced++;
                 } else if (transfer.on_hold) {

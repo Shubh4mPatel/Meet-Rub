@@ -1,6 +1,5 @@
 const { pool: db } = require('../../../config/dbConfig');
 const payoutService = require('../../razor-pay-services/payoutService');
-const linkedAccountService = require('../../razor-pay-services/linkedAccountService');
 const AppError = require("../../../utils/appError");
 
 // Get freelancer's withdrawal history with filters and pagination
@@ -330,23 +329,102 @@ const getTransactionHistory = async (req, res, next) => {
   }
 };
 
-// Trigger Razorpay linked account onboarding for freelancer
-const onboardLinkedAccount = async (req, res, next) => {
+// Get completed projects for withdrawal — with earnings balance + active payout status
+const getWithdrawalList = async (req, res, next) => {
   try {
     const freelancerId = req.user.roleWiseId;
+    const userId = req.user.user_id;
 
-    const result = await linkedAccountService.onboardFreelancer(freelancerId);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+    const offset = (page - 1) * limit;
+    const search = req.query.search?.trim() || '';
+    const from_date = req.query.from_date?.trim() || '';
+    const to_date = req.query.to_date?.trim() || '';
+
+    // Build dynamic WHERE conditions for project query
+    const conditions = [`p.freelancer_id = $1`, `p.status = 'COMPLETED'`];
+    const params = [freelancerId];
+    let idx = 2;
+
+    if (search) {
+      conditions.push(`s.service_name ILIKE $${idx++}`);
+      params.push(`%${search}%`);
+    }
+    if (from_date) {
+      conditions.push(`p.completed_at >= $${idx++}::date`);
+      params.push(from_date);
+    }
+    if (to_date) {
+      conditions.push(`p.completed_at < ($${idx++}::date + interval '1 day')`);
+      params.push(to_date);
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    const [balanceResult, activePayoutResult, projectsResult, countResult] = await Promise.all([
+      // Earnings balance
+      db.query(
+        `SELECT earnings_balance FROM freelancer WHERE freelancer_id = $1`,
+        [freelancerId]
+      ),
+      // Any in-progress payout request
+      db.query(
+        `SELECT id AS payout_id, amount, status, requested_at
+         FROM payouts
+         WHERE freelancer_id = $1 AND status IN ('REQUESTED', 'QUEUED', 'PENDING', 'PROCESSING')
+         ORDER BY requested_at DESC LIMIT 1`,
+        [userId]
+      ),
+      // Completed projects with service name
+      db.query(
+        `SELECT
+           p.id AS project_id,
+           s.service_name,
+           p.completed_at,
+           t.freelancer_amount AS amount
+         FROM projects p
+         JOIN transactions t ON t.project_id = p.id
+         LEFT JOIN services s ON p.service_id = s.id
+         WHERE ${whereClause}
+         ORDER BY p.completed_at DESC
+         LIMIT $${idx++} OFFSET $${idx++}`,
+        [...params, limit, offset]
+      ),
+      // Total count
+      db.query(
+        `SELECT COUNT(*) AS total
+         FROM projects p
+         LEFT JOIN services s ON p.service_id = s.id
+         WHERE ${whereClause}`,
+        params
+      ),
+    ]);
+
+    const total = parseInt(countResult.rows[0].total);
 
     return res.status(200).json({
       status: 'success',
-      message: result.status === 'already_activated'
-        ? 'Linked account already activated.'
-        : 'Linked account onboarding initiated.',
-      data: result,
+      data: {
+        earnings_balance: parseFloat(balanceResult.rows[0]?.earnings_balance || 0),
+        active_payout: activePayoutResult.rows[0] || null,
+        projects: projectsResult.rows.map(p => ({
+          project_id: p.project_id,
+          service_name: p.service_name,
+          completed_at: p.completed_at,
+          amount: parseFloat(p.amount),
+        })),
+        pagination: {
+          total,
+          total_pages: Math.ceil(total / limit),
+          current_page: page,
+          limit,
+        },
+      },
     });
   } catch (error) {
-    console.error('onboardLinkedAccount error:', error);
-    return next(new AppError(error.message || 'Failed to onboard linked account', 500));
+    console.error('getWithdrawalList error:', error);
+    return next(new AppError('Failed to get withdrawal list', 500));
   }
 };
 
@@ -382,4 +460,5 @@ module.exports = {
   getWalletDashboard,
   getTransactionHistory,
   getLinkedAccountStatus,
+  getWithdrawalList,
 }

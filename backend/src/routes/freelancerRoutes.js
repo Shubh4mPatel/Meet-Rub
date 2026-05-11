@@ -5,7 +5,8 @@ const {
     requestPayout,
     getWalletDashboard,
     getTransactionHistory,
-    getLinkedAccountStatus
+    getLinkedAccountStatus,
+    getWithdrawalList,
 } = require('../controller/razor-pay-controllers/freelancerController');
 const router = express.Router();
 const { requireRole, authenticateUser } = require('../middleware/authMiddleware');
@@ -88,6 +89,8 @@ router.get('/freelancers/:id/overview', getFreelancerOverview);
 router.get('/payouts', authenticateUser, requireRole(['freelancer']), getMyPayouts);
 
 router.post('/payouts/request', authenticateUser, requireRole(['freelancer']), requestPayout);
+
+router.get('/withdrawals', authenticateUser, requireRole(['freelancer']), getWithdrawalList);
 
 
 router.get('/wallet/dashboard', authenticateUser, requireRole(['freelancer']), getWalletDashboard);
