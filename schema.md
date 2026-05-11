@@ -437,6 +437,9 @@ CREATE TABLE IF NOT EXISTS public.freelancer
     city character varying(100) COLLATE pg_catalog."default",
     state character varying(50) COLLATE pg_catalog."default",
     postal_code character varying(10) COLLATE pg_catalog."default",
+    razorpay_onboarding_error text COLLATE pg_catalog."default",
+    razorpay_onboarding_error_step character varying(30) COLLATE pg_catalog."default",
+    razorpay_onboarding_error_at timestamp with time zone,
     CONSTRAINT influencer_pkey PRIMARY KEY (freelancer_id),
     CONSTRAINT unique_freelancer_user_name UNIQUE (user_name),
     CONSTRAINT influencer_user_id_fkey FOREIGN KEY (user_id)

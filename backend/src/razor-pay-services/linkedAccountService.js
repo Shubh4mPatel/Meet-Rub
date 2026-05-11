@@ -51,9 +51,11 @@ class LinkedAccountService {
             logger.info(`[createLinkedAccount] Linked account created: account_id=${response.data.id}`);
             return response.data;
         } catch (err) {
-            const errMsg = err.response?.data?.error?.description || err.message;
-            const errCode = err.response?.data?.error?.code || 'UNKNOWN';
-            logger.error(`[createLinkedAccount] Failed for freelancer_id=${freelancer?.freelancer_id}: ${errCode} - ${errMsg}`);
+            const error = err.response?.data?.error;
+            const errMsg = error
+                ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}${error.reason ? ` — reason: ${error.reason}` : ''}`
+                : err.message;
+            logger.error(`[createLinkedAccount] Failed for freelancer_id=${freelancer?.freelancer_id}: ${errMsg}`);
             throw new Error(`Linked account creation failed: ${errMsg}`);
         }
     }
@@ -97,7 +99,10 @@ class LinkedAccountService {
             logger.info(`[createStakeholder] Stakeholder created: stakeholder_id=${response.data.id}`);
             return response.data;
         } catch (err) {
-            const errMsg = err.response?.data?.error?.description || err.message;
+            const error = err.response?.data?.error;
+            const errMsg = error
+                ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}${error.reason ? ` — reason: ${error.reason}` : ''}`
+                : err.message;
             logger.error(`[createStakeholder] Failed for account_id=${accountId}: ${errMsg}`);
             throw new Error(`Stakeholder creation failed: ${errMsg}`);
         }
@@ -120,7 +125,10 @@ class LinkedAccountService {
             logger.info(`[requestProductConfig] Product config requested: product_id=${response.data.id}, status=${response.data.active_configuration?.payment_capture}`);
             return response.data;
         } catch (err) {
-            const errMsg = err.response?.data?.error?.description || err.message;
+            const error = err.response?.data?.error;
+            const errMsg = error
+                ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}${error.reason ? ` — reason: ${error.reason}` : ''}`
+                : err.message;
             logger.error(`[requestProductConfig] Failed for account_id=${accountId}: ${errMsg}`);
             throw new Error(`Product config request failed: ${errMsg}`);
         }
@@ -147,7 +155,10 @@ class LinkedAccountService {
             logger.info(`[updateProductConfig] Product config updated: activation_status=${response.data.activation_status}`);
             return response.data;
         } catch (err) {
-            const errMsg = err.response?.data?.error?.description || err.message;
+            const error = err.response?.data?.error;
+            const errMsg = error
+                ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}${error.reason ? ` — reason: ${error.reason}` : ''}`
+                : err.message;
             logger.error(`[updateProductConfig] Failed for account_id=${accountId}: ${errMsg}`);
             throw new Error(`Product config update failed: ${errMsg}`);
         }
@@ -234,7 +245,7 @@ class LinkedAccountService {
         if (phoneDigits.length !== 10)
             formatErrors.push('phone_number must be exactly 10 digits after stripping country code');
 
-        if (freelancer.bank_account_no.length < 5 || freelancer.bank_account_no.length > 35)
+        if (freelancer.bank_account_no.length < 5 || freelancer.bank_account_no.length > 20)
             formatErrors.push('bank_account_no must be between 5 and 35 characters');
 
         if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(freelancer.bank_ifsc_code))
@@ -261,34 +272,62 @@ class LinkedAccountService {
 
         const newIds = {}; // only fields that changed this run
 
+        const saveError = async (step, message) => {
+            await db.query(
+                `UPDATE freelancer SET razorpay_onboarding_error = $1, razorpay_onboarding_error_step = $2, razorpay_onboarding_error_at = NOW() WHERE freelancer_id = $3`,
+                [message, step, freelancerId]
+            );
+        };
+
         // Step 1: Create Linked Account (if not already created)
         if (!accountId) {
-            const account = await this.createLinkedAccount(freelancer);
-            accountId = account.id;
-            newIds.razorpay_linked_account_id = accountId;
-            newIds.razorpay_account_status_created = true;
-            logger.info(`[onboardFreelancer] Step 1 complete: account_id=${accountId}`);
+            try {
+                const account = await this.createLinkedAccount(freelancer);
+                accountId = account.id;
+                newIds.razorpay_linked_account_id = accountId;
+                newIds.razorpay_account_status_created = true;
+                logger.info(`[onboardFreelancer] Step 1 complete: account_id=${accountId}`);
+            } catch (err) {
+                await saveError('create_account', err.message);
+                throw err;
+            }
         }
 
         // Step 2: Create Stakeholder (if not already created)
         if (!stakeholderId) {
-            const stakeholder = await this.createStakeholder(accountId, freelancer);
-            stakeholderId = stakeholder.id;
-            newIds.razorpay_stakeholder_id = stakeholderId;
-            logger.info(`[onboardFreelancer] Step 2 complete: stakeholder_id=${stakeholderId}`);
+            try {
+                const stakeholder = await this.createStakeholder(accountId, freelancer);
+                stakeholderId = stakeholder.id;
+                newIds.razorpay_stakeholder_id = stakeholderId;
+                logger.info(`[onboardFreelancer] Step 2 complete: stakeholder_id=${stakeholderId}`);
+            } catch (err) {
+                await saveError('create_stakeholder', err.message);
+                throw err;
+            }
         }
 
         // Step 3: Request Product Configuration (if not already requested)
         if (!productId) {
-            const product = await this.requestProductConfig(accountId);
-            productId = product.id;
-            newIds.razorpay_product_id = productId;
-            logger.info(`[onboardFreelancer] Step 3 complete: product_id=${productId}`);
+            try {
+                const product = await this.requestProductConfig(accountId);
+                productId = product.id;
+                newIds.razorpay_product_id = productId;
+                logger.info(`[onboardFreelancer] Step 3 complete: product_id=${productId}`);
+            } catch (err) {
+                await saveError('request_product_config', err.message);
+                throw err;
+            }
         }
 
         // Step 4: Update Product Config with bank details (always run to get latest status)
-        const productConfig = await this.updateProductConfig(accountId, productId, freelancer);
-        const activationStatus = productConfig.activation_status || 'pending';
+        let productConfig;
+        try {
+            productConfig = await this.updateProductConfig(accountId, productId, freelancer);
+        } catch (err) {
+            await saveError('update_product_config', err.message);
+            throw err;
+        }
+        const activationStatus = productConfig?.activation_status || 'pending';
 
         let accountStatus = 'pending';
         if (activationStatus === 'activated') {
@@ -325,7 +364,7 @@ class LinkedAccountService {
                 );
             }
             await client.query(
-                `UPDATE freelancer SET razorpay_account_status = $1 WHERE freelancer_id = $2`,
+                `UPDATE freelancer SET razorpay_account_status = $1, razorpay_onboarding_error = NULL, razorpay_onboarding_error_step = NULL, razorpay_onboarding_error_at = NULL WHERE freelancer_id = $2`,
                 [accountStatus, freelancerId]
             );
 
