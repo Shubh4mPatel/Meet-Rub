@@ -2789,11 +2789,15 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
       SELECT
         f.freelancer_id,
         f.freelancer_full_name,
+        f.freelancer_email,
         f.created_at as joining_date,
         f.gov_id_number,
         f.verification_status,
         f.razorpay_account_status,
         f.razorpay_linked_account_id,
+        f.razorpay_onboarding_error,
+        f.razorpay_onboarding_error_step,
+        f.razorpay_onboarding_error_at,
         f.reason_for_rejection,
         CASE
           WHEN f.bank_account_no IS NOT NULL AND f.bank_ifsc_code IS NOT NULL THEN true
@@ -2803,12 +2807,18 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
           WHEN f.street_address IS NOT NULL AND f.city IS NOT NULL
                AND f.state IS NOT NULL AND f.postal_code IS NOT NULL THEN true
           ELSE false
-        END as has_address
+        END as has_address,
+        CASE
+          WHEN f.pan_card_number IS NOT NULL THEN true
+          ELSE false
+        END as has_pan
       FROM freelancer f
       WHERE f.verification_status != 'VERIFIED' ${whereClause}
-      GROUP BY f.freelancer_id, f.freelancer_full_name, f.created_at, f.gov_id_number, f.verification_status,
-               f.razorpay_account_status, f.razorpay_linked_account_id, f.reason_for_rejection, f.bank_account_no, f.bank_ifsc_code,
-               f.street_address, f.city, f.state, f.postal_code
+      GROUP BY f.freelancer_id, f.freelancer_full_name, f.freelancer_email, f.created_at, f.gov_id_number,
+               f.verification_status, f.razorpay_account_status, f.razorpay_linked_account_id,
+               f.razorpay_onboarding_error, f.razorpay_onboarding_error_step, f.razorpay_onboarding_error_at,
+               f.reason_for_rejection, f.bank_account_no, f.bank_ifsc_code,
+               f.street_address, f.city, f.state, f.postal_code, f.pan_card_number
       ORDER BY f.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
@@ -2833,8 +2843,10 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
       let next_action = null;
       let can_approve_kyc = false;
 
-      if (!freelancer.has_bank_details || !freelancer.has_address) {
+      if (!freelancer.has_bank_details || !freelancer.has_address || !freelancer.has_pan) {
         next_action = 'missing_details';
+      } else if (freelancer.razorpay_onboarding_error) {
+        next_action = 'onboarding_failed';
       } else if (!freelancer.razorpay_linked_account_id) {
         next_action = 'create_linked_account';
       } else if (freelancer.razorpay_account_status === 'needs_clarification') {
@@ -2846,8 +2858,9 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
         can_approve_kyc = true;
       }
 
+      const { has_bank_details, has_address, has_pan, ...rest } = freelancer;
       return {
-        ...freelancer,
+        ...rest,
         next_action,
         can_approve_kyc
       };
