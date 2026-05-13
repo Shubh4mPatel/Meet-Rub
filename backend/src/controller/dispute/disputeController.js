@@ -339,6 +339,7 @@ const getAllDisputes = async (req, res, next) => {
         d.id                       AS dispute_id,
         d.creator_id,
         d.freelancer_id,
+        d.project_id,
         d.reason_of_dispute,
         d.description,
         d.admin_note,
@@ -352,10 +353,15 @@ const getAllDisputes = async (req, res, next) => {
         f.freelancer_full_name     AS freelancer_name,
         f.freelancer_email         AS freelancer_email,
         f.profile_image_url        AS freelancer_avatar,
+        p.status                   AS project_status,
+        p.amount                   AS project_amount,
+        s.service_name,
         cr.room_id                 AS chat_room_id
       FROM disputes d
       JOIN creators c   ON d.creator_id   = c.creator_id
       JOIN freelancer f ON d.freelancer_id = f.freelancer_id
+      LEFT JOIN projects p  ON d.project_id = p.id
+      LEFT JOIN services s  ON p.service_id = s.id
       LEFT JOIN chat_rooms cr ON (
         (cr.user1_id = c.user_id AND cr.user2_id = f.user_id) OR
         (cr.user1_id = f.user_id AND cr.user2_id = c.user_id)
@@ -576,4 +582,92 @@ const resolveDispute = async (req, res, next) => {
   }
 };
 
-module.exports = { raiseDispute, getDisputes, getAllDisputes, resolveDispute };
+const getDisputeById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const { rows } = await db.query(
+      `SELECT
+        d.id                       AS dispute_id,
+        d.project_id,
+        d.creator_id,
+        d.freelancer_id,
+        d.reason_of_dispute,
+        d.description              AS dispute_description,
+        d.admin_note,
+        d.status                   AS dispute_status,
+        d.raised_by,
+        d.created_at               AS dispute_created_at,
+        d.updated_at               AS dispute_updated_at,
+        c.full_name                AS creator_name,
+        c.email                    AS creator_email,
+        c.profile_image_url        AS creator_avatar,
+        f.freelancer_full_name     AS freelancer_name,
+        f.freelancer_email         AS freelancer_email,
+        f.profile_image_url        AS freelancer_avatar,
+        p.status                   AS project_status,
+        p.amount                   AS project_amount,
+        s.service_name
+       FROM disputes d
+       JOIN creators c   ON d.creator_id   = c.creator_id
+       JOIN freelancer f ON d.freelancer_id = f.freelancer_id
+       LEFT JOIN projects p  ON d.project_id = p.id
+       LEFT JOIN services s  ON p.service_id = s.id
+       WHERE d.id = $1`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return next(new AppError('Dispute not found', 404));
+    }
+
+    const dispute = rows[0];
+
+    // Sign avatars
+    dispute.creator_avatar = await signAvatarUrl(dispute.creator_avatar);
+    dispute.freelancer_avatar = await signAvatarUrl(dispute.freelancer_avatar);
+
+    // Fetch deliverables if there's a linked project
+    let deliverables = [];
+    if (dispute.project_id) {
+      const { rows: delivRows } = await db.query(
+        `SELECT id, deliverable_url, project_description FROM deliverables WHERE project_id = $1`,
+        [dispute.project_id]
+      );
+
+      deliverables = await Promise.all(
+        delivRows.map(async (d) => {
+          const files = Array.isArray(d.deliverable_url) ? d.deliverable_url : [d.deliverable_url];
+          const resolvedFiles = await Promise.all(
+            files.filter(Boolean).map(async (file) => {
+              if (file.type === 'google_drive') {
+                return { type: 'google_drive', urls: file.urls };
+              }
+              const bucket = process.env.MINIO_BUCKET_NAME;
+              const signedUrl = await createPresignedUrl(bucket, file.key, EXPIRY_SECONDS).catch(() => null);
+              return { type: 's3', key: file.key, url: signedUrl };
+            })
+          );
+          return {
+            id: d.id,
+            project_description: d.project_description,
+            files: resolvedFiles,
+          };
+        })
+      );
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        ...dispute,
+        deliverables,
+      },
+    });
+  } catch (error) {
+    logger.error('getDisputeById error:', error);
+    return next(new AppError('Failed to fetch dispute details', 500));
+  }
+};
+
+module.exports = { raiseDispute, getDisputes, getAllDisputes, resolveDispute, getDisputeById };

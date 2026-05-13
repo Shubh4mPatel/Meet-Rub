@@ -4,7 +4,7 @@ const {  approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatfo
 const { addNiches, getNiches, AssignFreelancerToRequest, getServicesForAdmin, editServiceForAdmin, deleteServiceForAdmin } = require('../controller/services/serviceController')
 const { requireRole } = require('../middleware/authMiddleware')
 const upload = require('../../config/multer')
-const { getAllDisputes, resolveDispute } = require('../controller/dispute/disputeController')
+const { getAllDisputes, resolveDispute, getDisputeById } = require('../controller/dispute/disputeController')
 const { getAllCreatorProfiles, getCreatorById, getFreelancerForAdmin, getFreeLancerByIdForAdmin, getFreelancerForSuggestion, getFreelancerForKYCApproval } = require('../controller/users/userProfileController')
 const router = expess.Router()
 
@@ -70,7 +70,7 @@ router.post('/revoke-freelancer-suspension', requireRole(['admin']), revokeFreel
 router.post('/revoke-creator-suspension', requireRole(['admin']), revokeCreatorSuspension)
 
 router.get('/disputes', requireRole(['admin']), getAllDisputes);
-
+router.get('/disputes/:id', requireRole(['admin']), getDisputeById);
 router.patch('/disputes/resolve/:id', requireRole(['admin']), resolveDispute)
 
 router.get('/services-list', requireRole(['admin']), getServicesForAdmin);
