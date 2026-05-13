@@ -165,6 +165,7 @@ const getMyProjects = async (req, res, next) => {
     const userId = req.user.roleWiseId;
     const userType = req.user.role;
     const status = req.query.status;
+    const tab = req.query.tab; // 'current' | 'past'
     const service = req.query.service;
     const search = req.query.search ? req.query.search.trim() : null;
     const page = parseInt(req.query.page) || 1;
@@ -183,6 +184,12 @@ const getMyProjects = async (req, res, next) => {
       filterParams.push(userId);
     } else {
       return next(new AppError('Invalid user type', 400));
+    }
+
+    if (tab === 'current') {
+      whereClauses.push(`p.status NOT IN ('COMPLETED', 'CANCELLED')`);
+    } else if (tab === 'past') {
+      whereClauses.push(`p.status IN ('COMPLETED', 'CANCELLED')`);
     }
 
     if (status) {
@@ -226,13 +233,25 @@ LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
 
     const paginatedParams = [...filterParams, limit, offset];
 
-    const [{ rows: projects }, { rows: countResult }] = await Promise.all([
+    const idParam = filterParams[0]; // creator_id or freelancer_id
+    const idCol = userType === 'creator' ? 'creator_id' : 'freelancer_id';
+    const countsQuery = `
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'COMPLETED')                                   AS total_completed,
+        COUNT(*) FILTER (WHERE status IN ('CREATED', 'IN_PROGRESS', 'SUBMITTED'))      AS total_active,
+        COUNT(*) FILTER (WHERE status IN ('CANCELLED', 'DISPUTE', 'REJECTED'))          AS total_on_hold
+      FROM projects
+      WHERE ${idCol} = $1`;
+
+    const [{ rows: projects }, { rows: countResult }, { rows: countsResult }] = await Promise.all([
       db.query(dataQuery, paginatedParams),
       db.query(countQuery, filterParams),
+      db.query(countsQuery, [idParam]),
     ]);
 
     const totalCount = parseInt(countResult[0].total);
     const totalPages = Math.ceil(totalCount / limit);
+    const counts = countsResult[0];
 
     // Generate presigned URL for the other party's profile image
     const profileImageKey = userType === 'creator' ? 'freelancer_profile_image' : 'creator_profile_image';
@@ -252,6 +271,7 @@ LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
         // Remove the unused party's image from response
         const unusedKey = userType === 'creator' ? 'creator_profile_image' : 'freelancer_profile_image';
         delete project[unusedKey];
+        project.is_viewable = ['COMPLETED', 'REJECTED'].includes(project.status);
         return project;
       })
     );
@@ -260,6 +280,11 @@ LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
       status: 'success',
       message: 'Projects fetched successfully',
       data: {
+        summary: {
+          total_completed: parseInt(counts.total_completed),
+          total_active: parseInt(counts.total_active),
+          total_on_hold: parseInt(counts.total_on_hold),
+        },
         projects: projectsWithImages,
         pagination: {
           currentPage: page,
@@ -399,6 +424,7 @@ const getAllProjects = async (req, res, next) => {
       working: { db: 'IN_PROGRESS', table: 'project' },
       dispute: { db: 'DISPUTE', table: 'project' },
       complete: { db: 'COMPLETED', table: 'project' },
+      rejected: { db: 'REJECTED', table: 'project' },
       req_rejected: { db: 'rejected', table: 'package' },
       requested: { db: 'pending', table: 'package' },
       req_expired: { db: 'expired', table: 'package' },
@@ -412,7 +438,7 @@ const getAllProjects = async (req, res, next) => {
       const mapped = STATUS_MAP[statusFilter.toLowerCase()];
       if (!mapped) {
         return next(new AppError(
-          `Invalid status. Allowed values: working, dispute, complete, req_rejected, requested, req_expired`,
+          `Invalid status. Allowed values: working, dispute, complete, rejected, req_rejected, requested, req_expired`,
           400
         ));
       }
@@ -472,6 +498,7 @@ const getAllProjects = async (req, res, next) => {
           WHEN p.status = 'COMPLETED'   THEN 'completed'
           WHEN p.status = 'IN_PROGRESS' THEN 'in_progress'
           WHEN p.status = 'DISPUTE'     THEN 'on_hold'
+          WHEN p.status = 'REJECTED'    THEN 'rejected'
           ELSE 'project'
         END                             AS record_type,
         p.id,
@@ -479,6 +506,7 @@ const getAllProjects = async (req, res, next) => {
           WHEN p.status = 'COMPLETED'   THEN 'completed'
           WHEN p.status = 'IN_PROGRESS' THEN 'in_progress'
           WHEN p.status = 'DISPUTE'     THEN 'on_hold'
+          WHEN p.status = 'REJECTED'    THEN 'rejected'
           ELSE COALESCE(cp.package_type, 'direct')
         END                             AS type,
         p.status                        AS status,
@@ -1196,9 +1224,9 @@ const rejectProject = async (req, res, next) => {
       return next(new AppError('Project must be SUBMITTED before rejecting', 400));
     }
 
-    // Update project to DISPUTE
+    // Update project to REJECTED
     await client.query(
-      `UPDATE projects SET status = 'DISPUTE', updated_at = NOW() WHERE id = $1`,
+      `UPDATE projects SET status = 'REJECTED', updated_at = NOW() WHERE id = $1`,
       [projectId]
     );
 
