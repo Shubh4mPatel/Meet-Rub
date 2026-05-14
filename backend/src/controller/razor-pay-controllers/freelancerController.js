@@ -358,7 +358,11 @@ const getWithdrawalList = async (req, res, next) => {
     const to_date = req.query.to_date?.trim() || '';
 
     // Build dynamic WHERE conditions for project query
-    const conditions = [`p.freelancer_id = $1`, `p.status = 'COMPLETED'`];
+    const conditions = [
+      `p.freelancer_id = $1`,
+      `p.status = 'COMPLETED'`,
+      `NOT EXISTS (SELECT 1 FROM payouts py WHERE py.transaction_id = t.id)`,
+    ];
     const params = [freelancerId];
     let idx = 2;
 
@@ -410,6 +414,7 @@ const getWithdrawalList = async (req, res, next) => {
       db.query(
         `SELECT COUNT(*) AS total
          FROM projects p
+         JOIN transactions t ON t.project_id = p.id
          LEFT JOIN services s ON p.service_id = s.id
          WHERE ${whereClause}`,
         params
