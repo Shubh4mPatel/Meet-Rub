@@ -1,6 +1,72 @@
+const bcrypt = require('bcrypt');
 const { query } = require('../../../config/dbConfig')
 const AppError = require('../../../utils/appError');
 const logger = require('../../../utils/logger');
+
+const VALID_PERMISSIONS = [
+    'user_management',
+    'projects',
+    'payments',
+    'disputes',
+    'chat',
+];
+
+const createAdmin = async (req, res, next) => {
+    try {
+        const { full_name, email, password, permissions = [] } = req.body;
+
+        if (!full_name || !email || !password) {
+            return next(new AppError('full_name, email and password are required', 400));
+        }
+
+        // Validate permissions
+        const invalidPerms = permissions.filter(p => !VALID_PERMISSIONS.includes(p));
+        if (invalidPerms.length) {
+            return next(new AppError(`Invalid permissions: ${invalidPerms.join(', ')}. Allowed: ${VALID_PERMISSIONS.join(', ')}`, 400));
+        }
+
+        // Check duplicate email
+        const existing = await query('SELECT id FROM users WHERE user_email = $1', [email.toLowerCase()]);
+        if (existing.rows.length) {
+            return next(new AppError('An account with this email already exists', 409));
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        // Split full_name into first/last
+        const nameParts = full_name.trim().split(' ');
+        const first_name = nameParts[0];
+        const last_name = nameParts.slice(1).join(' ') || nameParts[0];
+
+        // Insert into users table
+        const userResult = await query(
+            `INSERT INTO users (user_name, user_email, user_password, user_role, approval_status, created_at, updated_at)
+             VALUES ($1, $2, $3, 'admin', 'approved', NOW(), NOW())
+             RETURNING id`,
+            [full_name.trim(), email.toLowerCase(), hashedPassword]
+        );
+        const userId = userResult.rows[0].id;
+
+        // Insert into admin table
+        const adminResult = await query(
+            `INSERT INTO admin (user_id, full_name, first_name, last_name, email, permissions, is_active, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW())
+             RETURNING id, full_name, email, permissions, is_active, created_at`,
+            [userId, full_name.trim(), first_name, last_name, email.toLowerCase(), JSON.stringify(permissions)]
+        );
+
+        logger.info(`New admin created: ${email} by admin ${req.user?.email}`);
+
+        return res.status(201).json({
+            status: 'success',
+            message: 'Admin created successfully',
+            data: adminResult.rows[0],
+        });
+    } catch (error) {
+        logger.error(error);
+        return next(new AppError('Failed to create admin', 500));
+    }
+};
 
 
 const approveProfile = async (req, res, next) => {
@@ -158,4 +224,4 @@ LIMIT $1 OFFSET $2`,
     }
 }
 
-module.exports = { approveProfile, getAllFreelancers, getAllCreators };
+module.exports = { approveProfile, getAllFreelancers, getAllCreators, createAdmin };

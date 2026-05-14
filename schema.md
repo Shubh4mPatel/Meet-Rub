@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS public.admin
     last_name character varying(100) COLLATE pg_catalog."default" NOT NULL,
     email character varying(255) COLLATE pg_catalog."default" NOT NULL,
     is_active boolean NOT NULL DEFAULT true,
+    permissions jsonb NOT NULL DEFAULT '[]',
     created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT admin_pkey PRIMARY KEY (id),

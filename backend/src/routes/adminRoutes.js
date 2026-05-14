@@ -6,10 +6,13 @@ const { requireRole } = require('../middleware/authMiddleware')
 const upload = require('../../config/multer')
 const { getAllDisputes, resolveDispute, getDisputeById } = require('../controller/dispute/disputeController')
 const { getAllCreatorProfiles, getCreatorById, getFreelancerForAdmin, getFreeLancerByIdForAdmin, getFreelancerForSuggestion, getFreelancerForKYCApproval } = require('../controller/users/userProfileController')
+const { createAdmin } = require('../controller/admin/adminContoller')
 const router = expess.Router()
 
 
 router.post('/userApproval', approveProfile)
+
+router.post('/create-admin', requireRole(['admin']), createAdmin)
 
 
 router.get('/getServices', getServices)
