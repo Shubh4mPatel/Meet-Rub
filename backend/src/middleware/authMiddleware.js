@@ -24,7 +24,8 @@ const refreshAccessToken = async (req, res, next) => {
     const user = await query(
       `SELECT 
   u.*,
-  COALESCE(f.freelancer_id, c.creator_id, a.id) AS roleWiseId
+  COALESCE(f.freelancer_id, c.creator_id, a.id) AS roleWiseId,
+  a.permissions AS adminPermissions
 FROM users u
 LEFT JOIN freelancer f ON u.id = f.user_id AND u.user_role = 'freelancer'
 LEFT JOIN creators c ON u.id = c.user_id AND u.user_role = 'creator'
@@ -46,6 +47,7 @@ WHERE u.id = $1`,
       name: user.rows[0].user_name,
       role: user.rows[0].user_role,
       roleWiseId: user.rows[0].rolewiseid, // Database returns lowercase column names
+      permissions: user.rows[0].adminpermissions || null,
     };
 
     logger.info("Token refresh payload:", payload);
@@ -170,9 +172,29 @@ const logout = async (req, res, next) => {
   }
 };
 
+// Middleware to check granular module-level permissions for admin routes.
+// Usage: requirePermission('payments', 'approve')
+// - Reads req.user.permissions (set in JWT during login/refresh)
+// - Returns 403 if the admin does not have the required action for the module
+const requirePermission = (module, action) => {
+  return (req, res, next) => {
+    const permissions = req.user?.permissions;
+
+    if (!permissions || !permissions[module] || !permissions[module].includes(action)) {
+      return res.status(403).json({
+        status: 'failed',
+        message: `Access denied: requires '${action}' permission on '${module}'`,
+      });
+    }
+
+    next();
+  };
+};
+
 module.exports = {
   refreshAccessToken,
   authenticateUser,
   requireRole,
+  requirePermission,
   logout,
 };

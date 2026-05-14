@@ -98,13 +98,14 @@ async function createPresignedUrl(bucketName, objectName, expirySeconds) {
   }
 }
 
-function generateTokens(user,roleWiseId) {
+function generateTokens(user, roleWiseId, permissions = null) {
     const payload = {
         user_id: user.id,
         email: user.user_email,
         name: user.user_name,
         role: user.user_role,
-        roleWiseId: roleWiseId
+        roleWiseId: roleWiseId,
+        permissions: permissions,
     };
     const accessToken = jwt.sign(payload, process.env.JWT_SECRET);
     const refreshToken = jwt.sign({ user_id: user.id }, process.env.JWT_SECRET);

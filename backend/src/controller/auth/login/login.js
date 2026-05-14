@@ -44,6 +44,7 @@ const loginUser = async (req, res, next) => {
         }
 
         let roleWiseId = null;
+        let adminPermissions = null;
         logger.info(`Fetching role-wise ID for user role: ${user.user_role}`);
         if (user.user_role === 'freelancer') {
             const result = await query(
@@ -67,15 +68,16 @@ const loginUser = async (req, res, next) => {
         }
         if (user.user_role === 'admin') {
             const result = await query(
-                "SELECT id FROM admin WHERE user_id = $1",
+                "SELECT id, permissions FROM admin WHERE user_id = $1",
                 [user.id]
             );
             roleWiseId = result.rows[0]?.id || null;
+            adminPermissions = result.rows[0]?.permissions || null;
         }
 
         logger.info(`User authenticated successfully: user_id=${user.id}`);
 
-        const { accessToken, refreshToken } = generateTokens(user,roleWiseId);
+        const { accessToken, refreshToken } = generateTokens(user, roleWiseId, adminPermissions);
 
         res.locals.accessToken = accessToken;
         res.locals.refreshToken = refreshToken;

@@ -2,27 +2,28 @@ const bcrypt = require('bcrypt');
 const { query } = require('../../../config/dbConfig')
 const AppError = require('../../../utils/appError');
 const logger = require('../../../utils/logger');
-
-const VALID_PERMISSIONS = [
-    'user_management',
-    'projects',
-    'payments',
-    'disputes',
-    'chat',
-];
+const { PERMISSIONS } = require('../../config/permissions');
 
 const createAdmin = async (req, res, next) => {
     try {
-        const { full_name, email, password, permissions = [] } = req.body;
+        const { full_name, email, password, permissions = {} } = req.body;
 
         if (!full_name || !email || !password) {
             return next(new AppError('full_name, email and password are required', 400));
         }
 
-        // Validate permissions
-        const invalidPerms = permissions.filter(p => !VALID_PERMISSIONS.includes(p));
-        if (invalidPerms.length) {
-            return next(new AppError(`Invalid permissions: ${invalidPerms.join(', ')}. Allowed: ${VALID_PERMISSIONS.join(', ')}`, 400));
+        // Validate permissions object against master schema
+        for (const [module, actions] of Object.entries(permissions)) {
+            if (!PERMISSIONS[module]) {
+                return next(new AppError(`Invalid permission module: '${module}'. Allowed modules: ${Object.keys(PERMISSIONS).join(', ')}`, 400));
+            }
+            if (!Array.isArray(actions)) {
+                return next(new AppError(`Permissions for module '${module}' must be an array`, 400));
+            }
+            const invalidActions = actions.filter(a => !PERMISSIONS[module].includes(a));
+            if (invalidActions.length) {
+                return next(new AppError(`Invalid actions for module '${module}': ${invalidActions.join(', ')}. Allowed: ${PERMISSIONS[module].join(', ')}`, 400));
+            }
         }
 
         // Check duplicate email

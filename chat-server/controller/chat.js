@@ -202,6 +202,13 @@ const chatController = (io) => {
           return;
         }
 
+        const permissions = socket.user?.permissions;
+        if (!permissions?.chat?.includes('create')) {
+          console.log(`[admin-initiate-chat] REJECTED - Admin ${userId} lacks chat.create permission`);
+          socket.emit("error", { message: "Access denied: requires 'create' permission on 'chat'" });
+          return;
+        }
+
         console.log(`[admin-initiate-chat] Admin ${username} (${userId}) initiating chat with user ${targetUserId}`);
 
         // Validate target user exists and is not an admin
@@ -351,6 +358,13 @@ const chatController = (io) => {
         if (userRole !== 'admin') {
           console.log(`[admin-join-support-chat] REJECTED - User ${userId} is not an admin (role: ${userRole})`);
           socket.emit("error", { message: "Only admins can access support chats" });
+          return;
+        }
+
+        const permissions = socket.user?.permissions;
+        if (!permissions?.chat?.includes('view')) {
+          console.log(`[admin-join-support-chat] REJECTED - Admin ${userId} lacks chat.view permission`);
+          socket.emit("error", { message: "Access denied: requires 'view' permission on 'chat'" });
           return;
         }
 
