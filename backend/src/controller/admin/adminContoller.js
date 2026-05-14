@@ -225,4 +225,111 @@ LIMIT $1 OFFSET $2`,
     }
 }
 
-module.exports = { approveProfile, getAllFreelancers, getAllCreators, createAdmin };
+const getAdminList = async (req, res, next) => {
+    try {
+        const { search, module } = req.query;
+
+        const result = await query(
+            `SELECT a.id, a.full_name, a.email, a.permissions, a.is_active, a.created_at
+             FROM admin a
+             WHERE
+               ($1::text IS NULL OR a.full_name ILIKE '%' || $1 || '%' OR a.email ILIKE '%' || $1 || '%')
+               AND ($2::text IS NULL OR jsonb_exists(a.permissions, $2))
+             ORDER BY a.created_at DESC`,
+            [search || null, module || null]
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            data: result.rows,
+        });
+    } catch (error) {
+        logger.error(error);
+        return next(new AppError('Failed to fetch admin list', 500));
+    }
+};
+
+const updateAdminPermissions = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { permissions } = req.body;
+
+        if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
+            return next(new AppError('permissions must be a non-null object', 400));
+        }
+
+        // Validate against master schema
+        for (const [mod, actions] of Object.entries(permissions)) {
+            if (!PERMISSIONS[mod]) {
+                return next(new AppError(`Invalid permission module: '${mod}'. Allowed: ${Object.keys(PERMISSIONS).join(', ')}`, 400));
+            }
+            if (!Array.isArray(actions)) {
+                return next(new AppError(`Permissions for module '${mod}' must be an array`, 400));
+            }
+            const invalidActions = actions.filter(a => !PERMISSIONS[mod].includes(a));
+            if (invalidActions.length) {
+                return next(new AppError(`Invalid actions for module '${mod}': ${invalidActions.join(', ')}. Allowed: ${PERMISSIONS[mod].join(', ')}`, 400));
+            }
+        }
+
+        // Prevent editing own permissions
+        if (req.user?.roleWiseId === Number(id)) {
+            return next(new AppError('You cannot edit your own permissions', 403));
+        }
+
+        const result = await query(
+            `UPDATE admin SET permissions = $1, updated_at = NOW()
+             WHERE id = $2
+             RETURNING id, full_name, email, permissions`,
+            [JSON.stringify(permissions), id]
+        );
+
+        if (!result.rows.length) {
+            return next(new AppError('Admin not found', 404));
+        }
+
+        logger.info(`Admin ${result.rows[0].email} permissions updated by ${req.user?.email}`);
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Permissions updated successfully',
+            data: result.rows[0],
+        });
+    } catch (error) {
+        logger.error(error);
+        return next(new AppError('Failed to update permissions', 500));
+    }
+};
+
+const deleteAdmin = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        // Prevent self-deletion
+        if (req.user?.roleWiseId === Number(id)) {
+            return next(new AppError('You cannot delete your own account', 403));
+        }
+
+        const adminRes = await query('SELECT user_id, email FROM admin WHERE id = $1', [id]);
+        if (!adminRes.rows.length) {
+            return next(new AppError('Admin not found', 404));
+        }
+
+        const { user_id, email } = adminRes.rows[0];
+
+        await query('DELETE FROM admin WHERE id = $1', [id]);
+        await query('DELETE FROM users WHERE id = $1', [user_id]);
+
+        logger.info(`Admin ${email} deleted by ${req.user?.email}`);
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Admin deleted successfully',
+        });
+    } catch (error) {
+        logger.error(error);
+        return next(new AppError('Failed to delete admin', 500));
+    }
+};
+
+module.exports = { approveProfile, getAllFreelancers, getAllCreators, createAdmin, getAdminList, updateAdminPermissions, deleteAdmin };

@@ -41,7 +41,10 @@
  *   create → socket: admin-initiate-chat
  *
  * admin_management:
+ *   view   → GET /admins
  *   create → POST /create-admin
+ *   update → PATCH /admins/:id/permissions
+ *   delete → DELETE /admins/:id
  */
 const PERMISSIONS = {
     user_management: ['view', 'update', 'approve'],
@@ -49,7 +52,7 @@ const PERMISSIONS = {
     disputes:        ['view', 'update'],
     projects:        ['view', 'create', 'update'],
     chat:            ['view', 'create'],
-    admin_management:['create'],
+    admin_management:['view', 'create', 'update', 'delete'],
 };
 
 /**
