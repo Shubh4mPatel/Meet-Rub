@@ -2,7 +2,7 @@ const bcrypt = require('bcrypt');
 const { query } = require('../../../config/dbConfig')
 const AppError = require('../../../utils/appError');
 const logger = require('../../../utils/logger');
-const { PERMISSIONS } = require('../../config/permissions');
+const { PERMISSIONS } = require('../../../config/permissions');
 
 const createAdmin = async (req, res, next) => {
     try {
