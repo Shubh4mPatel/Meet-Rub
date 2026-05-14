@@ -1,10 +1,10 @@
 const paymentService = require('../../razor-pay-services/paymentService');
-const payoutService = require('../../razor-pay-services/payoutService');
 const linkedAccountService = require('../../razor-pay-services/linkedAccountService');
 const { pool: db } = require('../../../config/dbConfig');
 const { query } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const { createPresignedUrl } = require("../../../utils/helper");
+const razorpay = require('../../../config/razorpay');
 
 
 // Approve payout request (admin) — triggers Razorpay payout
@@ -15,12 +15,17 @@ const approvePayout = async (req, res, next) => {
   try {
     await client.query('BEGIN');
 
+    // Fetch payout + linked transaction in one query
     const { rows: payouts } = await client.query(
-      `SELECT po.*, f.freelancer_id AS f_id, f.verification_status
+      `SELECT po.id, po.status, po.amount, po.freelancer_id,
+              f.freelancer_id AS f_id, f.verification_status,
+              t.id AS transaction_id, t.razorpay_transfer_id,
+              t.project_id
        FROM payouts po
-       JOIN users u ON po.freelancer_id = u.id
-       JOIN freelancer f ON f.user_id = u.id
-       WHERE po.id = $1 FOR UPDATE`,
+       JOIN users u        ON po.freelancer_id = u.id
+       JOIN freelancer f   ON f.user_id = u.id
+       JOIN transactions t ON t.id = po.transaction_id
+       WHERE po.id = $1 FOR UPDATE OF po`,
       [payoutId]
     );
 
@@ -36,36 +41,47 @@ const approvePayout = async (req, res, next) => {
       return next(new AppError(`Payout cannot be approved. Current status: ${payout.status}`, 400));
     }
 
-    // Check if freelancer's account is verified
     if (payout.verification_status !== 'VERIFIED') {
       await client.query('ROLLBACK');
       return next(new AppError('Freelancer account not verified', 400));
     }
 
-    // Update payout to QUEUED
+    if (!payout.razorpay_transfer_id) {
+      await client.query('ROLLBACK');
+      return next(new AppError('No Razorpay transfer found for this payout. Cannot release.', 400));
+    }
+
+    // Release the held Route transfer
+    await razorpay.transfers.edit(payout.razorpay_transfer_id, { on_hold: 0 });
+
+    // Mark transaction and project as completed
     await client.query(
-      `UPDATE payouts
-       SET status = 'QUEUED', approved_by = $1, approved_at = NOW(), updated_at = NOW()
-       WHERE id = $2`,
+      `UPDATE transactions SET status = 'COMPLETED', released_by = $1, released_at = NOW(), updated_at = NOW() WHERE id = $2`,
+      [adminId, payout.transaction_id]
+    );
+
+    await client.query(
+      `UPDATE projects SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [payout.project_id]
+    );
+
+    // Mark payout as processed
+    await client.query(
+      `UPDATE payouts SET status = 'PROCESSED', approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2`,
       [adminId, payoutId]
     );
 
     await client.query('COMMIT');
 
-    // Trigger Razorpay payout async
-    payoutService.processPayout(payoutId).catch((err) => {
-      console.error('processPayout error:', err);
-    });
-
     return res.status(200).json({
       status: 'success',
-      message: 'Payout approved. Processing initiated.',
-      data: { payout_id: payoutId }
+      message: 'Payout approved. Funds released to freelancer.',
+      data: { payout_id: payoutId, amount: parseFloat(payout.amount) }
     });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('approvePayout error:', error);
-    return next(new AppError(error.message, 500));
+    return next(new AppError('Failed to approve payout', 500));
   } finally {
     client.release();
   }

@@ -39,27 +39,21 @@ const getMyPayouts = async (req, res, next) => {
 
 // Request payout (partial amount allowed)
 const requestPayout = async (req, res, next) => {
-  const freelancerId = req.user.user_id; // Standardize on users.id for payouts.freelancer_id
-  const { amount } = req.body;
+  const freelancerUserId = req.user.user_id;
+  const { project_id } = req.body;
 
-  if (!amount || isNaN(amount)) {
-    return next(new AppError('amount is required', 400));
-  }
-
-  const requestedAmount = parseFloat(amount);
-
-  if (requestedAmount < 100) {
-    return next(new AppError('Minimum payout amount is ₹100', 400));
+  if (!project_id) {
+    return next(new AppError('project_id is required', 400));
   }
 
   const client = await db.connect();
   try {
     await client.query('BEGIN');
 
-    // Get freelancer verification status (locked)
+    // Verify freelancer exists and is verified
     const { rows: freelancers } = await client.query(
-      `SELECT user_id AS freelancer_id, verification_status FROM freelancer WHERE user_id = $1 FOR UPDATE`,
-      [freelancerId]
+      `SELECT freelancer_id, verification_status FROM freelancer WHERE user_id = $1 FOR UPDATE`,
+      [freelancerUserId]
     );
 
     if (freelancers.length === 0) {
@@ -74,23 +68,42 @@ const requestPayout = async (req, res, next) => {
       return next(new AppError('Your account must be verified before requesting a payout', 400));
     }
 
-    // Check no active payout request already exists
-    const { rows: activePayout } = await client.query(
-      `SELECT id FROM payouts WHERE freelancer_id = $1 AND status IN ('REQUESTED', 'QUEUED', 'PENDING', 'PROCESSING')`,
-      [freelancerId]
+    // Fetch the HELD transaction for this project belonging to this freelancer
+    const { rows: transactions } = await client.query(
+      `SELECT t.id, t.freelancer_amount, t.razorpay_transfer_id
+       FROM transactions t
+       JOIN projects p ON t.project_id = p.id
+       WHERE t.project_id = $1
+         AND t.freelancer_id = $2
+         AND t.status = 'HELD'
+       LIMIT 1`,
+      [project_id, freelancer.freelancer_id]
     );
 
-    if (activePayout.length > 0) {
+    if (transactions.length === 0) {
       await client.query('ROLLBACK');
-      return next(new AppError('You already have a payout request in progress', 400));
+      return next(new AppError('No held payment found for this project. Payout can only be requested after payment is secured.', 400));
     }
 
-    // Create payout request
+    const transaction = transactions[0];
+
+    // Block if a payout already exists for this transaction
+    const { rows: existingPayout } = await client.query(
+      `SELECT id, status FROM payouts WHERE transaction_id = $1`,
+      [transaction.id]
+    );
+
+    if (existingPayout.length > 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError(`A payout for this project already exists (status: ${existingPayout[0].status})`, 400));
+    }
+
+    // Create payout request linked to the transaction
     const { rows: payoutResult } = await client.query(
-      `INSERT INTO payouts (freelancer_id, amount, currency, status)
-       VALUES ($1, $2, $3, 'REQUESTED')
-       RETURNING id`,
-      [freelancerId, requestedAmount, process.env.CURRENCY || 'INR']
+      `INSERT INTO payouts (freelancer_id, amount, currency, status, transaction_id)
+       VALUES ($1, $2, $3, 'REQUESTED', $4)
+       RETURNING id, amount`,
+      [freelancerUserId, transaction.freelancer_amount, process.env.CURRENCY || 'INR', transaction.id]
     );
 
     await client.query('COMMIT');
@@ -100,7 +113,9 @@ const requestPayout = async (req, res, next) => {
       message: 'Payout request submitted successfully.',
       data: {
         payout_id: payoutResult[0].id,
-        amount: requestedAmount
+        amount: parseFloat(payoutResult[0].amount),
+        project_id,
+        transaction_id: transaction.id,
       }
     });
   } catch (error) {

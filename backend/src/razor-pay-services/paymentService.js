@@ -554,13 +554,6 @@ class PaymentService {
       //   [tx.project_id]
       // );
 
-      // Credit freelancer earnings tracking balance.
-      // Actual funds are auto-settled by Razorpay to the linked account's bank.
-      await client.query(
-        `UPDATE freelancer SET earnings_balance = earnings_balance + $1, updated_at = NOW() WHERE freelancer_id = $2`,
-        [tx.freelancer_amount, tx.freelancer_id]
-      );
-
       await client.query('COMMIT');
 
       logger.info(`[releaseTransfer] Transfer ${tx.razorpay_transfer_id} released by admin ${adminId} for transaction ${transactionId}`);
