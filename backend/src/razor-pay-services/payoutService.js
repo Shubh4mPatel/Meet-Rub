@@ -9,7 +9,7 @@ class PayoutService {
     let idx = 2;
     const conditions = ['p.freelancer_id = $1'];
 
-    const VALID_STATUSES = ['REQUESTED', 'PROCESSED', 'REJECTED', 'FAILED'];
+    const VALID_STATUSES = ['REQUESTED', 'PROCESSED', 'REJECTED', 'FAILED', 'REVERSED'];
     if (status) {
       const upperStatus = status.toUpperCase();
       if (!VALID_STATUSES.includes(upperStatus)) {
@@ -51,6 +51,7 @@ class PayoutService {
       PROCESSED: 'Credited',
       REJECTED:  'Rejected',
       FAILED:    'Failed',
+      REVERSED:  'Reversed',
     };
 
     const dataParams = [...params, limit, offset];

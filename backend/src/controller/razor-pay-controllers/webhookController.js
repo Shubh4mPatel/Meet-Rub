@@ -405,7 +405,7 @@ const handleTransferReversed = async (payload) => {
 
     // Get the transaction before updating — need to check if balance was credited
     const { rows: txRows } = await client.query(
-      `SELECT t.id, t.status, t.freelancer_amount, t.freelancer_id
+      `SELECT t.id, t.status, t.freelancer_amount, t.freelancer_id, t.settled_at
        FROM transactions t
        WHERE t.razorpay_transfer_id = $1 AND t.status IN ('HELD', 'COMPLETED')
        FOR UPDATE`,
@@ -420,8 +420,10 @@ const handleTransferReversed = async (payload) => {
 
     const tx = txRows[0];
 
-    // If transaction was COMPLETED, the freelancer's balance was credited — revert it
-    if (tx.status === 'COMPLETED' && tx.freelancer_amount && tx.freelancer_id) {
+    // Only debit earnings_balance if transfer.settled already fired (settled_at is set).
+    // earnings_balance is credited in handleTransferSettled (T+2 days after release),
+    // not at approvePayout time — so COMPLETED alone is not a safe signal.
+    if (tx.settled_at && tx.freelancer_amount && tx.freelancer_id) {
       await client.query(
         `UPDATE freelancer
          SET earnings_balance = earnings_balance - $1,
@@ -443,6 +445,14 @@ const handleTransferReversed = async (payload) => {
        WHERE id = (SELECT project_id FROM transactions WHERE id = $1)`,
       [tx.id]
     );
+
+    // Mark the linked payout as REVERSED so freelancer history reflects reality
+    await client.query(
+      `UPDATE payouts SET status = 'REVERSED', updated_at = NOW()
+       WHERE transaction_id = $1 AND status = 'PROCESSED'`,
+      [tx.id]
+    );
+    logger.info(`[handleTransferReversed] Marked payout REVERSED for transaction ${tx.id}`);
 
     logger.info(`[handleTransferReversed] Transaction ${tx.id} marked REFUNDED for transfer ${transferId}`);
 
@@ -475,10 +485,13 @@ const handleTransferSettled = async (payload) => {
     );
 
     if (rows.length > 0) {
-      // Mark that settlement is done — credit earnings_balance for tracking
       await client.query(
         `UPDATE freelancer SET earnings_balance = earnings_balance + $1, updated_at = NOW() WHERE freelancer_id = $2`,
         [rows[0].freelancer_amount, rows[0].freelancer_id]
+      );
+      await client.query(
+        `UPDATE transactions SET settled_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [rows[0].id]
       );
       logger.info(`[handleTransferSettled] Credited earnings_balance ${rows[0].freelancer_amount} for freelancer ${rows[0].freelancer_id}`);
     } else {

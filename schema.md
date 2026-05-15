@@ -984,6 +984,7 @@ CREATE TABLE IF NOT EXISTS public.transactions
     held_at timestamp with time zone,
     released_at timestamp with time zone,
     released_by integer,
+    settled_at timestamp with time zone,
     payout_id character varying(255) COLLATE pg_catalog."default",
     payout_status character varying(20) COLLATE pg_catalog."default",
     payout_utr character varying(255) COLLATE pg_catalog."default",
