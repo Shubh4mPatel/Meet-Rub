@@ -1045,6 +1045,18 @@ const createFreelancerLinkedAccount = async (req, res, next) => {
     });
   } catch (error) {
     console.error('createFreelancerLinkedAccount error:', error);
+
+    // Validation errors thrown by linkedAccountService before hitting Razorpay
+    if (
+      error.message?.startsWith('Onboarding failed') ||
+      error.message?.includes('missing required fields') ||
+      error.message?.includes('must be at least') ||
+      error.message?.includes('Invalid') ||
+      error.message?.includes('must have bank details')
+    ) {
+      return next(new AppError(error.message, 400));
+    }
+
     return next(new AppError(error.message || 'Failed to create linked account', 500));
   }
 };
