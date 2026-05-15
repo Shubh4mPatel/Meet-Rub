@@ -86,7 +86,8 @@ const loginUser = async (req, res, next) => {
             email: user.user_email,
             name: user.user_name,
             role: user.user_role,
-            roleWiseId
+            roleWiseId,
+            ...(user.user_role === 'admin' && { permissions: adminPermissions }),
         };
         return next();
 
