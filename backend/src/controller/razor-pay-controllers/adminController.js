@@ -977,32 +977,6 @@ const getEscrowTransactions = async (req, res, next) => {
   }
 };
 
-// Release transfer — release on-hold funds to freelancer via Razorpay Routes
-const releaseTransfer = async (req, res, next) => {
-  const transactionId = req.params.id;
-  const adminId = req.user.roleWiseId;
-
-  try {
-    const result = await paymentService.releaseTransfer(transactionId, adminId);
-
-    return res.status(200).json({
-      status: 'success',
-      message: 'Transfer released. Funds will settle to freelancer bank in T+2 days.',
-      data: result,
-    });
-  } catch (error) {
-    console.error('releaseTransfer error:', error);
-    const msg = error?.error?.description || error?.message || 'Failed to release transfer';
-    if (msg.includes('not found') || msg.includes('No transfer') || msg.includes('No db records')) {
-      return next(new AppError(msg, 404));
-    }
-    if (msg.includes('not in HELD') || msg.includes('already')) {
-      return next(new AppError(msg, 400));
-    }
-    return next(new AppError(msg, 500));
-  }
-};
-
 // Create Razorpay linked account for a freelancer (admin button 2)
 const createFreelancerLinkedAccount = async (req, res, next) => {
   try {
@@ -1163,7 +1137,6 @@ module.exports = {
   suspendCreatorByAdmin,
   revokeCreatorSuspension,
   getEscrowTransactions,
-  releaseTransfer,
   createFreelancerLinkedAccount,
   getFreelancerLinkedAccountStatus,
   resetFreelancerLinkedAccount,

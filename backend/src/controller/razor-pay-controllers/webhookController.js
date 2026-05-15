@@ -321,7 +321,7 @@ const handleTransferProcessed = async (payload) => {
 
   // If transfer is on_hold, it means payment was successful but funds are in escrow.
   // Mark transaction as HELD and project as IN_PROGRESS.
-  // Admin will release the hold later via releaseTransfer.
+  // Admin will release the hold later via POST /admin/payouts/:id/approve.
   const client = await db.connect();
   try {
     await client.query('BEGIN');

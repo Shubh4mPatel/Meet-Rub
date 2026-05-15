@@ -9,7 +9,7 @@ class PayoutService {
     let idx = 2;
     const conditions = ['p.freelancer_id = $1'];
 
-    const VALID_STATUSES = ['REQUESTED', 'PROCESSED', 'REJECTED'];
+    const VALID_STATUSES = ['REQUESTED', 'PROCESSED', 'REJECTED', 'FAILED'];
     if (status) {
       const upperStatus = status.toUpperCase();
       if (!VALID_STATUSES.includes(upperStatus)) {
@@ -46,6 +46,13 @@ class PayoutService {
       [freelancerId]
     );
 
+    const STATUS_LABEL = {
+      REQUESTED: 'In process',
+      PROCESSED: 'Credited',
+      REJECTED:  'Rejected',
+      FAILED:    'Failed',
+    };
+
     const dataParams = [...params, limit, offset];
     const { rows } = await db.query(
       `SELECT
@@ -54,6 +61,7 @@ class PayoutService {
         p.currency,
         p.status,
         p.rejection_reason,
+        p.failure_reason,
         p.rejected_at,
         p.requested_at,
         f.bank_account_no,
@@ -67,10 +75,25 @@ class PayoutService {
     );
 
     const payouts = rows.map((row) => {
-      if (row.bank_account_no) {
-        row.bank_account_no = '****' + row.bank_account_no.slice(-4);
-      }
-      return row;
+      const masked = row.bank_account_no
+        ? '****' + row.bank_account_no.slice(-4)
+        : null;
+
+      const reason = row.rejection_reason || row.failure_reason || null;
+
+      return {
+        id: row.id,
+        reference_id: `WDL-${row.id}`,
+        amount: parseFloat(row.amount),
+        currency: row.currency,
+        status: row.status,
+        status_label: STATUS_LABEL[row.status] || row.status,
+        reason,
+        requested_at: row.requested_at,
+        rejected_at: row.rejected_at,
+        bank_name: row.bank_name,
+        bank_account_no: masked,
+      };
     });
 
     return {
