@@ -516,6 +516,21 @@ const resolveDispute = async (req, res, next) => {
         [dispute.project_id]
       );
 
+      // Auto-create payout record so withdrawal list excludes this project
+      // and freelancer history reflects this release.
+      // Routes flow → PROCESSED (transfer.settled webhook will flip it to CREDITED after T+2)
+      // Legacy flow → CREDITED immediately (earnings_balance already credited above)
+      const autoPayoutStatus = dispute.razorpay_transfer_id ? 'PROCESSED' : 'CREDITED';
+      await client.query(
+        `INSERT INTO payouts (freelancer_id, amount, currency, status, transaction_id, approved_by, approved_at)
+         SELECT f.user_id, $2, $3, $4, $5, $6, NOW()
+         FROM freelancer f
+         WHERE f.freelancer_id = $1
+           AND NOT EXISTS (SELECT 1 FROM payouts WHERE transaction_id = $5)`,
+        [dispute.t_freelancer_id, dispute.freelancer_amount, process.env.CURRENCY || 'INR', autoPayoutStatus, dispute.transaction_id, adminId]
+      );
+      logger.info(`Dispute ${id}: Auto-created payout (status: ${autoPayoutStatus}) for transaction ${dispute.transaction_id}`);
+
     } else {
       // Refund full amount (including GST) to creator
       if (!dispute.razorpay_payment_id) {
