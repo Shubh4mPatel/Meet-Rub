@@ -41,8 +41,8 @@ const createAdmin = async (req, res, next) => {
 
         // Insert into users table
         const userResult = await query(
-            `INSERT INTO users (user_name, user_email, user_password, user_role, approval_status, created_at, updated_at)
-             VALUES ($1, $2, $3, 'admin', 'approved', NOW(), NOW())
+            `INSERT INTO users (user_name, user_email, user_password, user_role, created_at)
+             VALUES ($1, $2, $3, 'admin', NOW())
              RETURNING id`,
             [full_name.trim(), email.toLowerCase(), hashedPassword]
         );
@@ -75,11 +75,10 @@ const approveProfile = async (req, res, next) => {
         const { userEmail } = req.body;
         const adminUser = req.user
         await query(
-            `UPDATE users
-   SET approval_status = 'approved',
-       approved_at = $1
-   WHERE user_email = $2`,
-            [new Date(), userEmail]
+            `UPDATE freelancer
+   SET verification_status = 'VERIFIED'
+   WHERE freelancer_email = $1`,
+            [userEmail]
         );
         logger.info(`user ${userEmail} approved by admin ${adminUser.name}`)
 
@@ -105,7 +104,7 @@ const getAllFreelancers = async (req, res, next) => {
     f.phone_number, 
     f.freelancer_email, 
     f.created_at,
-    u.approval_status,
+    f.verification_status,
     COALESCE(
         json_agg(
             DISTINCT jsonb_build_object(
@@ -121,8 +120,8 @@ FROM freelancer f
 INNER JOIN users u ON f.user_id = u.id
 LEFT JOIN featured_freelancers ff ON f.freelancer_id = ff.freelancer_id AND ff.is_active = true
 LEFT JOIN service_options so ON ff.service_option_id = so.id
-WHERE u.approval_status != 'approved'
-GROUP BY f.freelancer_id, f.freelancer_full_name, f.phone_number, f.freelancer_email, f.created_at, u.approval_status
+WHERE f.verification_status != 'VERIFIED'
+GROUP BY f.freelancer_id, f.freelancer_full_name, f.phone_number, f.freelancer_email, f.created_at, f.verification_status
 ORDER BY is_featured DESC, f.created_at DESC
 LIMIT $1 OFFSET $2`,
             [limit, offset]
@@ -176,13 +175,12 @@ const getAllCreators = async (req, res, next) => {
 
         const creatorsData = await query(
             `SELECT 
-    c.creator_full_name, 
-    c.creator_email, 
-    c.created_at,
-    u.approval_status
+    c.full_name AS creator_full_name, 
+    c.email AS creator_email, 
+    c.created_at
 FROM creators c
 INNER JOIN users u ON c.user_id = u.id
-WHERE u.approval_status != 'approved'
+WHERE u.is_active = true
 LIMIT $1 OFFSET $2`,
             [limit, offset]
         );
