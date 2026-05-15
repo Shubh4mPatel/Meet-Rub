@@ -9,7 +9,7 @@ class PayoutService {
     let idx = 2;
     const conditions = ['p.freelancer_id = $1'];
 
-    const VALID_STATUSES = ['REQUESTED', 'PROCESSED', 'REJECTED', 'FAILED', 'REVERSED'];
+    const VALID_STATUSES = ['REQUESTED', 'PROCESSED', 'CREDITED', 'REJECTED', 'FAILED', 'REVERSED'];
     if (status) {
       const upperStatus = status.toUpperCase();
       if (!VALID_STATUSES.includes(upperStatus)) {
@@ -38,9 +38,9 @@ class PayoutService {
 
     const { rows: statusCounts } = await db.query(
       `SELECT
-        COUNT(*) FILTER (WHERE status = 'REQUESTED') AS pending,
-        COUNT(*) FILTER (WHERE status = 'PROCESSED') AS completed,
-        COUNT(*) FILTER (WHERE status = 'REJECTED')  AS rejected
+        COUNT(*) FILTER (WHERE status = 'REQUESTED')                    AS pending,
+        COUNT(*) FILTER (WHERE status IN ('PROCESSED', 'CREDITED'))     AS completed,
+        COUNT(*) FILTER (WHERE status = 'REJECTED')                     AS rejected
        FROM payouts
        WHERE freelancer_id = $1`,
       [freelancerId]
@@ -48,7 +48,8 @@ class PayoutService {
 
     const STATUS_LABEL = {
       REQUESTED: 'In process',
-      PROCESSED: 'Credited',
+      PROCESSED: 'Releasing',
+      CREDITED:  'Credited',
       REJECTED:  'Rejected',
       FAILED:    'Failed',
       REVERSED:  'Reversed',

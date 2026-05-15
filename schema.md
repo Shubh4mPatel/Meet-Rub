@@ -669,7 +669,7 @@ CREATE TABLE IF NOT EXISTS public.payouts
         REFERENCES public.admin (id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION,
-    CONSTRAINT payouts_status_check CHECK (status::text = ANY (ARRAY['REQUESTED'::character varying, 'QUEUED'::character varying, 'PENDING'::character varying, 'PROCESSING'::character varying, 'PROCESSED'::character varying, 'REVERSED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying, 'REJECTED'::character varying]::text[])),
+    CONSTRAINT payouts_status_check CHECK (status::text = ANY (ARRAY['REQUESTED'::character varying, 'QUEUED'::character varying, 'PENDING'::character varying, 'PROCESSING'::character varying, 'PROCESSED'::character varying, 'CREDITED'::character varying, 'REVERSED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying, 'REJECTED'::character varying]::text[])),
     CONSTRAINT payouts_mode_check CHECK (mode::text = ANY (ARRAY['IMPS'::character varying, 'NEFT'::character varying, 'RTGS'::character varying, 'UPI'::character varying]::text[]))
 )
 

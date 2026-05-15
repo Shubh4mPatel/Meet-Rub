@@ -493,7 +493,12 @@ const handleTransferSettled = async (payload) => {
         `UPDATE transactions SET settled_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [rows[0].id]
       );
-      logger.info(`[handleTransferSettled] Credited earnings_balance ${rows[0].freelancer_amount} for freelancer ${rows[0].freelancer_id}`);
+      await client.query(
+        `UPDATE payouts SET status = 'CREDITED', updated_at = NOW()
+         WHERE transaction_id = $1 AND status = 'PROCESSED'`,
+        [rows[0].id]
+      );
+      logger.info(`[handleTransferSettled] Credited earnings_balance ${rows[0].freelancer_amount} for freelancer ${rows[0].freelancer_id}, payout marked CREDITED`);
     } else {
       logger.info(`[handleTransferSettled] No COMPLETED transaction for transfer ${transferId}`);
     }

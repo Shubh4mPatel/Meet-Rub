@@ -186,8 +186,10 @@ const getWalletDashboard = async (req, res, next) => {
           CONCAT('Bank Transfer to ', COALESCE(f.bank_name, 'Bank'), ' ****', RIGHT(COALESCE(f.bank_account_no, '0000'), 4)) AS description,
           -py.amount                                                                                                 AS amount,
           CASE
-            WHEN py.status = 'PROCESSED' THEN 'Completed'
+            WHEN py.status = 'CREDITED'  THEN 'Credited'
+            WHEN py.status = 'PROCESSED' THEN 'Releasing'
             WHEN py.status = 'REJECTED'  THEN 'Rejected'
+            WHEN py.status = 'REVERSED'  THEN 'Reversed'
             WHEN py.status = 'FAILED'    THEN 'Failed'
             ELSE 'Pending'
           END                                                                                                        AS status
