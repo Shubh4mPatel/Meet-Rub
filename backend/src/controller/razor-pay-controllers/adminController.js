@@ -1010,12 +1010,29 @@ const createFreelancerLinkedAccount = async (req, res, next) => {
 
     const result = await linkedAccountService.onboardFreelancer(parseInt(freelancer_id));
 
+    let next_action = null;
+    let can_approve_kyc = false;
+    if (result.status === 'activated') {
+      next_action = 'approve_platform_kyc';
+      can_approve_kyc = true;
+    } else if (result.status === 'needs_clarification') {
+      next_action = 'check_razorpay_requirements';
+    } else {
+      next_action = 'check_razorpay_status';
+    }
+
     return res.status(200).json({
       status: 'success',
       message: result.status === 'activated'
         ? 'Linked account created and activated successfully.'
         : `Linked account created. Status: ${result.status}. Razorpay may require additional review.`,
-      data: result,
+      data: {
+        razorpay_account_status: result.status,
+        account_id: result.accountId,
+        requirements: result.requirements || [],
+        next_action,
+        can_approve_kyc,
+      },
     });
   } catch (error) {
     console.error('createFreelancerLinkedAccount error:', error);

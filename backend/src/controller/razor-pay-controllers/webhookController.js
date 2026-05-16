@@ -513,6 +513,50 @@ const handleTransferSettled = async (payload) => {
   }
 };
 
+// Handle account.activated event — Razorpay fires this after async bank verification completes
+const handleAccountActivated = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) {
+    logger.warn('[handleAccountActivated] Missing account entity in payload');
+    return;
+  }
+
+  const { rowCount } = await db.query(
+    `UPDATE freelancer SET razorpay_account_status = 'activated', updated_at = NOW()
+     WHERE razorpay_linked_account_id = $1`,
+    [account.id]
+  );
+
+  if (rowCount > 0) {
+    logger.info(`[handleAccountActivated] Freelancer with account ${account.id} set to activated`);
+  } else {
+    logger.warn(`[handleAccountActivated] No freelancer found for razorpay_linked_account_id=${account.id}`);
+  }
+};
+
+// Handle account.needs_clarification — Razorpay requires more info before activation
+const handleAccountNeedsClarification = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) {
+    logger.warn('[handleAccountNeedsClarification] Missing account entity in payload');
+    return;
+  }
+
+  const requirements = account.requirements || [];
+
+  const { rowCount } = await db.query(
+    `UPDATE freelancer SET razorpay_account_status = 'needs_clarification', updated_at = NOW()
+     WHERE razorpay_linked_account_id = $1`,
+    [account.id]
+  );
+
+  if (rowCount > 0) {
+    logger.info(`[handleAccountNeedsClarification] Freelancer with account ${account.id} set to needs_clarification, requirements: ${JSON.stringify(requirements)}`);
+  } else {
+    logger.warn(`[handleAccountNeedsClarification] No freelancer found for razorpay_linked_account_id=${account.id}`);
+  }
+};
+
 // Handle Razorpay webhooks
 const handleWebhook = async (req, res, next) => {
   try {
@@ -533,6 +577,7 @@ const handleWebhook = async (req, res, next) => {
     const webhookEventId = parsedForEvent.id
       || parsedForEvent.payload?.payout?.entity?.id
       || parsedForEvent.payload?.payment?.entity?.id
+      || parsedForEvent.payload?.account?.entity?.id
       || null;
 
     logger.info(`[handleWebhook] Received webhook event: ${event}, id: ${webhookEventId}`);
@@ -601,6 +646,16 @@ const handleWebhook = async (req, res, next) => {
       case 'transfer.settled':
         await handleTransferSettled(payload);
         logger.info(`[handleWebhook] Successfully processed transfer.settled event`);
+        break;
+
+      case 'account.activated':
+        await handleAccountActivated(payload);
+        logger.info(`[handleWebhook] Successfully processed account.activated event`);
+        break;
+
+      case 'account.needs_clarification':
+        await handleAccountNeedsClarification(payload);
+        logger.info(`[handleWebhook] Successfully processed account.needs_clarification event`);
         break;
 
       default:

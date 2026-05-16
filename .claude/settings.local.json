@@ -73,7 +73,9 @@
       "Bash(curl -s --connect-timeout 5 -k -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODQzODE2MjEsImZpcnN0bmFtZSI6IlNodWJoYW0iLCJsYXN0bmFtZSI6IlBhdGVsIiwicHJlbWl1bSI6dHJ1ZSwic2NvcGUiOiJhdXRoIiwidXNlcl9pZCI6MzAyLCJ1c2VybmFtZSI6InNodWJoNG0uZGV2QGdtYWlsLmNvbSJ9.aQkwazV3Z7F4liRy-cUZNfTT631SPPbcM_lwFXThpzE' https://152.67.23.30/api/v1/admin)",
       "Bash(curl -s --connect-timeout 5 -k -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODQzODE2MjEsImZpcnN0bmFtZSI6IlNodWJoYW0iLCJsYXN0bmFtZSI6IlBhdGVsIiwicHJlbWl1bSI6dHJ1ZSwic2NvcGUiOiJhdXRoIiwidXNlcl9pZCI6MzAyLCJ1c2VybmFtZSI6InNodWJoNG0uZGV2QGdtYWlsLmNvbSJ9.aQkwazV3Z7F4liRy-cUZNfTT631SPPbcM_lwFXThpzE' https://152.67.23.30/api/v1/admin/dashboard)",
       "WebFetch(domain:razorpay.com)",
-      "Read(//home/shubh4m/**)"
+      "Read(//home/shubh4m/**)",
+      "WebSearch",
+      "WebFetch(domain:next.razorpay.com)"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -327,7 +327,18 @@ class LinkedAccountService {
             await saveError('update_product_config', err.message);
             throw err;
         }
-        const activationStatus = productConfig?.activation_status || 'pending';
+
+        // Step 4b: PATCH response is pre-verification (Razorpay runs async penny drop).
+        // Immediately GET the product config to capture the real post-verification status.
+        let latestProductConfig = productConfig;
+        try {
+            latestProductConfig = await this.getProductConfigStatus(accountId, productId);
+            logger.info(`[onboardFreelancer] Step 4b GET status: activation_status=${latestProductConfig?.activation_status}`);
+        } catch (err) {
+            logger.warn(`[onboardFreelancer] Step 4b GET failed, falling back to PATCH response: ${err.message}`);
+        }
+
+        const activationStatus = latestProductConfig?.activation_status || productConfig?.activation_status || 'pending';
 
         let accountStatus = 'pending';
         if (activationStatus === 'activated') {
@@ -386,7 +397,7 @@ class LinkedAccountService {
             stakeholderId,
             productId,
             activationStatus,
-            requirements: productConfig.requirements || [],
+            requirements: latestProductConfig.requirements || productConfig.requirements || [],
         };
     }
 
