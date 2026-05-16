@@ -75,12 +75,21 @@ const approvePayout = async (req, res, next) => {
 
     return res.status(200).json({
       status: 'success',
-      message: 'Payout approved. Funds released to freelancer.',
+      message: 'Payout approved. Funds will be released to freelancer in 1-3 business days by Razorpay.',
       data: { payout_id: payoutId, amount: parseFloat(payout.amount) }
     });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('approvePayout error:', error);
+    // Mark payout as FAILED so admin knows to retry — stays REQUESTED if this update also fails
+    try {
+      await db.query(
+        `UPDATE payouts SET status = 'FAILED', failure_reason = $1, updated_at = NOW() WHERE id = $2 AND status = 'REQUESTED'`,
+        [error.message || 'Razorpay transfer release failed', payoutId]
+      );
+    } catch (dbErr) {
+      console.error('approvePayout: could not mark payout FAILED:', dbErr);
+    }
     return next(new AppError('Failed to approve payout', 500));
   } finally {
     client.release();
@@ -150,7 +159,7 @@ const getAllPayouts = async (req, res, next) => {
           p.requested_at as payout_created_at,
           fl.freelancer_full_name as freelancer_name,
           fl.freelancer_email,
-          fl.user_name as freelancer_username,
+          u.user_name as freelancer_username,
           fl.profile_image_url as freelancer_profile_image
        FROM payouts p
        JOIN users u ON p.freelancer_id = u.id

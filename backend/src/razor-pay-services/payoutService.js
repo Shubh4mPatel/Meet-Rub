@@ -113,6 +113,27 @@ class PayoutService {
       },
     };
   }
+
+  async updatePayoutStatus(razorpayPayoutId, status, utr = null) {
+    const upperStatus = status.toUpperCase();
+
+    const { rowCount } = await db.query(
+      `UPDATE payouts
+       SET status = $1,
+           utr = COALESCE($2, utr),
+           updated_at = NOW()
+       WHERE razorpay_payout_id = $3`,
+      [upperStatus, utr, razorpayPayoutId]
+    );
+
+    if (rowCount > 0) {
+      logger.info(`[updatePayoutStatus] Payout ${razorpayPayoutId} → ${upperStatus}${utr ? `, UTR: ${utr}` : ''}`);
+    } else {
+      logger.warn(`[updatePayoutStatus] No payout found for razorpay_payout_id=${razorpayPayoutId}`);
+    }
+
+    return rowCount;
+  }
 }
 
 module.exports = new PayoutService();
