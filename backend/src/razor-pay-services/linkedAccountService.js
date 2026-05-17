@@ -2,6 +2,7 @@ const { pool: db } = require('../../config/dbConfig');
 const razorpayRoutes = require('../../config/razorpayRoutes');
 const { getLogger } = require('../../utils/logger');
 const logger = getLogger('linked-account-service');
+const { toStateCode } = require('../../utils/indianStates');
 
 class LinkedAccountService {
     /**
@@ -33,7 +34,7 @@ class LinkedAccountService {
                             street1: freelancer.street_address,
                             street2: freelancer.street_address_2 || 'N/A',
                             city: freelancer.city,
-                            state: freelancer.state.toUpperCase(),
+                            state: toStateCode(freelancer.state),
                             postal_code: Number(freelancer.postal_code),
                             country: 'IN',
                         },
@@ -80,7 +81,7 @@ class LinkedAccountService {
                     residential: {
                         street: freelancer.street_address,
                         city: freelancer.city,
-                        state: freelancer.state.toUpperCase(),
+                        state: toStateCode(freelancer.state),
                         postal_code: String(freelancer.postal_code),
                         country: 'IN',
                     },

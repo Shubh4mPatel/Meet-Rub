@@ -7,6 +7,8 @@ const { logger } = require("../../../utils/logger");
 const { createPresignedUrl } = require("../../../utils/helper");
 const Joi = require("joi");
 const { sendMail } = require("../../../config/email");
+const { VALID_STATE_NAMES, INDIAN_STATES } = require("../../../utils/indianStates");
+const linkedAccountService = require("../../../razor-pay-services/linkedAccountService");
 
 const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -330,7 +332,9 @@ const freelancerBasicInfoSchema = Joi.object({
   profileTitle: Joi.string().optional().allow(""),
   street_address: Joi.string().optional().allow(""),
   city: Joi.string().optional().allow(""),
-  state: Joi.string().optional().allow(""),
+  state: Joi.string().valid(...INDIAN_STATES.map(s => s.name), "").optional().allow("").messages({
+    'any.only': 'Please select a valid Indian state'
+  }),
   postal_code: Joi.string().optional().allow("")
 });
 
@@ -1055,9 +1059,9 @@ const editProfile = async (req, res, next) => {
           return next(new AppError('City must be between 2 and 100 characters', 400));
         }
 
-        // Razorpay validation: state (min 2, max 50 characters)
-        if (state.trim().length < 2 || state.trim().length > 50) {
-          return next(new AppError('State must be between 2 and 50 characters', 400));
+        // Razorpay validation: state must be a valid Indian state name
+        if (!VALID_STATE_NAMES.has(state.trim())) {
+          return next(new AppError('Please select a valid Indian state', 400));
         }
 
         // Check if Razorpay linked account exists
@@ -2851,9 +2855,13 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
         next_action = 'create_linked_account';
       } else if (freelancer.razorpay_account_status === 'needs_clarification') {
         next_action = 'check_razorpay_requirements';
+      } else if (freelancer.razorpay_account_status === 'under_review') {
+        next_action = 'wait_for_razorpay';
+      } else if (freelancer.razorpay_account_status === 'rejected') {
+        next_action = 'account_rejected';
       } else if (freelancer.razorpay_account_status === 'pending' || freelancer.razorpay_account_status === 'created') {
         next_action = 'check_razorpay_status';
-      } else if (freelancer.razorpay_account_status === 'activated') {
+      } else if (freelancer.razorpay_account_status === 'activated' || freelancer.razorpay_account_status === 'activated_kyc_pending') {
         next_action = 'approve_platform_kyc';
         can_approve_kyc = true;
       }
@@ -3082,6 +3090,11 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         worked_with,
         razorpay_account_status,
         razorpay_linked_account_id,
+        razorpay_onboarding_error,
+        razorpay_onboarding_error_step,
+        razorpay_onboarding_error_at,
+        razorpay_product_id,
+        pan_card_number,
         CASE
           WHEN bank_account_no IS NOT NULL AND bank_ifsc_code IS NOT NULL THEN true
           ELSE false
@@ -3091,6 +3104,10 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
                AND state IS NOT NULL AND postal_code IS NOT NULL THEN true
           ELSE false
         END as has_address,
+        CASE
+          WHEN pan_card_number IS NOT NULL THEN true
+          ELSE false
+        END as has_pan,
         bank_account_holder_name,
         bank_account_no,
         bank_ifsc_code,
@@ -3179,19 +3196,41 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
 
     logger.info(`Successfully fetched KYC details for freelancer ID: ${freelancer_id}`);
 
-    // Add computed field for next action (same logic as KYC approval list)
+    // Compute next_action following the priority order from the plan
     let next_action = null;
     let can_approve_kyc = false;
+    let onboarding_error = null;
+    let requirements = null;
+    let requirements_fetch_failed = false;
 
-    if (!freelancer.has_bank_details || !freelancer.has_address) {
+    if (!freelancer.has_bank_details || !freelancer.has_address || !freelancer.has_pan) {
       next_action = 'missing_details';
+    } else if (freelancer.razorpay_onboarding_error) {
+      next_action = 'onboarding_failed';
+      onboarding_error = {
+        message: freelancer.razorpay_onboarding_error,
+        step: freelancer.razorpay_onboarding_error_step || null,
+        at: freelancer.razorpay_onboarding_error_at || null,
+      };
     } else if (!freelancer.razorpay_linked_account_id) {
       next_action = 'create_linked_account';
     } else if (freelancer.razorpay_account_status === 'needs_clarification') {
       next_action = 'check_razorpay_requirements';
+      try {
+        const sync = await linkedAccountService.syncAccountStatus(freelancer.freelancer_id);
+        requirements = sync.requirements || [];
+      } catch (err) {
+        logger.warn(`[getFreeLancerByIdForAdmin] Failed to fetch Razorpay requirements for freelancer_id=${freelancer.freelancer_id}: ${err.message}`);
+        requirements = [];
+        requirements_fetch_failed = true;
+      }
+    } else if (freelancer.razorpay_account_status === 'under_review') {
+      next_action = 'wait_for_razorpay';
+    } else if (freelancer.razorpay_account_status === 'rejected') {
+      next_action = 'account_rejected';
     } else if (freelancer.razorpay_account_status === 'pending' || freelancer.razorpay_account_status === 'created') {
       next_action = 'check_razorpay_status';
-    } else if (freelancer.razorpay_account_status === 'activated') {
+    } else if (freelancer.razorpay_account_status === 'activated' || freelancer.razorpay_account_status === 'activated_kyc_pending') {
       next_action = 'approve_platform_kyc';
       can_approve_kyc = true;
     }
@@ -3228,8 +3267,12 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
           account_id: freelancer.razorpay_linked_account_id,
           has_bank_details: freelancer.has_bank_details,
           has_address: freelancer.has_address,
+          has_pan: freelancer.has_pan,
           next_action: next_action,
-          can_approve_kyc: can_approve_kyc
+          can_approve_kyc: can_approve_kyc,
+          error: onboarding_error,
+          requirements: requirements,
+          ...(requirements_fetch_failed && { requirements_fetch_failed: true }),
         },
         // Bank details (masked)
         bank_details: freelancer.has_bank_details ? {
