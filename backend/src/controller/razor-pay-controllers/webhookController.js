@@ -1,21 +1,12 @@
 const crypto = require('crypto');
 const { pool: db } = require('../../../config/dbConfig');
 const razorpay = require('../../../config/razorpay');
-const payoutService = require('../../razor-pay-services/payoutService');
 const AppError = require("../../../utils/appError");
 const { getLogger } = require('../../../utils/logger');
 const logger = getLogger('webhook-controller');
 
-// Verify Razorpay webhook signature
-// Payout events come from Razorpay X and use RAZORPAY_X_WEBHOOK_SECRET
-const PAYOUT_EVENTS = new Set(['payout.processed', 'payout.failed', 'payout.reversed']);
-// Transfer events use the standard RAZORPAY_WEBHOOK_SECRET
-const TRANSFER_EVENTS = new Set(['transfer.processed', 'transfer.failed', 'transfer.reversed', 'transfer.settled']);
-
-const verifyWebhookSignature = (rawBody, signature, event) => {
-  const secret = PAYOUT_EVENTS.has(event)
-    ? process.env.RAZORPAY_X_WEBHOOK_SECRET
-    : process.env.RAZORPAY_WEBHOOK_SECRET;
+const verifyWebhookSignature = (rawBody, signature) => {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
   const expectedSignature = crypto
     .createHmac('sha256', secret)
@@ -271,45 +262,6 @@ const handlePaymentFailed = async (payload) => {
   } finally {
     client.release();
   }
-}
-
-// Handle payout processed event
-const handlePayoutProcessed = async (payload) => {
-  const payout = payload.payout.entity;
-
-  logger.info(`[handlePayoutProcessed] Payout processed: ${payout.id}, UTR: ${payout.utr}`);
-
-  await payoutService.updatePayoutStatus(payout.id, 'processed', payout.utr);
-}
-
-// Handle payout failed event
-const handlePayoutFailed = async (payload) => {
-  const payout = payload.payout.entity;
-
-  logger.warn(`[handlePayoutFailed] Payout failed: ${payout.id}`);
-
-  try {
-    // Update payout status and failure reason
-    const failureReason = payout.status_details?.reason || 'Unknown error';
-    await db.query(
-      `UPDATE payouts SET status = 'FAILED', failure_reason = $1, updated_at = NOW() WHERE razorpay_payout_id = $2`,
-      [failureReason, payout.id]
-    );
-    logger.info(`[handlePayoutFailed] Updated payout status to FAILED, reason: ${failureReason}`);
-  } catch (error) {
-    logger.error(`[handlePayoutFailed] Error processing failed payout ${payout.id}:`, error);
-    throw error;
-  }
-}
-
-// Handle payout reversed event
-const handlePayoutReversed = async (payload) => {
-  const payout = payload.payout.entity;
-
-  logger.warn(`[handlePayoutReversed] Payout reversed: ${payout.id}, UTR: ${payout.utr}`);
-
-  await payoutService.updatePayoutStatus(payout.id, 'reversed', payout.utr);
-  logger.info(`[handlePayoutReversed] Successfully updated payout ${payout.id} to reversed`);
 }
 
 // Handle transfer processed event (Routes)
@@ -582,10 +534,9 @@ const handleWebhook = async (req, res, next) => {
 
     logger.info(`[handleWebhook] Received webhook event: ${event}, id: ${webhookEventId}`);
     logger.info(`[handleWebhook] Raw signature header: ${req.headers['x-razorpay-signature']}`);
-    logger.info(`[handleWebhook] Secret being used: ${process.env.RAZORPAY_WEBHOOK_SECRET}`);
 
     // Verify signature on raw bytes BEFORE any further processing
-    if (!verifyWebhookSignature(rawBody, signature, event)) {
+    if (!verifyWebhookSignature(rawBody, signature)) {
       logger.warn(`[handleWebhook] Invalid signature for event: ${event}`);
       return next(new AppError('Invalid signature', 400));
     }
@@ -611,21 +562,6 @@ const handleWebhook = async (req, res, next) => {
       case 'payment.failed':
         await handlePaymentFailed(payload);
         logger.info(`[handleWebhook] Successfully processed payment.failed event`);
-        break;
-
-      case 'payout.processed':
-        await handlePayoutProcessed(payload);
-        logger.info(`[handleWebhook] Successfully processed payout.processed event`);
-        break;
-
-      case 'payout.failed':
-        await handlePayoutFailed(payload);
-        logger.info(`[handleWebhook] Successfully processed payout.failed event`);
-        break;
-
-      case 'payout.reversed':
-        await handlePayoutReversed(payload);
-        logger.info(`[handleWebhook] Successfully processed payout.reversed event`);
         break;
 
       case 'transfer.processed':
