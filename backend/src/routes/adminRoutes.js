@@ -1,6 +1,6 @@
 const expess = require('express')
 const { approveProfile, getServices, addServices, getUserServiceRequestsToAdmin } = require('../controller')
-const {  approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, revokeFreelancerSuspension, addFeaturedFreelancer, removeFeaturedFreelancer, suspendCreatorByAdmin, revokeCreatorSuspension, getEscrowTransactions, createFreelancerLinkedAccount, getFreelancerLinkedAccountStatus, resetFreelancerLinkedAccount } = require('../controller/razor-pay-controllers/adminController')
+const {  approvePayout, rejectPayout, getAllPayouts, getPayoutDetails, getPlatformStats, updateCommission, approveKYCByAdmin, rejectKYCByAdmin, suspendFreelancerByAdmin, revokeFreelancerSuspension, addFeaturedFreelancer, removeFeaturedFreelancer, suspendCreatorByAdmin, revokeCreatorSuspension, getEscrowTransactions, createFreelancerLinkedAccount, getFreelancerLinkedAccountStatus, resetFreelancerLinkedAccount, resubmitToRazorpay } = require('../controller/razor-pay-controllers/adminController')
 const { addNiches, getNiches, AssignFreelancerToRequest, getServicesForAdmin, editServiceForAdmin, deleteServiceForAdmin } = require('../controller/services/serviceController')
 const { requireRole, requirePermission } = require('../middleware/authMiddleware')
 const upload = require('../../config/multer')
@@ -97,5 +97,6 @@ router.get('/transactions/escrow', requireRole(['admin']), requirePermission('pa
 router.post('/freelancer/:freelancer_id/create-linked-account', requireRole(['admin']), requirePermission('payments', 'update'), createFreelancerLinkedAccount);
 router.get('/freelancer/:freelancer_id/linked-account-status', requireRole(['admin']), requirePermission('payments', 'view'), getFreelancerLinkedAccountStatus);
 router.delete('/freelancer/:freelancer_id/reset-linked-account', requireRole(['admin']), requirePermission('payments', 'update'), resetFreelancerLinkedAccount);
+router.post('/freelancer/:freelancer_id/resubmit-razorpay', requireRole(['admin']), requirePermission('payments', 'update'), resubmitToRazorpay);
 
 module.exports = router

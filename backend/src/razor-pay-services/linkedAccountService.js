@@ -166,6 +166,28 @@ class LinkedAccountService {
     }
 
     /**
+     * Update Stakeholder PAN for needs_clarification (kyc.pan requirement)
+     * PATCH /v2/accounts/{account_id}/stakeholders/{stakeholder_id}
+     */
+    async updateStakeholderPAN(accountId, stakeholderId, panCardNumber) {
+        try {
+            const response = await razorpayRoutes.patch(
+                `/v2/accounts/${accountId}/stakeholders/${stakeholderId}`,
+                { kyc: { pan: panCardNumber } }
+            );
+            logger.info(`[updateStakeholderPAN] Updated PAN for account_id=${accountId}, stakeholder_id=${stakeholderId}`);
+            return response.data;
+        } catch (err) {
+            const error = err.response?.data?.error;
+            const errMsg = error
+                ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}`
+                : err.message;
+            logger.error(`[updateStakeholderPAN] Failed for account_id=${accountId}: ${errMsg}`);
+            throw new Error(`Stakeholder PAN update failed: ${errMsg}`);
+        }
+    }
+
+    /**
      * Fetch Linked Account status from Razorpay
      * GET /v2/accounts/{account_id}
      */

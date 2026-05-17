@@ -1146,6 +1146,78 @@ const resetFreelancerLinkedAccount = async (req, res, next) => {
   }
 };
 
+const resubmitToRazorpay = async (req, res, next) => {
+  try {
+    const { freelancer_id } = req.params;
+
+    if (!freelancer_id) {
+      return next(new AppError('Freelancer ID is required', 400));
+    }
+
+    const { rows } = await query(
+      `SELECT razorpay_linked_account_id, razorpay_product_id, razorpay_stakeholder_id,
+              razorpay_account_status, bank_account_no, bank_ifsc_code,
+              bank_account_holder_name, freelancer_full_name, pan_card_number
+       FROM freelancer WHERE freelancer_id = $1`,
+      [freelancer_id]
+    );
+
+    if (rows.length === 0) {
+      return next(new AppError('Freelancer not found', 404));
+    }
+
+    const freelancer = rows[0];
+
+    if (freelancer.razorpay_account_status !== 'needs_clarification') {
+      return next(new AppError(
+        `Resubmit is only allowed when status is needs_clarification. Current status: ${freelancer.razorpay_account_status || 'none'}`,
+        400
+      ));
+    }
+
+    if (!freelancer.razorpay_linked_account_id || !freelancer.razorpay_product_id) {
+      return next(new AppError('Freelancer does not have a linked Razorpay account yet', 400));
+    }
+
+    const { razorpay_linked_account_id: accountId, razorpay_product_id: productId, razorpay_stakeholder_id: stakeholderId } = freelancer;
+
+    // Resubmit bank details (settlements.*)
+    const productResult = await linkedAccountService.updateProductConfig(accountId, productId, freelancer);
+
+    // Resubmit PAN if stakeholder exists (kyc.pan)
+    if (stakeholderId && freelancer.pan_card_number) {
+      await linkedAccountService.updateStakeholderPAN(accountId, stakeholderId, freelancer.pan_card_number);
+    }
+
+    // Get fresh status after resubmit
+    const activationStatus = productResult?.activation_status || 'pending';
+    let newStatus = 'pending';
+    if (activationStatus === 'activated') newStatus = 'activated';
+    else if (activationStatus === 'needs_clarification') newStatus = 'needs_clarification';
+    else if (activationStatus === 'under_review') newStatus = 'under_review';
+
+    await query(
+      `UPDATE freelancer SET razorpay_account_status = $1, razorpay_onboarding_error = NULL,
+       razorpay_onboarding_error_step = NULL, razorpay_onboarding_error_at = NULL
+       WHERE freelancer_id = $2`,
+      [newStatus, freelancer_id]
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Details resubmitted to Razorpay successfully',
+      data: {
+        freelancer_id,
+        razorpay_account_status: newStatus,
+        activation_status: activationStatus,
+      },
+    });
+  } catch (error) {
+    logger.error('resubmitToRazorpay error:', error);
+    return next(new AppError(error.message || 'Failed to resubmit to Razorpay', 500));
+  }
+};
+
 module.exports = {
   approvePayout,
   rejectPayout,
@@ -1166,4 +1238,5 @@ module.exports = {
   createFreelancerLinkedAccount,
   getFreelancerLinkedAccountStatus,
   resetFreelancerLinkedAccount,
+  resubmitToRazorpay,
 }
