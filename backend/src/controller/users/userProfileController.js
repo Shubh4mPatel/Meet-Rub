@@ -7,8 +7,8 @@ const { logger } = require("../../../utils/logger");
 const { createPresignedUrl } = require("../../../utils/helper");
 const Joi = require("joi");
 const { sendMail } = require("../../../config/email");
-const { VALID_STATE_NAMES, INDIAN_STATES } = require("../../../utils/indianStates");
-const linkedAccountService = require("../../../razor-pay-services/linkedAccountService");
+const { VALID_STATE_NAMES, INDIAN_STATES } = require("../../utils/indianStates");
+const linkedAccountService = require("../../razor-pay-services/linkedAccountService");
 
 const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -718,11 +718,6 @@ const editProfile = async (req, res, next) => {
       if (type === "govtId") {
         logger.info("Updating Freelancer Govt ID");
 
-        if (freelancerExistsResult[0]?.verification_status === 'PENDING') {
-          logger.warn("Gov ID update blocked — verification is pending");
-          return next(new AppError("Your government ID is currently under review and cannot be changed", 403));
-        }
-
         // Parse userData JSON string
         let gov_id_type, gov_id_number;
         try {
@@ -789,7 +784,12 @@ const editProfile = async (req, res, next) => {
           );
 
           const { rows: freelancerGovInfo } = await query(
-            "UPDATE freelancer SET gov_id_type=$1, gov_id_url=$2, gov_id_number=$3 WHERE user_id=$4 returning gov_id_type, gov_id_url, gov_id_number",
+            `UPDATE freelancer
+             SET gov_id_type=$1, gov_id_url=$2, gov_id_number=$3,
+               verification_status = CASE WHEN verification_status = 'REJECTED' THEN 'PENDING' ELSE verification_status END,
+               reason_for_rejection = CASE WHEN verification_status = 'REJECTED' THEN NULL ELSE reason_for_rejection END
+             WHERE user_id=$4
+             RETURNING gov_id_type, gov_id_url, gov_id_number`,
             [gov_id_type, gov_id_url, gov_id_number, user.user_id]
           );
 
@@ -816,11 +816,6 @@ const editProfile = async (req, res, next) => {
       }
       if (type === "panCard") {
         logger.info("Updating Freelancer PAN Card");
-
-        if (freelancerExistsResult[0]?.verification_status === 'PENDING') {
-          logger.warn("PAN card update blocked — verification is pending");
-          return next(new AppError("Your details are currently under review and cannot be changed", 403));
-        }
 
         const { pan_card_number } = req.body;
 
@@ -860,7 +855,11 @@ const editProfile = async (req, res, next) => {
           );
 
           await query(
-            "UPDATE freelancer SET pan_card_number=$1, pan_card_image_url=$2, updated_at=NOW() WHERE user_id=$3",
+            `UPDATE freelancer
+             SET pan_card_number=$1, pan_card_image_url=$2, updated_at=NOW(),
+               verification_status = CASE WHEN verification_status = 'REJECTED' THEN 'PENDING' ELSE verification_status END,
+               reason_for_rejection = CASE WHEN verification_status = 'REJECTED' THEN NULL ELSE reason_for_rejection END
+             WHERE user_id=$3`,
             [pan_card_number, panCardImageUrl, user.user_id]
           );
 

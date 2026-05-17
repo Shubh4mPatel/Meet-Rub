@@ -9,7 +9,7 @@ const crypto = require("crypto");
 const { generateTokens } = require("../../../../utils/helper");
 const { sendWelcomeEmail, sendAdminNewUserEmail } = require("../../../../utils/welcomeEmail");
 const redisClient = require("../../../../config/reddis");
-const { INDIAN_STATES } = require("../../../../utils/indianStates");
+const { INDIAN_STATES } = require("../../../utils/indianStates");
 
 const USERNAMES_SET_KEY = "usernames:set";
 

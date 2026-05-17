@@ -2,7 +2,7 @@ const { pool: db } = require('../../config/dbConfig');
 const razorpayRoutes = require('../../config/razorpayRoutes');
 const { getLogger } = require('../../utils/logger');
 const logger = getLogger('linked-account-service');
-const { toStateCode } = require('../../utils/indianStates');
+const { toStateCode } = require('../utils/indianStates');
 
 class LinkedAccountService {
     /**
