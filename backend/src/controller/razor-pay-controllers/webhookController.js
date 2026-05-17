@@ -465,48 +465,121 @@ const handleTransferSettled = async (payload) => {
   }
 };
 
-// Handle account.activated event — Razorpay fires this after async bank verification completes
-const handleAccountActivated = async (payload) => {
-  const account = payload.account?.entity;
-  if (!account?.id) {
-    logger.warn('[handleAccountActivated] Missing account entity in payload');
-    return;
-  }
-
+// Shared helper — update freelancer razorpay_account_status by linked account id
+const updateAccountStatus = async (accountId, status, eventName) => {
   const { rowCount } = await db.query(
-    `UPDATE freelancer SET razorpay_account_status = 'activated', updated_at = NOW()
-     WHERE razorpay_linked_account_id = $1`,
-    [account.id]
+    `UPDATE freelancer SET razorpay_account_status = $1, updated_at = NOW()
+     WHERE razorpay_linked_account_id = $2`,
+    [status, accountId]
   );
-
   if (rowCount > 0) {
-    logger.info(`[handleAccountActivated] Freelancer with account ${account.id} set to activated`);
+    logger.info(`[${eventName}] Freelancer account ${accountId} → ${status}`);
   } else {
-    logger.warn(`[handleAccountActivated] No freelancer found for razorpay_linked_account_id=${account.id}`);
+    logger.warn(`[${eventName}] No freelancer found for razorpay_linked_account_id=${accountId}`);
   }
 };
 
-// Handle account.needs_clarification — Razorpay requires more info before activation
+// account.activated — bank verification passed
+const handleAccountActivated = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleAccountActivated] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'activated', 'handleAccountActivated');
+};
+
+// account.instantly_activated — activated without penny drop delay
+const handleAccountInstantlyActivated = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleAccountInstantlyActivated] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'activated', 'handleAccountInstantlyActivated');
+};
+
+// account.activated_kyc_pending — can receive transfers but KYC not complete
+const handleAccountActivatedKycPending = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleAccountActivatedKycPending] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'activated_kyc_pending', 'handleAccountActivatedKycPending');
+};
+
+// account.under_review — Razorpay is reviewing the account
+const handleAccountUnderReview = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleAccountUnderReview] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'under_review', 'handleAccountUnderReview');
+};
+
+// account.needs_clarification — Razorpay requires more info before activation
 const handleAccountNeedsClarification = async (payload) => {
   const account = payload.account?.entity;
-  if (!account?.id) {
-    logger.warn('[handleAccountNeedsClarification] Missing account entity in payload');
-    return;
-  }
+  if (!account?.id) { logger.warn('[handleAccountNeedsClarification] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'needs_clarification', 'handleAccountNeedsClarification');
+};
 
-  const requirements = account.requirements || [];
+// account.rejected — Razorpay rejected the linked account
+const handleAccountRejected = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleAccountRejected] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'rejected', 'handleAccountRejected');
+};
+
+// account.updated — generic account update; sync whatever status Razorpay reports
+const handleAccountUpdated = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleAccountUpdated] Missing account entity'); return; }
+  logger.info(`[handleAccountUpdated] Account ${account.id} updated — no status sync needed`);
+};
+
+// product.route.activated — Route product activated, freelancer can receive transfers
+const handleProductRouteActivated = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleProductRouteActivated] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'activated', 'handleProductRouteActivated');
+};
+
+// product.route.needs_clarification
+const handleProductRouteNeedsClarification = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleProductRouteNeedsClarification] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'needs_clarification', 'handleProductRouteNeedsClarification');
+};
+
+// product.route.under_review
+const handleProductRouteUnderReview = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleProductRouteUnderReview] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'under_review', 'handleProductRouteUnderReview');
+};
+
+// product.route.rejected
+const handleProductRouteRejected = async (payload) => {
+  const account = payload.account?.entity;
+  if (!account?.id) { logger.warn('[handleProductRouteRejected] Missing account entity'); return; }
+  await updateAccountStatus(account.id, 'rejected', 'handleProductRouteRejected');
+};
+
+// refund.processed — refund confirmed by Razorpay, money is on its way to creator
+const handleRefundProcessed = async (payload) => {
+  const refund = payload.refund?.entity;
+  if (!refund?.id) { logger.warn('[handleRefundProcessed] Missing refund entity'); return; }
 
   const { rowCount } = await db.query(
-    `UPDATE freelancer SET razorpay_account_status = 'needs_clarification', updated_at = NOW()
-     WHERE razorpay_linked_account_id = $1`,
-    [account.id]
+    `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW()
+     WHERE razorpay_payment_id = $1 AND status != 'REFUNDED'`,
+    [refund.payment_id]
   );
+  logger.info(`[handleRefundProcessed] refund_id=${refund.id} payment_id=${refund.payment_id} updated=${rowCount}`);
+};
 
-  if (rowCount > 0) {
-    logger.info(`[handleAccountNeedsClarification] Freelancer with account ${account.id} set to needs_clarification, requirements: ${JSON.stringify(requirements)}`);
-  } else {
-    logger.warn(`[handleAccountNeedsClarification] No freelancer found for razorpay_linked_account_id=${account.id}`);
-  }
+// refund.failed — refund attempt failed, revert transaction to HELD so admin can retry
+const handleRefundFailed = async (payload) => {
+  const refund = payload.refund?.entity;
+  if (!refund?.id) { logger.warn('[handleRefundFailed] Missing refund entity'); return; }
+
+  const { rowCount } = await db.query(
+    `UPDATE transactions SET status = 'HELD', updated_at = NOW()
+     WHERE razorpay_payment_id = $1 AND status = 'REFUNDED'`,
+    [refund.payment_id]
+  );
+  logger.warn(`[handleRefundFailed] refund_id=${refund.id} payment_id=${refund.payment_id} reverted=${rowCount} — admin must retry refund`);
 };
 
 // Handle Razorpay webhooks
@@ -589,9 +662,64 @@ const handleWebhook = async (req, res, next) => {
         logger.info(`[handleWebhook] Successfully processed account.activated event`);
         break;
 
+      case 'account.instantly_activated':
+        await handleAccountInstantlyActivated(payload);
+        logger.info(`[handleWebhook] Successfully processed account.instantly_activated event`);
+        break;
+
+      case 'account.activated_kyc_pending':
+        await handleAccountActivatedKycPending(payload);
+        logger.info(`[handleWebhook] Successfully processed account.activated_kyc_pending event`);
+        break;
+
+      case 'account.under_review':
+        await handleAccountUnderReview(payload);
+        logger.info(`[handleWebhook] Successfully processed account.under_review event`);
+        break;
+
       case 'account.needs_clarification':
         await handleAccountNeedsClarification(payload);
         logger.info(`[handleWebhook] Successfully processed account.needs_clarification event`);
+        break;
+
+      case 'account.rejected':
+        await handleAccountRejected(payload);
+        logger.info(`[handleWebhook] Successfully processed account.rejected event`);
+        break;
+
+      case 'account.updated':
+        await handleAccountUpdated(payload);
+        logger.info(`[handleWebhook] Successfully processed account.updated event`);
+        break;
+
+      case 'product.route.activated':
+        await handleProductRouteActivated(payload);
+        logger.info(`[handleWebhook] Successfully processed product.route.activated event`);
+        break;
+
+      case 'product.route.needs_clarification':
+        await handleProductRouteNeedsClarification(payload);
+        logger.info(`[handleWebhook] Successfully processed product.route.needs_clarification event`);
+        break;
+
+      case 'product.route.under_review':
+        await handleProductRouteUnderReview(payload);
+        logger.info(`[handleWebhook] Successfully processed product.route.under_review event`);
+        break;
+
+      case 'product.route.rejected':
+        await handleProductRouteRejected(payload);
+        logger.info(`[handleWebhook] Successfully processed product.route.rejected event`);
+        break;
+
+      case 'refund.processed':
+        await handleRefundProcessed(payload);
+        logger.info(`[handleWebhook] Successfully processed refund.processed event`);
+        break;
+
+      case 'refund.failed':
+        await handleRefundFailed(payload);
+        logger.info(`[handleWebhook] Successfully processed refund.failed event`);
         break;
 
       default:
