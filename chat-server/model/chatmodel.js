@@ -874,6 +874,8 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         p.service_id,
         s.service_name,
         cp.package_type,
+        cp.delivery_days,
+        cp.delivery_time,
         EXISTS (
           SELECT 1 FROM deadline_extension_requested der
           WHERE der.project_id = p.id AND der.status = 'pending'
@@ -926,6 +928,8 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         p.service_id,
         s.service_name,
         cp.package_type,
+        cp.delivery_days,
+        cp.delivery_time,
         EXISTS (
           SELECT 1 FROM deadline_extension_requested der
           WHERE der.project_id = p.id AND der.status = 'pending'

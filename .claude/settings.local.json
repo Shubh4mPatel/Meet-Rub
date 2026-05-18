@@ -75,7 +75,9 @@
       "WebFetch(domain:razorpay.com)",
       "Read(//home/shubh4m/**)",
       "WebSearch",
-      "WebFetch(domain:next.razorpay.com)"
+      "WebFetch(domain:next.razorpay.com)",
+      "mcp__code-review-graph__list_graph_stats_tool",
+      "Bash(git log *)"
     ],
     "additionalDirectories": [
       "/tmp"
