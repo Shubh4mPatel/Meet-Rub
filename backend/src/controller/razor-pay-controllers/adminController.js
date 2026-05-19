@@ -5,6 +5,8 @@ const { query } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const { createPresignedUrl } = require("../../../utils/helper");
 const razorpay = require('../../../config/razorpay');
+const { getLogger } = require('../../../utils/logger');
+const adminLogger = getLogger('admin-controller');
 
 
 // Approve payout request (admin) — triggers Razorpay payout
@@ -36,7 +38,7 @@ const approvePayout = async (req, res, next) => {
 
     const payout = payouts[0];
 
-    if (payout.status !== 'REQUESTED') {
+    if (payout.status !== 'REQUESTED' && payout.status !== 'FAILED') {
       await client.query('ROLLBACK');
       return next(new AppError(`Payout cannot be approved. Current status: ${payout.status}`, 400));
     }
@@ -52,7 +54,17 @@ const approvePayout = async (req, res, next) => {
     }
 
     // Release the held Route transfer
-    await razorpay.transfers.edit(payout.razorpay_transfer_id, { on_hold: 0 });
+    adminLogger.info(`[approvePayout] Verifying transfer ${payout.razorpay_transfer_id} before release`);
+    const transfer = await razorpay.transfers.fetch(payout.razorpay_transfer_id);
+    adminLogger.info(`[approvePayout] Transfer fetched: id=${transfer.id}, status=${transfer.status}, on_hold=${transfer.on_hold}, amount=${transfer.amount}`);
+
+    if (transfer.on_hold === 0 || transfer.on_hold === false) {
+      adminLogger.info(`[approvePayout] Transfer ${payout.razorpay_transfer_id} already released, skipping edit`);
+    } else {
+      adminLogger.info(`[approvePayout] Releasing transfer ${payout.razorpay_transfer_id} for payout ${payoutId}`);
+      const editResult = await razorpay.transfers.edit(payout.razorpay_transfer_id, { on_hold: 0 });
+      adminLogger.info(`[approvePayout] Transfer released successfully: id=${editResult.id}, on_hold=${editResult.on_hold}`);
+    }
 
     // Mark transaction and project as completed
     await client.query(
@@ -81,14 +93,14 @@ const approvePayout = async (req, res, next) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('approvePayout error:', error);
-    // Mark payout as FAILED so admin knows to retry — stays REQUESTED if this update also fails
+    // Mark payout as FAILED so admin knows to retry
     try {
       await db.query(
-        `UPDATE payouts SET status = 'FAILED', failure_reason = $1, updated_at = NOW() WHERE id = $2 AND status = 'REQUESTED'`,
+        `UPDATE payouts SET status = 'FAILED', failure_reason = $1, updated_at = NOW() WHERE id = $2 AND status IN ('REQUESTED', 'FAILED')`,
         [error.message || 'Razorpay transfer release failed', payoutId]
       );
     } catch (dbErr) {
-      console.error('approvePayout: could not mark payout FAILED:', dbErr);
+      adminLogger.error('approvePayout: could not mark payout FAILED:', dbErr);
     }
     return next(new AppError('Failed to approve payout', 500));
   } finally {
