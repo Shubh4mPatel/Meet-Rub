@@ -81,11 +81,16 @@ const creatorSchema = Joi.object({
   socialLinks: Joi.string().required().custom((value, helpers) => {
     try {
       const parsed = JSON.parse(value);
-      if (!Array.isArray(parsed) || parsed.length === 0) {
+      // Must be a non-null object (not array)
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         return helpers.error('any.invalid');
       }
-      // Check if at least one social link has a non-empty URL
-      const hasValidLink = parsed.some(link => link && link.url && link.url.trim() !== '');
+      const entries = Object.entries(parsed);
+      if (entries.length === 0) {
+        return helpers.error('any.invalid');
+      }
+      // At least one platform must have a non-empty URL string as value
+      const hasValidLink = entries.some(([, url]) => typeof url === 'string' && url.trim() !== '');
       if (!hasValidLink) {
         return helpers.error('any.invalid');
       }
