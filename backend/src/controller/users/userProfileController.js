@@ -1179,17 +1179,16 @@ const getAllFreelancers = async (req, res, next) => {
           AND ff.is_active = true`
       : ``;
 
-    // Conditional profile_title: use service_title when filtered, else freelancer.profile_title
-    // Fallback to freelancer.profile_title if service_title is NULL
+    // Always return service_title: matching service when filtered, oldest service when not
     const profileTitleSubquery = serviceTypes.length > 0
-      ? `COALESCE((SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1), f.profile_title)`
-      : "f.profile_title";
+      ? `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1)`
+      : `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at ASC LIMIT 1)`;
 
     let queryText = `
       SELECT
         f.freelancer_id,
         f.freelancer_full_name,
-        ${profileTitleSubquery} as profile_title,
+        ${profileTitleSubquery} as service_title,
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
@@ -1242,7 +1241,7 @@ const getAllFreelancers = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with`;
 
     // Add sorting — featured freelancers (priority 1-5) always come first, then rest
     const featuredOrderBy = serviceTypes.length > 0 ? `MIN(ff.priority) ASC NULLS LAST, ` : ``;
@@ -1946,17 +1945,16 @@ const getWishlistFreelancers = async (req, res, next) => {
     const maxDays = req.query.maxDays ? parseInt(req.query.maxDays) : null;
 
     // Build the query based on filters
-    // Conditional profile_title: use service_title when filtered, else freelancer.profile_title
-    // Fallback to freelancer.profile_title if service_title is NULL
+    // Always return service_title: matching service when filtered, oldest service when not
     const profileTitleSubquery = serviceTypes.length > 0
-      ? "COALESCE((SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1), f.profile_title)"
-      : "f.profile_title";
+      ? "(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1)"
+      : "(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at ASC LIMIT 1)";
 
     let queryText = `
       SELECT
         f.freelancer_id,
         f.freelancer_full_name,
-        ${profileTitleSubquery} as profile_title,
+        ${profileTitleSubquery} as service_title,
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
@@ -2014,7 +2012,7 @@ const getWishlistFreelancers = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, w.created_at`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, w.created_at`;
 
     // Add sorting based on sortBy parameter
     let orderByClause = "";
@@ -3433,17 +3431,16 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     // Build the query based on filters
     const serviceSubquery = serviceTypes.length > 0 ? `AND s2.service_name = ANY($1::text[])` : ``;
 
-    // Conditional profile_title: use service_title when filtered, else freelancer.profile_title
-    // Fallback to freelancer.profile_title if service_title is NULL
+    // Always return service_title: matching service when filtered, oldest service when not
     const profileTitleSubquery = serviceTypes.length > 0
-      ? `COALESCE((SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1), f.profile_title)`
-      : "f.profile_title";
+      ? `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1)`
+      : `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at ASC LIMIT 1)`;
 
     let queryText = `
       SELECT
         f.freelancer_id,
         f.freelancer_full_name,
-        ${profileTitleSubquery} as profile_title,
+        ${profileTitleSubquery} as service_title,
         f.profile_image_url,
         f.freelancer_thumbnail_image,
         f.rating,
@@ -3495,7 +3492,7 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with`;
 
     // Add sorting based on sortBy parameter
     let orderByClause = "";
@@ -3971,10 +3968,9 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     logger.info("[getAllFreelancers] Featured join active?", { hasFeatured });
 
     // --- Main query ---
-    // Conditional profile_title: use service_title when filtered, else freelancer.profile_title
-    const profileTitleSelect = serviceTypes.length > 0
-      ? "COALESCE(ls.service_title, f.profile_title) AS profile_title"
-      : "f.profile_title";
+    // Always return service_title: use matching service when filtered, oldest service when not
+    const lateralOrder = serviceTypes.length > 0 ? "DESC" : "ASC";
+    const profileTitleSelect = "ls.service_title";
 
     const mainQuery = `
       SELECT
@@ -4000,7 +3996,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         FROM services s2
         WHERE s2.freelancer_id = f.freelancer_id
           ${lateralServiceFilter}
-        ORDER BY s2.created_at DESC
+        ORDER BY s2.created_at ${lateralOrder}
         LIMIT 1
       ) ls ON true
       ${featuredJoin}
@@ -4008,7 +4004,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         AND f.is_active = true
         ${filters.whereClause}
       GROUP BY
-        f.freelancer_id, f.freelancer_full_name, f.profile_title,
+        f.freelancer_id, f.freelancer_full_name,
         f.profile_image_url, f.freelancer_thumbnail_image, f.rating,
         f.worked_with, w.freelancer_id,
         ls.thumbnail_file, ls.service_title, ls.min_delivery_days, ls.max_delivery_days
