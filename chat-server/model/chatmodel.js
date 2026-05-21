@@ -148,9 +148,6 @@ LIMIT $2 OFFSET $3;
 
     try {
       const result = await pool.query(query, [roomId, limit, offset]);
-      console.log(
-        `Fetched ${result.rows.length} messages for room ${roomId} with limit ${limit} and offset ${offset}`
-      );
 
       // Reverse to oldest-first and map to camelCase to match real-time message format
       const messages = result.rows.reverse().map((row) => ({
@@ -595,6 +592,10 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   ) {
     const { project_id, days, hours } = extensionData;
 
+    logger.info(
+      `[saveDeadlineExtensionRequest] incoming chatRoomId=${chatRoomId} userId=${userId} recipientId=${recipientId} project_id=${project_id} days=${days} hours=${hours}`
+    );
+
     // Relative-duration contract: extension is expressed as days + sub-day hours.
     // On acceptance, projects.end_date is set to NOW() + that interval.
     const daysInt = Number.parseInt(days, 10);
@@ -648,7 +649,11 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         hoursInt,
         new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       ]);
-      return result.rows[0];
+      const row = result.rows[0];
+      logger.info(
+        `[saveDeadlineExtensionRequest] inserted id=${row.id} project_id=${row.project_id} freelancer_id=${row.freelancer_id} creator_id=${row.creator_id} days=${row.days} hours=${row.hours} status=${row.status} expires_at=${row.expires_at}`
+      );
+      return row;
     } catch (error) {
       console.error("Error saving deadline extension request:", error);
       throw error;
@@ -657,6 +662,9 @@ ORDER BY m.created_at DESC NULLS LAST; `;
 
   // Accept deadline extension request and update the project's end_date
   async acceptDeadlineExtension(requestId, creatorUserId) {
+    logger.info(
+      `[acceptDeadlineExtension] incoming requestId=${requestId} creatorUserId=${creatorUserId}`
+    );
     const creatorCheck = await pool.query(
       `SELECT creator_id FROM creators WHERE user_id = $1`,
       [creatorUserId]
@@ -679,13 +687,40 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       const extension = extResult.rows[0];
       if (!extension) {
         await client.query("ROLLBACK");
+        logger.info(
+          `[acceptDeadlineExtension] no pending request matched requestId=${requestId} for creator_id=${creatorId} (returning null)`
+        );
         return null;
       }
 
-      // Relative duration: deadline starts ticking from acceptance time.
+      logger.info(
+        `[acceptDeadlineExtension] extension matched id=${extension.id} project_id=${extension.project_id} days=${extension.days} hours=${extension.hours} — extending end_date from NOW()`
+      );
+
+      // Cumulative behaviour: each accept extends the existing deadline.
+      // Baseline = GREATEST(end_date, NOW()) so a deadline already in the future
+      // stacks, but a lapsed deadline doesn't anchor the new one in the past.
+      // GREATEST ignores NULL arguments, so projects without an end_date still
+      // get a sensible NOW()-based baseline.
+      const beforeResult = await client.query(
+        `SELECT end_date                              AS prev_end_date,
+                NOW()                                 AS server_now,
+                GREATEST(end_date, NOW())             AS baseline,
+                GREATEST(end_date, NOW()) + make_interval(days => $1, hours => $2)
+                                                      AS computed_new_end_date
+           FROM projects WHERE id = $3`,
+        [extension.days, extension.hours, extension.project_id]
+      );
+      const before = beforeResult.rows[0] || {};
+      const fmt = (d) => (d instanceof Date ? d.toISOString() : (d ?? "null"));
+      logger.info(
+        `[acceptDeadlineExtension] CALC project_id=${extension.project_id} server_now=${fmt(before.server_now)} prev_end_date=${fmt(before.prev_end_date)} baseline=${fmt(before.baseline)} days=${extension.days} hours=${extension.hours} computed_new_end_date=${fmt(before.computed_new_end_date)}`
+      );
+
+      // Cumulative: extend from whichever is later — current end_date or NOW().
       const projectResult = await client.query(
         `UPDATE projects
-         SET end_date = NOW() + make_interval(days => $1, hours => $2),
+         SET end_date = GREATEST(end_date, NOW()) + make_interval(days => $1, hours => $2),
              updated_at = NOW()
          WHERE id = $3
          RETURNING *`,
@@ -694,9 +729,14 @@ ORDER BY m.created_at DESC NULLS LAST; `;
 
       await client.query("COMMIT");
 
+      const updatedProject = projectResult.rows[0] || null;
+      logger.info(
+        `[acceptDeadlineExtension] AFTER project_id=${extension.project_id} stored_end_date=${fmt(updatedProject?.end_date)} computed_was=${fmt(before.computed_new_end_date)} (stored may be a few ms later if NOW()>end_date — separate statement re-evaluates NOW())`
+      );
+
       return {
         ...extension,
-        project: projectResult.rows[0] || null,
+        project: updatedProject,
       };
     } catch (error) {
       await client.query("ROLLBACK");
@@ -709,6 +749,10 @@ ORDER BY m.created_at DESC NULLS LAST; `;
 
   // Reject deadline extension request
   async rejectDeadlineExtension(requestId, creatorUserId) {
+    logger.info(
+      `[rejectDeadlineExtension] incoming requestId=${requestId} creatorUserId=${creatorUserId}`
+    );
+
     const creatorCheck = await pool.query(
       `SELECT creator_id FROM creators WHERE user_id = $1`,
       [creatorUserId]
@@ -725,7 +769,17 @@ ORDER BY m.created_at DESC NULLS LAST; `;
 
     try {
       const result = await pool.query(query, [requestId, creatorId]);
-      return result.rows[0];
+      const row = result.rows[0];
+      if (row) {
+        logger.info(
+          `[rejectDeadlineExtension] rejected id=${row.id} project_id=${row.project_id}`
+        );
+      } else {
+        logger.info(
+          `[rejectDeadlineExtension] no row matched requestId=${requestId} creator_id=${creatorId}`
+        );
+      }
+      return row;
     } catch (error) {
       console.error("Error rejecting deadline extension:", error);
       throw error;

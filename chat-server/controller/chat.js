@@ -541,7 +541,6 @@ const chatController = (io) => {
           chatModel.getChatHistory(chatRoomId),
           chatModel.getRoomParticipants(chatRoomId),
         ]);
-        console.log(`Chat history for room ${chatRoomId}:`, chatHistory);
 
         if (participants) {
           [participants.user1_avatar, participants.user2_avatar] = await Promise.all([
@@ -710,7 +709,6 @@ const chatController = (io) => {
           }
         }
 
-        console.log(`Message saved: ${username} to ${recipientId}`);
       } catch (error) {
         console.error("custom-package error:", error);
         socket.emit("error", { message: "Failed to send package" });
@@ -841,6 +839,10 @@ const chatController = (io) => {
 
     socket.on("deadline-extension-request", async (extensionData, recipientId) => {
       try {
+        console.log(
+          `[deadline-extension-request] received from userId=${userId} role=${userRole} recipientId=${recipientId} payload=${JSON.stringify(extensionData)}`
+        );
+
         if (userRole !== "freelancer") {
           socket.emit("error", { message: "Only freelancers can request a deadline extension" });
           return;
@@ -854,6 +856,10 @@ const chatController = (io) => {
           userId,
           recipientId,
           extensionData
+        );
+
+        console.log(
+          `[deadline-extension-request] saved id=${extensionRequest.id} project_id=${extensionRequest.project_id} days=${extensionRequest.days} hours=${extensionRequest.hours} chatRoomId=${chatRoomId}`
         );
 
         const savedMessage = await chatModel.saveMessage(
@@ -898,6 +904,10 @@ const chatController = (io) => {
 
     socket.on("accept-deadline-extension", async (requestId, recipientId) => {
       try {
+        console.log(
+          `[accept-deadline-extension] received from userId=${userId} role=${userRole} requestId=${requestId} recipientId=${recipientId}`
+        );
+
         if (userRole !== "creator") {
           socket.emit("error", { message: "Only creators can accept deadline extensions" });
           return;
@@ -909,9 +919,16 @@ const chatController = (io) => {
         const updatedRequest = await chatModel.acceptDeadlineExtension(requestId, userId);
 
         if (!updatedRequest) {
+          console.log(
+            `[accept-deadline-extension] no matching pending request for requestId=${requestId} userId=${userId}`
+          );
           socket.emit("error", { message: "Request not found or unauthorized" });
           return;
         }
+
+        console.log(
+          `[accept-deadline-extension] accepted requestId=${requestId} project_id=${updatedRequest.project_id} new_end_date=${updatedRequest.project?.end_date ?? "unchanged"}`
+        );
 
         io.to(chatRoomId).emit("deadline-extension-accepted", {
           requestId,
@@ -936,12 +953,19 @@ const chatController = (io) => {
 
     socket.on("reject-deadline-extension", async (requestId, recipientId) => {
       try {
+        console.log(
+          `[reject-deadline-extension] received from userId=${userId} role=${userRole} requestId=${requestId} recipientId=${recipientId}`
+        );
+
         const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
 
         const updatedRequest = await chatModel.rejectDeadlineExtension(requestId, userId);
 
         if (!updatedRequest) {
+          console.log(
+            `[reject-deadline-extension] no matching request for requestId=${requestId} userId=${userId}`
+          );
           socket.emit("error", { message: "Request not found or unauthorized" });
           return;
         }
@@ -968,17 +992,13 @@ const chatController = (io) => {
     // Send a message
     socket.on("send-message", async ({ recipientId, message }) => {
       try {
-        console.log(`[send-message] User ${username} (${userId}, role: ${userRole}) sending to ${recipientId}`);
-
         // Standard room ID format for all chats (regular and support)
         const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
-        console.log(`[send-message] Using chat room: ${chatRoomId}`);
 
         const messageType = "text";
 
         // Save message to database
-        console.log(`[send-message] Saving message to room: ${chatRoomId}`);
         const savedMessage = await chatModel.saveMessage(
           chatRoomId,
           userId,
@@ -997,15 +1017,11 @@ const chatController = (io) => {
           chatRoomId,
           isRead: false,
         };
-        console.log(`[send-message] Message saved to database:`, { id: messageData.id, chatRoomId: messageData.chatRoomId, sender: messageData.senderId });
 
         // Send message to the chat room (both users)
         io.to(chatRoomId).emit("receive-message", messageData);
-        console.log(`[send-message] Message emitted to room: ${chatRoomId}`);
 
         await emitWebNotification(io, recipientId, userId, 'new_message', 'New Message', `You have received a new message from ${username}`, 'link', chatRoomId);
-
-        console.log(`[send-message] SUCCESS - Message saved: ${username} to ${recipientId} in room ${chatRoomId}`);
       } catch (error) {
         console.error(`[send-message] ERROR - Sender ${userId}, Recipient ${recipientId}:`, error);
         socket.emit("error", { message: "Failed to send message" });
@@ -1015,12 +1031,9 @@ const chatController = (io) => {
     // Send a file message (image, video, audio, document)
     socket.on("send-file-message", async ({ recipientId, file_url, object_name, filename, file_size, file_type, message }) => {
       try {
-        console.log(`[send-file-message] User ${username} (${userId}) sending file to ${recipientId}`);
-
         // Standard room ID format for all chats (regular and support)
         const [smallerId, largerId] = [userId, recipientId].sort((a, b) => parseInt(a) - parseInt(b));
         const chatRoomId = `${smallerId}-${largerId}`;
-        console.log(`[send-file-message] Using chat room: ${chatRoomId}`);
 
         // Validate required fields
         if (!object_name || !filename || !file_type) {
@@ -1038,7 +1051,6 @@ const chatController = (io) => {
         const fileUrlToStore = object_name;
 
         // Save message to database
-        console.log(`[send-file-message] Saving file message to room: ${chatRoomId}`);
         const savedMessage = await chatModel.saveMessage(
           chatRoomId,
           userId,
@@ -1064,16 +1076,9 @@ const chatController = (io) => {
           chatRoomId,
           isRead: false,
         };
-        console.log(`[send-file-message] File message saved to database:`, {
-          id: messageData.id,
-          chatRoomId: messageData.chatRoomId,
-          sender: messageData.senderId,
-          file_type: messageType
-        });
 
         // Send message to the chat room (both users)
         io.to(chatRoomId).emit("receive-file-message", messageData);
-        console.log(`[send-file-message] File message emitted to room: ${chatRoomId}`);
 
         // Send web notification
         await emitWebNotification(
