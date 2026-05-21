@@ -229,8 +229,8 @@ CREATE TABLE IF NOT EXISTS public.deadline_extension_requested
     freelancer_id integer NOT NULL,
     creator_id integer NOT NULL,
     chat_room_id character varying(255) COLLATE pg_catalog."default" NOT NULL,
-    new_delivery_date date NOT NULL,
-    new_delivery_time time without time zone NOT NULL,
+    days integer NOT NULL DEFAULT 0,
+    hours integer NOT NULL DEFAULT 0,
     status character varying(50) COLLATE pg_catalog."default" DEFAULT 'pending'::character varying,
     requested_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     approved_at timestamp without time zone,
@@ -252,7 +252,10 @@ CREATE TABLE IF NOT EXISTS public.deadline_extension_requested
         REFERENCES public.chat_rooms (room_id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE CASCADE,
-    CONSTRAINT deadline_extension_status_check CHECK (status::text = ANY (ARRAY['pending'::character varying::text, 'accepted'::character varying::text, 'rejected'::character varying::text, 'expired'::character varying::text]))
+    CONSTRAINT deadline_extension_status_check CHECK (status::text = ANY (ARRAY['pending'::character varying::text, 'accepted'::character varying::text, 'rejected'::character varying::text, 'expired'::character varying::text])),
+    CONSTRAINT deadline_extension_days_check CHECK (days >= 0),
+    CONSTRAINT deadline_extension_hours_check CHECK (hours BETWEEN 0 AND 23),
+    CONSTRAINT deadline_extension_total_check CHECK (days > 0 OR hours > 0)
 )
 
 TABLESPACE pg_default;

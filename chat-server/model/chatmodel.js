@@ -2,33 +2,6 @@ const pool = require("../config/dbConfig");
 const { logger } = require("../utils/logger");
 const { createDownloadablePresignedUrl } = require("../utils/helper");
 
-// Converts a time string to UTC.
-// If the value already carries a UTC indicator (Z or +00:00) it is returned unchanged.
-// If it carries a non-UTC offset the time is shifted to UTC.
-// If there is no timezone information at all the value is returned unchanged.
-function toUTCTime(timeStr) {
-  if (!timeStr) return timeStr;
-
-  const s = String(timeStr).trim();
-
-  // Already UTC
-  if (s.endsWith("Z") || s.endsWith("+00:00") || s.endsWith("+0000")) {
-    return s;
-  }
-
-  // Has a non-UTC numeric offset, e.g. "+05:30" or "-04:00"
-  if (/[+-]\d{2}:?\d{2}$/.test(s)) {
-    const d = new Date(`1970-01-01T${s}`);
-    if (!isNaN(d.getTime())) {
-      // Return HH:MM:SSZ
-      return d.toISOString().slice(11, 19) + "Z";
-    }
-  }
-
-  // No timezone info — return as-is
-  return s;
-}
-
 const chatModel = {
   // Create or get user
   async GetUser(userId, username) {
@@ -128,8 +101,8 @@ const chatModel = {
     der.freelancer_id as der_freelancer_id,
     der.creator_id as der_creator_id,
     der.chat_room_id as der_chat_room_id,
-    der.new_delivery_date as der_new_delivery_date,
-    der.new_delivery_time as der_new_delivery_time,
+    der.days as der_days,
+    der.hours as der_hours,
     der.status as der_status,
     der.requested_at as der_requested_at,
     der.approved_at as der_approved_at,
@@ -199,8 +172,8 @@ LIMIT $2 OFFSET $3;
             freelancer_id: row.der_freelancer_id,
             creator_id: row.der_creator_id,
             chat_room_id: row.der_chat_room_id,
-            new_delivery_date: row.der_new_delivery_date,
-            new_delivery_time: row.der_new_delivery_time,
+            days: row.der_days,
+            hours: row.der_hours,
             status: row.der_status,
             requested_at: row.der_requested_at,
             approved_at: row.der_approved_at,
@@ -620,7 +593,21 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     recipientId,
     extensionData
   ) {
-    const { project_id, new_delivery_date, new_delivery_time } = extensionData;
+    const { project_id, days, hours } = extensionData;
+
+    // Relative-duration contract: extension is expressed as days + sub-day hours.
+    // On acceptance, projects.end_date is set to NOW() + that interval.
+    const daysInt = Number.parseInt(days, 10);
+    const hoursInt = Number.parseInt(hours, 10);
+    if (!Number.isFinite(daysInt) || !Number.isFinite(hoursInt)) {
+      throw new Error('days and hours must be integers');
+    }
+    if (daysInt < 0 || hoursInt < 0 || hoursInt > 23) {
+      throw new Error('Invalid duration: days >= 0, hours between 0 and 23');
+    }
+    if (daysInt === 0 && hoursInt === 0) {
+      throw new Error('Extension duration must be greater than zero');
+    }
 
     const roleCheck = await pool.query(
       `SELECT freelancer_id, user_id FROM freelancer WHERE user_id = $1 OR user_id = $2`,
@@ -645,7 +632,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     const query = `
       INSERT INTO deadline_extension_requested (
         project_id, freelancer_id, creator_id, chat_room_id,
-        new_delivery_date, new_delivery_time, status, expires_at
+        days, hours, status, expires_at
       )
       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
       RETURNING *
@@ -657,8 +644,8 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         freelancerId,
         creatorId,
         chatRoomId,
-        new_delivery_date,
-        toUTCTime(new_delivery_time),
+        daysInt,
+        hoursInt,
         new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       ]);
       return result.rows[0];
@@ -695,12 +682,14 @@ ORDER BY m.created_at DESC NULLS LAST; `;
         return null;
       }
 
+      // Relative duration: deadline starts ticking from acceptance time.
       const projectResult = await client.query(
         `UPDATE projects
-         SET end_date = $1, updated_at = NOW()
-         WHERE id = $2
+         SET end_date = NOW() + make_interval(days => $1, hours => $2),
+             updated_at = NOW()
+         WHERE id = $3
          RETURNING *`,
-        [extension.new_delivery_date, extension.project_id]
+        [extension.days, extension.hours, extension.project_id]
       );
 
       await client.query("COMMIT");
