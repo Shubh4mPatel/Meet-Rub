@@ -16,7 +16,7 @@ node_modules/
 # OS files
 .DS_Store
 Thumbs.db
-
+bug.md
 /todo
 # IDE files
 .vscode/
