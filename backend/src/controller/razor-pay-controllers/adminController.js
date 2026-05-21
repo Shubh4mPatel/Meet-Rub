@@ -128,8 +128,15 @@ const getAllPayouts = async (req, res, next) => {
     let idx = 1;
 
     if (status) {
-      conditions.push(`p.status = $${idx++}`);
-      params.push(status);
+      // "past" is a meta-value: everything except freshly raised REQUESTED rows,
+      // so the admin UI can show all non-pending payouts in one tab.
+      if (String(status).toLowerCase() === 'past') {
+        conditions.push(`p.status != $${idx++}`);
+        params.push('REQUESTED');
+      } else {
+        conditions.push(`p.status = $${idx++}`);
+        params.push(status);
+      }
     }
 
     if (search) {
@@ -169,9 +176,11 @@ const getAllPayouts = async (req, res, next) => {
           p.status,
           p.id as payout_id,
           p.requested_at as payout_created_at,
+          CASE WHEN p.status = 'REJECTED' THEN p.rejection_reason END as rejection_reason,
           fl.freelancer_full_name as freelancer_name,
           fl.freelancer_email,
           u.user_name as freelancer_username,
+          fl.earnings_balance,
           fl.profile_image_url as freelancer_profile_image
        FROM payouts p
        JOIN users u ON p.freelancer_id = u.id

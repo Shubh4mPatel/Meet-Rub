@@ -495,6 +495,7 @@ class PaymentService {
       `SELECT t.*,
         c.full_name as client_name,
         f.freelancer_full_name as freelancer_name,
+        f.earnings_balance as freelancer_earnings_balance,
         p.status as project_status
       FROM transactions t
       JOIN creators c ON t.creator_id = c.creator_id
