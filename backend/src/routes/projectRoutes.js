@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { createProject, getMyProjects, getProject, updateProjectStatus, deleteProject, getAllProjects, uploadDeliverable, sendHireRequest, approveProject, rejectProject } = require('../controller/razor-pay-controllers/projectController');
-const {  requireRole } = require('../middleware/authMiddleware');
+const { requestDeadlineExtension, respondToDeadlineExtension, getExtensionRequests } = require('../controller/deadline/deadlineExtensionController');
+const { requireRole } = require('../middleware/authMiddleware');
 
 
 router.post('/create-project', createProject);
@@ -31,5 +32,15 @@ router.post('/:id/approve', requireRole(['creator']), approveProject);
 
 // Creator rejects completed project — auto-creates dispute, funds stay in escrow
 router.post('/:id/reject', requireRole(['creator']), rejectProject);
+
+// Deadline extension routes
+// Freelancer requests deadline extension
+router.post('/deadline-extension/request', requireRole(['freelancer']), requestDeadlineExtension);
+
+// Creator accepts/rejects deadline extension
+router.post('/deadline-extension/:extension_id/respond', requireRole(['creator']), respondToDeadlineExtension);
+
+// Get extension requests for a project
+router.get('/:project_id/deadline-extensions', getExtensionRequests);
 
 module.exports = router;

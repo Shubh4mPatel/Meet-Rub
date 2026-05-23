@@ -4,14 +4,14 @@ const { sendMail } = require('../config/email');
 
 const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
-const APP_URL         = process.env.APP_URL         || 'https://meetrub.com';
-const LOGO_SVG_PATH   = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
-const LOGO_URL        = process.env.LOGO_URL        ||
+const APP_URL = process.env.APP_URL || 'https://meetrub.com';
+const LOGO_SVG_PATH = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
+const LOGO_URL = process.env.LOGO_URL ||
   `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
-const HELP_URL        = process.env.HELP_URL        || `${APP_URL}/help`;
-const PRIVACY_URL     = process.env.PRIVACY_URL     || `${APP_URL}/privacy`;
-const CURRENCY        = process.env.CURRENCY        || '₹';
-const REVIEW_DAYS     = process.env.REVIEW_DAYS     || '7';
+const HELP_URL = process.env.HELP_URL || `${APP_URL}/help`;
+const PRIVACY_URL = process.env.PRIVACY_URL || `${APP_URL}/privacy`;
+const CURRENCY = process.env.CURRENCY || '₹';
+const REVIEW_DAYS = process.env.REVIEW_DAYS || '7';
 
 function fillTemplate(html, vars) {
   return Object.entries(vars).reduce(
@@ -34,16 +34,16 @@ async function sendDeliverySubmittedEmail({ freelancerEmail, freelancerName, pro
     'utf8'
   );
   const filled = fillTemplate(html, {
-    freelancer_username:  freelancerName,
-    order_id:             String(projectId),
-    delivery_time:        formatDeliveryTime(new Date()),
-    currency:             CURRENCY,
-    freelancer_earnings:  amount != null ? Number(amount).toFixed(2) : '—',
-    order_url:            `${APP_URL}/freelancer/orders/${projectId}`,
-    review_days:          REVIEW_DAYS,
-    logo_url:             LOGO_URL,
-    help_url:             HELP_URL,
-    privacy_url:          PRIVACY_URL,
+    freelancer_username: freelancerName,
+    order_id: String(projectId),
+    delivery_time: formatDeliveryTime(new Date()),
+    currency: CURRENCY,
+    freelancer_earnings: amount != null ? Number(amount).toFixed(2) : '—',
+    order_url: `${APP_URL}/freelancer/orders/${projectId}`,
+    review_days: REVIEW_DAYS,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
   });
   await sendMail(freelancerEmail, `Delivery submitted — Order #${projectId}`, filled);
 }
@@ -61,17 +61,231 @@ async function sendDeliveryReceivedEmail({
     'utf8'
   );
   const filled = fillTemplate(html, {
-    creator_username:   creatorName,
+    creator_username: creatorName,
     freelancer_username: freelancerName,
-    order_id:           String(projectId),
-    service_title:      serviceTitle || 'Your order',
-    delivery_time:      formatDeliveryTime(new Date()),
-    delivery_message:   deliveryMessage || '',
-    logo_url:           LOGO_URL,
-    help_url:           HELP_URL,
-    privacy_url:        PRIVACY_URL,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'Your order',
+    delivery_time: formatDeliveryTime(new Date()),
+    delivery_message: deliveryMessage || '',
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
   });
   await sendMail(creatorEmail, `New delivery received — Order #${projectId}`, filled);
 }
 
-module.exports = { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail };
+async function sendCreatorRatingRequestEmail({ creatorEmail, creatorName, freelancerName, projectId, serviceTitle }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/ratingRequest.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username: creatorName,
+    freelancer_username: freelancerName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'Your order',
+    review_url: `${APP_URL}/creator/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(creatorEmail, `Project completed — rate your freelancer — Order #${projectId}`, filled);
+}
+
+async function sendFreelancerRatingRequestEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/ratingRequest.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    creator_username: creatorName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'Your order',
+    review_url: `${APP_URL}/freelancer/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(freelancerEmail, `Project completed — rate your client — Order #${projectId}`, filled);
+}
+
+async function sendOrderApprovedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, amount }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/orderApproved.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    creator_username: creatorName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'Your order',
+    currency: CURRENCY,
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    withdraw_url: `${APP_URL}/freelancer/wallet`,
+    order_url: `${APP_URL}/freelancer/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(freelancerEmail, `Delivery approved — raise withdrawal request — Order #${projectId}`, filled);
+}
+
+async function sendCreatorDisputeEmail({ creatorEmail, creatorName, freelancerName, disputeId, projectId, serviceTitle, disputeReason }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/raisedispute.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username: creatorName,
+    freelancer_username: freelancerName,
+    order_id: String(projectId || disputeId),
+    service_title: serviceTitle || 'your order',
+    dispute_reason: disputeReason,
+    dispute_time: formatDeliveryTime(new Date()),
+    dispute_url: `${APP_URL}/creator/disputes/${disputeId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(creatorEmail, `Dispute raised — Order #${projectId || disputeId}`, filled);
+}
+
+async function sendFreelancerDisputeEmail({ freelancerEmail, freelancerName, creatorName, disputeId, projectId, serviceTitle, disputeReason }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/disputeRaised.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    creator_username: creatorName,
+    order_id: String(projectId || disputeId),
+    service_title: serviceTitle || 'your order',
+    dispute_reason: disputeReason,
+    dispute_url: `${APP_URL}/freelancer/disputes/${disputeId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(freelancerEmail, `Dispute raised against you — Order #${projectId || disputeId}`, filled);
+}
+
+async function sendPaymentConfirmedEmail({ creatorEmail, creatorName, freelancerName, projectId, serviceTitle, amount, deadline, paymentMethod }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/paymentConfirmed.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username: creatorName,
+    freelancer_username: freelancerName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'Your order',
+    currency: CURRENCY,
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    deadline: deadline || 'TBD',
+    payment_method: paymentMethod || 'Razorpay',
+    order_url: `${APP_URL}/creator/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(creatorEmail, `Payment confirmed — Order #${projectId}`, filled);
+}
+
+async function sendOrderActivatedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, amount, deadline }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/orderActivated.html'),
+    'utf8'
+  );
+  // Calculate 80% freelancer earnings
+  const freelancerEarnings = amount != null ? (Number(amount) * 0.8).toFixed(2) : '—';
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    creator_username: creatorName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'Your order',
+    currency: CURRENCY,
+    freelancer_earnings: freelancerEarnings,
+    deadline: deadline || 'TBD',
+    order_url: `${APP_URL}/freelancer/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(freelancerEmail, `New order activated — Order #${projectId}`, filled);
+}
+
+async function sendDeadlineExtensionRequestEmail({ creatorEmail, creatorName, freelancerName, projectId, serviceTitle, extensionTime, currentDeadline, newDeadline }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/deadlineExtensionRequest.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username: creatorName,
+    freelancer_username: freelancerName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'Your order',
+    extension_time: extensionTime,
+    current_deadline: currentDeadline,
+    new_deadline: newDeadline,
+    extension_url: `${APP_URL}/creator/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(creatorEmail, `Deadline extension requested — Order #${projectId}`, filled);
+}
+
+async function sendDeadlineExtensionAcceptedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, extensionTime, newDeadline }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/deadlineExtensionAccepted.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    creator_username: creatorName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'Your order',
+    extension_time: extensionTime,
+    new_deadline: newDeadline,
+    order_url: `${APP_URL}/freelancer/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(freelancerEmail, `Extension request accepted — Order #${projectId}`, filled);
+}
+
+async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, currentDeadline }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/deadlineExtensionRejected.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    creator_username: creatorName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'Your order',
+    current_deadline: currentDeadline,
+    order_url: `${APP_URL}/freelancer/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(freelancerEmail, `Extension request declined — Order #${projectId}`, filled);
+}
+
+module.exports = {
+  sendDeliverySubmittedEmail,
+  sendDeliveryReceivedEmail,
+  sendCreatorRatingRequestEmail,
+  sendFreelancerRatingRequestEmail,
+  sendOrderApprovedEmail,
+  sendCreatorDisputeEmail,
+  sendFreelancerDisputeEmail,
+  sendPaymentConfirmedEmail,
+  sendOrderActivatedEmail,
+  sendDeadlineExtensionRequestEmail,
+  sendDeadlineExtensionAcceptedEmail,
+  sendDeadlineExtensionRejectedEmail,
+};

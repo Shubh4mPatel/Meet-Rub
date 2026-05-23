@@ -3,7 +3,7 @@ const AppError = require("../../../utils/appError");
 const { logger } = require('../../../utils/logger');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
-const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail } = require('../../../utils/deliveryEmails');
+const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail, sendCreatorRatingRequestEmail, sendFreelancerRatingRequestEmail, sendOrderApprovedEmail, sendCreatorDisputeEmail, sendFreelancerDisputeEmail } = require('../../../utils/deliveryEmails');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
 
 // Create a new project
@@ -1119,7 +1119,15 @@ const approveProject = async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: projects } = await client.query(
-      'SELECT * FROM projects WHERE id = $1 AND creator_id = $2 FOR UPDATE',
+      `SELECT p.*, 
+              f.user_id AS freelancer_user_id, f.freelancer_full_name, f.freelancer_email,
+              c.full_name AS creator_name, c.email AS creator_email, c.user_id AS creator_user_id,
+              s.service_name
+       FROM projects p
+       JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+       JOIN creators c ON p.creator_id = c.creator_id
+       LEFT JOIN services s ON p.service_id = s.id
+       WHERE p.id = $1 AND p.creator_id = $2 FOR UPDATE OF p`,
       [projectId, creatorId]
     );
 
@@ -1166,6 +1174,105 @@ const approveProject = async (req, res, next) => {
     // Transaction stays in HELD status - admin will release it later
 
     await client.query('COMMIT');
+
+    const project = projects[0];
+    const serviceLabel = project.service_name ? ` for ${project.service_name}` : '';
+
+    // Send in-app notifications and emails (non-blocking)
+    const notificationResults = await Promise.allSettled([
+      // In-app: rating request to creator
+      sendNotification({
+        recipientId: project.creator_user_id,
+        senderId: project.freelancer_user_id,
+        eventType: 'rating_request',
+        title: 'Rate your freelancer',
+        body: `Project completed! Please rate ${project.freelancer_full_name} for their work.`,
+        actionType: 'link',
+        actionRoute: String(projectId),
+      }),
+      // In-app: rating request to freelancer
+      sendNotification({
+        recipientId: project.freelancer_user_id,
+        senderId: project.creator_user_id,
+        eventType: 'rating_request',
+        title: 'Rate your client',
+        body: `Project completed! Please rate ${project.creator_name} for their collaboration.`,
+        actionType: 'link',
+        actionRoute: String(projectId),
+      }),
+      // In-app: order approved to freelancer
+      sendNotification({
+        recipientId: project.freelancer_user_id,
+        senderId: project.creator_user_id,
+        eventType: 'order_approved',
+        title: 'Delivery approved!',
+        body: `${project.creator_name} has approved your delivery${serviceLabel}. Raise a withdrawal request for payment.`,
+        actionType: 'link',
+        actionRoute: String(projectId),
+      }),
+      // Email: rating request to creator
+      sendCreatorRatingRequestEmail({
+        creatorEmail: project.creator_email,
+        creatorName: project.creator_name,
+        freelancerName: project.freelancer_full_name,
+        projectId,
+        serviceTitle: project.service_name,
+      }),
+      // Email: rating request to freelancer
+      sendFreelancerRatingRequestEmail({
+        freelancerEmail: project.freelancer_email,
+        freelancerName: project.freelancer_full_name,
+        creatorName: project.creator_name,
+        projectId,
+        serviceTitle: project.service_name,
+      }),
+      // Email: order approved to freelancer
+      sendOrderApprovedEmail({
+        freelancerEmail: project.freelancer_email,
+        freelancerName: project.freelancer_full_name,
+        creatorName: project.creator_name,
+        projectId,
+        serviceTitle: project.service_name,
+        amount: project.amount,
+      }),
+      // Email: order completed to creator (existing template)
+      (async () => {
+        const fs = require('fs');
+        const path = require('path');
+        const { sendMail } = require('../../../config/email');
+        const TEMPLATES_DIR = path.join(__dirname, '../../../../Email-Templates');
+        const APP_URL = process.env.APP_URL || 'https://meetrub.com';
+        const LOGO_SVG_PATH = path.join(__dirname, '../../../../Email-Templates/assets/logo-large.svg');
+        const LOGO_URL = process.env.LOGO_URL || `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
+        const CURRENCY = process.env.CURRENCY || '\u20B9';
+        const html = fs.readFileSync(path.join(TEMPLATES_DIR, 'creator/orderCompleted.html'), 'utf8');
+        const filled = Object.entries({
+          creator_username: project.creator_name,
+          freelancer_username: project.freelancer_full_name,
+          order_id: String(projectId),
+          service_title: project.service_name || 'Your order',
+          currency: CURRENCY,
+          amount: project.amount != null ? Number(project.amount).toFixed(2) : '\u2014',
+          review_url: `${APP_URL}/creator/orders/${projectId}`,
+          hire_again_url: `${APP_URL}/creator/freelancers`,
+          logo_url: LOGO_URL,
+          help_url: process.env.HELP_URL || `${APP_URL}/help`,
+          privacy_url: process.env.PRIVACY_URL || `${APP_URL}/privacy`,
+        }).reduce((acc, [k, v]) => acc.replaceAll(`{{${k}}}`, v ?? ''), html);
+        await sendMail(project.creator_email, `Order completed \u2014 Order #${projectId}`, filled);
+      })(),
+    ]);
+
+    notificationResults.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        const labels = [
+          'creator rating_request notification', 'freelancer rating_request notification',
+          'order_approved notification', 'creator rating email', 'freelancer rating email',
+          'order approved email', 'order completed email',
+        ];
+        logger.error(`approveProject: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
+      }
+    });
 
     return res.status(200).json({
       status: 'success',
@@ -1240,19 +1347,47 @@ const rejectProject = async (req, res, next) => {
     await client.query('COMMIT');
 
     const disputeId = disputeResult[0].id;
+    const disputeReasonDisplay = reason_of_dispute === 'other' ? description : reason_of_dispute;
 
-    // Send admin email
-    sendAdminDisputeEmail({
-      disputeId,
-      projectId,
-      creatorName: project.creator_name,
-      creatorEmail: project.creator_email,
-      freelancerName: project.freelancer_full_name,
-      freelancerEmail: project.freelancer_email,
-      serviceTitle: project.service_name,
-      amount: project.amount,
-      disputeReason: reason_of_dispute === 'other' ? description : reason_of_dispute,
-    }).catch((err) => logger.error('Failed to send admin dispute email:', err));
+    // Send admin email and party emails (non-blocking)
+    Promise.allSettled([
+      sendAdminDisputeEmail({
+        disputeId,
+        projectId,
+        creatorName: project.creator_name,
+        creatorEmail: project.creator_email,
+        freelancerName: project.freelancer_full_name,
+        freelancerEmail: project.freelancer_email,
+        serviceTitle: project.service_name,
+        amount: project.amount,
+        disputeReason: disputeReasonDisplay,
+      }),
+      sendCreatorDisputeEmail({
+        creatorEmail: project.creator_email,
+        creatorName: project.creator_name,
+        freelancerName: project.freelancer_full_name,
+        disputeId,
+        projectId,
+        serviceTitle: project.service_name,
+        disputeReason: disputeReasonDisplay,
+      }),
+      sendFreelancerDisputeEmail({
+        freelancerEmail: project.freelancer_email,
+        freelancerName: project.freelancer_full_name,
+        creatorName: project.creator_name,
+        disputeId,
+        projectId,
+        serviceTitle: project.service_name,
+        disputeReason: disputeReasonDisplay,
+      }),
+    ]).then((results) => {
+      results.forEach((result, i) => {
+        if (result.status === 'rejected') {
+          const labels = ['admin email', 'creator email', 'freelancer email'];
+          logger.error(`rejectProject: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
+        }
+      });
+    });
 
     // Notify freelancer
     await Promise.all([

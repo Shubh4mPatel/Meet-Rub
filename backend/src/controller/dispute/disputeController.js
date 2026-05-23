@@ -6,6 +6,7 @@ const paymentService = require('../../razor-pay-services/paymentService');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
+const { sendCreatorDisputeEmail, sendFreelancerDisputeEmail } = require('../../../utils/deliveryEmails');
 
 const EXPIRY_SECONDS = 4 * 60 * 60; // 4 hours
 
@@ -134,17 +135,59 @@ const raiseDispute = async (req, res, next) => {
 
     if (partiesRes.rows.length > 0) {
       const { creator_name, creator_email, freelancer_name, freelancer_email } = partiesRes.rows[0];
-      sendAdminDisputeEmail({
-        disputeId: disputeResult.rows[0].id,
-        projectId: project_id || null,
-        creatorName: creator_name,
-        creatorEmail: creator_email,
-        freelancerName: freelancer_name,
-        freelancerEmail: freelancer_email,
-        serviceTitle: serviceName,
-        amount: projectAmount,
-        disputeReason: reason_of_dispute === 'other' ? description : reason_of_dispute,
-      }).catch((err) => logger.error('Failed to send admin dispute email:', err));
+      const disputeReasonDisplay = reason_of_dispute === 'other' ? description : reason_of_dispute;
+
+      Promise.allSettled([
+        // Email to admin
+        sendAdminDisputeEmail({
+          disputeId: disputeResult.rows[0].id,
+          projectId: project_id || null,
+          creatorName: creator_name,
+          creatorEmail: creator_email,
+          freelancerName: freelancer_name,
+          freelancerEmail: freelancer_email,
+          serviceTitle: serviceName,
+          amount: projectAmount,
+          disputeReason: disputeReasonDisplay,
+        }),
+        // Email to creator (either raising it or being disputed)
+        role === 'creator'
+          ? sendCreatorDisputeEmail({
+            creatorEmail: creator_email,
+            creatorName: creator_name,
+            freelancerName: freelancer_name,
+            disputeId: disputeResult.rows[0].id,
+            projectId: project_id,
+            serviceTitle: serviceName,
+            disputeReason: disputeReasonDisplay,
+          })
+          : sendCreatorDisputeEmail({
+            creatorEmail: creator_email,
+            creatorName: creator_name,
+            freelancerName: freelancer_name,
+            disputeId: disputeResult.rows[0].id,
+            projectId: project_id,
+            serviceTitle: serviceName,
+            disputeReason: disputeReasonDisplay,
+          }),
+        // Email to freelancer (either raising it or being disputed)
+        sendFreelancerDisputeEmail({
+          freelancerEmail: freelancer_email,
+          freelancerName: freelancer_name,
+          creatorName: creator_name,
+          disputeId: disputeResult.rows[0].id,
+          projectId: project_id,
+          serviceTitle: serviceName,
+          disputeReason: disputeReasonDisplay,
+        }),
+      ]).then((results) => {
+        results.forEach((result, i) => {
+          if (result.status === 'rejected') {
+            const labels = ['admin email', 'creator email', 'freelancer email'];
+            logger.error(`raiseDispute: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
+          }
+        });
+      });
     }
 
     const raiserId = req.user.user_id;
