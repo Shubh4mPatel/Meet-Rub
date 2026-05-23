@@ -223,6 +223,35 @@ LIMIT $1 OFFSET $2`,
     }
 }
 
+const getMyAdminInfo = async (req, res, next) => {
+    try {
+        const adminId = req.user?.roleWiseId;
+        if (!adminId) {
+            return next(new AppError('Admin id missing from token', 401));
+        }
+
+        const result = await query(
+            `SELECT a.id, a.user_id, a.first_name, a.last_name, a.full_name, a.email,
+                    a.permissions, a.is_active, a.created_at, a.updated_at
+             FROM admin a
+             WHERE a.id = $1`,
+            [adminId]
+        );
+
+        if (result.rows.length === 0) {
+            return next(new AppError('Admin not found', 404));
+        }
+
+        return res.status(200).json({
+            status: 'success',
+            data: result.rows[0],
+        });
+    } catch (error) {
+        logger.error(error);
+        return next(new AppError('Failed to fetch admin info', 500));
+    }
+};
+
 const getAdminList = async (req, res, next) => {
     try {
         const { search, module } = req.query;
@@ -330,4 +359,4 @@ const deleteAdmin = async (req, res, next) => {
     }
 };
 
-module.exports = { approveProfile, getAllFreelancers, getAllCreators, createAdmin, getAdminList, updateAdminPermissions, deleteAdmin };
+module.exports = { approveProfile, getAllFreelancers, getAllCreators, createAdmin, getAdminList, getMyAdminInfo, updateAdminPermissions, deleteAdmin };
