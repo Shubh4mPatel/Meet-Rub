@@ -131,4 +131,55 @@ async function sendAdminDisputeEmail({
   );
 }
 
-module.exports = { sendWelcomeEmail, sendAdminNewUserEmail, sendAdminDisputeEmail };
+async function sendAccountSuspendedEmail(role, { email, username, reason }) {
+  const templatePath = role === 'freelancer' 
+    ? path.join(TEMPLATES_DIR, 'freelancer/accountSuspended.html')
+    : path.join(TEMPLATES_DIR, 'creator/accountSuspended.html');
+
+  const html = fs.readFileSync(templatePath, 'utf8');
+
+  const filled = fillTemplate(html, {
+    username,
+    email,
+    reason_for_suspension: reason,
+    logo_url:              LOGO_URL,
+    help_url:              HELP_URL,
+    privacy_url:           PRIVACY_URL,
+  });
+
+  const subject = role === 'freelancer'
+    ? 'Your MeetRub freelancer account has been suspended'
+    : 'Your MeetRub creator account has been suspended';
+
+  await sendMail(email, subject, filled);
+}
+
+async function sendAccountRestoredEmail(role, { email, username }) {
+  const templatePath = role === 'freelancer' 
+    ? path.join(TEMPLATES_DIR, 'freelancer/accountUnsuspended.html')
+    : path.join(TEMPLATES_DIR, 'creator/accountUnsuspended.html');
+
+  const html = fs.readFileSync(templatePath, 'utf8');
+
+  const filled = fillTemplate(html, {
+    username,
+    email,
+    logo_url:    LOGO_URL,
+    help_url:    HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  const subject = role === 'freelancer'
+    ? 'Your MeetRub freelancer account has been restored'
+    : 'Your MeetRub creator account has been restored';
+
+  await sendMail(email, subject, filled);
+}
+
+module.exports = { 
+  sendWelcomeEmail, 
+  sendAdminNewUserEmail, 
+  sendAdminDisputeEmail,
+  sendAccountSuspendedEmail,
+  sendAccountRestoredEmail
+};

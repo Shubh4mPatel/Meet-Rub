@@ -203,20 +203,20 @@ const raiseDispute = async (req, res, next) => {
         recipientId: other_party_id,
         senderId: raiserId,
         eventType: 'dispute_raised_against_you',
-        title: 'A dispute has been raised against you',
-        body: disputeBody,
+        title: 'Dispute Raised',
+        body: `A dispute has been raised for Order #${project_id || 'N/A'}. Our team will review and resolve within 7 business days.`,
         actionType: 'link',
-        actionRoute: disputeRoute,
+        actionRoute: String(disputeRoute),
       }),
       // Confirm to the raiser
       sendNotification({
         recipientId: raiserId,
         senderId: raiserId,
         eventType: 'dispute_raised_by_you',
-        title: 'Dispute raised successfully',
-        body: `Your dispute has been successfully raised ${req.user.name}.Our team will review the details and keep you informed for of the next steps.`,
+        title: 'Dispute Submitted',
+        body: `Your dispute for Order #${project_id || 'N/A'} has been submitted. Our team will review and resolve within 7 business days.`,
         actionType: 'link',
-        actionRoute: disputeRoute,
+        actionRoute: String(disputeRoute),
       }),
     ]);
 

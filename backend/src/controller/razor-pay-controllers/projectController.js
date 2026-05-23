@@ -764,17 +764,17 @@ const uploadDeliverable = async (req, res, next) => {
         recipientId: project.creator_user_id,
         senderId: req.user.user_id,
         eventType: 'deliverable_uploaded',
-        title: 'New deliverable uploaded',
-        body: `${req.user.name} has uploaded a deliverable${serviceLabel}.`,
+        title: 'New Delivery Received',
+        body: `${req.user.name} has submitted the deliverable for Order #${project_id}. Please review.`,
         actionType: 'link',
         actionRoute: String(project_id),
       }),
       sendNotification({
-        recipientId: project.creator_user_id,
+        recipientId: req.user.user_id,
         senderId: req.user.user_id,
-        eventType: 'rating_request',
-        title: 'Rate your experience',
-        body: `Your project${serviceLabel} is complete. Please rate ${req.user.name} for their work.`,
+        eventType: 'deliverable_submitted',
+        title: 'Deliverable Submitted Successfully',
+        body: `You have successfully uploaded your deliverable for Order #${project_id}. Awaiting creator's review.`,
         actionType: 'link',
         actionRoute: String(project_id),
       }),
@@ -796,7 +796,7 @@ const uploadDeliverable = async (req, res, next) => {
 
     notificationResults.forEach((result, i) => {
       if (result.status === 'rejected') {
-        const labels = ['deliverable_uploaded notification', 'rating_request notification', 'delivery submitted email', 'delivery received email'];
+        const labels = ['deliverable_uploaded notification (creator)', 'deliverable_submitted notification (freelancer)', 'delivery submitted email', 'delivery received email'];
         logger.error(`uploadDeliverable: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
       }
     });
@@ -1395,19 +1395,19 @@ const rejectProject = async (req, res, next) => {
         recipientId: project.freelancer_user_id,
         senderId: creatorUserId,
         eventType: 'dispute_raised_against_you',
-        title: 'A dispute has been raised against you',
-        body: `${project.creator_name} has raised a dispute regarding project #${projectId}.`,
+        title: 'Dispute Raised',
+        body: `A dispute has been raised for Order #${projectId}. Our team will review and resolve within 7 business days.`,
         actionType: 'link',
-        actionRoute: disputeId,
+        actionRoute: String(disputeId),
       }),
       sendNotification({
         recipientId: creatorUserId,
         senderId: creatorUserId,
         eventType: 'dispute_raised_by_you',
-        title: 'Dispute raised successfully',
-        body: `Your dispute for project #${projectId} has been submitted. Our team will review it.`,
+        title: 'Dispute Submitted',
+        body: `Your dispute for Order #${projectId} has been submitted. Our team will review and resolve within 7 business days.`,
         actionType: 'link',
-        actionRoute: disputeId,
+        actionRoute: String(disputeId),
       }),
     ]);
 

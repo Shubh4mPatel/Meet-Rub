@@ -1,10 +1,28 @@
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
+const fs = require('fs');
+const path = require('path');
 const { query } = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
 const { logger } = require('../../../../utils/logger');
 const { sendEmailNotification } = require("../../../../producer/notificationProducer");
 const { sendMail } = require("../../../../config/email");
+
+const TEMPLATES_DIR = path.join(__dirname, '../../../../../Email-Templates');
+
+const APP_URL = process.env.APP_URL || 'https://meetrub.com';
+const LOGO_SVG_PATH = path.join(__dirname, '../../../../../Email-Templates/assets/logo-large.svg');
+const LOGO_URL = process.env.LOGO_URL ||
+  `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
+const HELP_URL = process.env.HELP_URL || `${APP_URL}/help`;
+const PRIVACY_URL = process.env.PRIVACY_URL || `${APP_URL}/privacy`;
+
+function fillTemplate(html, vars) {
+  return Object.entries(vars).reduce(
+    (acc, [key, value]) => acc.replaceAll(`{{${key}}}`, value ?? ''),
+    html
+  );
+}
 
 const otpSendApi = async (req, res, next) => {
   let { email, type } = req.body;
@@ -57,20 +75,38 @@ const otpSendApi = async (req, res, next) => {
     }
 
     let subject = "";
-    let message = "";
+    let htmlContent = "";
 
     if (type === "email-verification") {
       subject = "Your Meetrub Verification Code";
-      message = `Your OTP is: ${otp}`;
+      const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'auth/emailVerificationOtp.html'),
+        'utf8'
+      );
+      htmlContent = fillTemplate(html, {
+        otp_code: otp,
+        logo_url: LOGO_URL,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+      });
     } else {
       subject = "Meetrub Password Reset Code";
-      message = `Your OTP is: ${otp}`;
+      const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'auth/passwordResetOtp.html'),
+        'utf8'
+      );
+      htmlContent = fillTemplate(html, {
+        otp_code: otp,
+        logo_url: LOGO_URL,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+      });
     }
 
     logger.info("Sending OTP email");
 
     // sendEmailNotification(email, subject, message, false);
-    sendMail(email, subject, message);
+    sendMail(email, subject, htmlContent);
 
     logger.info("OTP sent successfully");
 

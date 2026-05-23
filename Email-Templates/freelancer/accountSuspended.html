@@ -7,25 +7,22 @@
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;}
   .wrapper{max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);}
-  .header{background:#7C3AED;padding:28px 32px 24px;text-align:center;}
+  .header{background:#DC2626;padding:28px 32px 24px;text-align:center;}
   .logo-row{text-align:center;margin-bottom:12px;}
-  .header-subtitle{color:#C4B5FD;font-size:13px;margin-top:2px;}
+  .header-subtitle{color:#FECACA;font-size:13px;margin-top:2px;}
   .body{padding:32px;}
   .body h2{font-size:19px;color:#1A1A2E;margin:0 0 10px;font-family:Arial,sans-serif;}
   .body p{font-size:15px;color:#4B5563;line-height:1.65;margin:0 0 16px;}
-  .highlight{background:#F5F3FF;border-left:4px solid #7C3AED;border-radius:6px;padding:16px 20px;margin:20px 0;}
-  .highlight p{margin:5px 0;color:#1A1A2E;font-size:14px;}
-  .highlight strong{color:#7C3AED;}
-  .btn{display:inline-block;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;text-decoration:none;margin:6px 4px;}
-  .btn-primary{background:#7C3AED;color:#ffffff;}
-  .btn-secondary{background:#F3F4F6;color:#1A1A2E;border:1px solid #D1D5DB;}
-  .footer{background:#F8F7FF;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
+  .highlight{background:#FEF2F2;border-left:4px solid #DC2626;border-radius:6px;padding:16px 20px;margin:20px 0;}
+  .highlight p{margin:5px 0;color:#7F1D1D;font-size:14px;}
+  .highlight strong{color:#991B1B;}
+  .footer{background:#F8F9FA;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
   .footer p{font-size:12px;color:#9CA3AF;margin:4px 0;}
   .social-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 10px;}
   .social-row a{display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;}
   .social-row img{width:32px;height:32px;display:block;}
   .footer-links{margin-top:8px;}
-  .footer-links a{font-size:12px;color:#7C3AED;text-decoration:none;margin:0 8px;}
+  .footer-links a{font-size:12px;color:#DC2626;text-decoration:none;margin:0 8px;}
 </style>
 </head>
 <body>
@@ -34,22 +31,27 @@
     <div class="logo-row">
       <img src="{{logo_url}}" alt="Meetrub" style="height:48px;width:auto;display:block;margin:0 auto;">
     </div>
-    <div class="header-subtitle">Deadline extension requested</div>
+    <div class="header-subtitle">Account suspended</div>
   </div>
   <div class="body">
+    <h2>Hi {{freelancer_username}},</h2>
+    <p>We regret to inform you that your Meetrub freelancer account has been temporarily suspended by our team.</p>
     
-        <h2>Hi {{creator_username}},</h2>
-        <p><strong>{{freelancer_username}}</strong> has requested a deadline extension for your order.</p>
-        <div class="highlight">
-          <p><strong>Order ID:</strong> #{{order_id}}</p>
-          <p><strong>Service:</strong> {{service_title}}</p>
-          <p><strong>Extension requested:</strong> {{extension_time}}</p>
-          <p><strong>Current deadline:</strong> {{current_deadline}}</p>
-          <p><strong>New deadline (if accepted):</strong> {{new_deadline}}</p>
-        </div>
-        <p>Please review the request and respond within 7 days.</p>
-        <a href="{{extension_url}}" class="btn btn-primary">Accept Extension</a>
-        <a href="{{extension_url}}" class="btn btn-secondary">Decline Extension</a>
+    <div class="highlight">
+      <p><strong>Reason for suspension:</strong></p>
+      <p>{{reason_for_suspension}}</p>
+    </div>
+    
+    <p><strong>What this means:</strong></p>
+    <p>• You cannot access your freelancer dashboard</p>
+    <p>• You cannot receive new orders or bids</p>
+    <p>• Existing projects may be affected</p>
+    <p>• Your profile is hidden from creators</p>
+    
+    <p style="margin-top:24px;"><strong>Next steps:</strong></p>
+    <p>If you believe this suspension is in error or would like to appeal, please contact our support team immediately. We're here to help resolve any issues.</p>
+    
+    <p style="margin-top:24px;color:#6B7280;font-size:14px;">For assistance, contact us at <a href="{{help_url}}" style="color:#DC2626;text-decoration:none;">{{help_url}}</a></p>
   </div>
   <div class="footer">
     <div class="social-row">
@@ -57,7 +59,7 @@
       <a href="https://instagram.com/meetrub" title="Instagram"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABAUlEQVR4nNVXQRLCIAyEjl/SY3lYOerD9FgeVQ8ODkJICCGiubVAdrMbCrWGGffz9cDGXfCWk69pMgUqIbNogbeurTKUAENRUwNUYDQ4lrMgoAGO5V6oCdokTtjkdd+GAT8uN/D9W4FvVA9hWQw8KlBjjwWkXp7HBW/J74B2TCdgMe8pC1KZoTnUuDGdCqz7VngMvWvpHXQbUpEC9G5ZtgI1W+Izl8j0Jvw/AjWpez9aoiYccVYs3DucMa8qoSbkVu+Ct8O2YW/8RhP22CCNiPkBnJ8LWheStODpFhTSa9+McrsLBTT7AcoNWqBBopaTBJJaQhVDNqFEjZa17OSjf8+fRYF/NtVNsc8AAAAASUVORK5CYII=" alt="Instagram"></a>
       <a href="https://linkedin.com/company/meetrub" title="LinkedIn"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABdklEQVR4nGNkIBFwpR36j0/+2yw7RlLMI0oxIUspcQwTrSwnVi9OF1JiMTaAKzSwhgC1LcdnJoYDaGE5PrOZCCmgtSMIJkJaA7gD6OF7bHYx0dtydEcMnijABRamajB8nWnL8HWmLYOyGCf1HTAQwQ8DXGmH/jMOpAMYGBgYWAgpWJiqwRBiIsrAwMDAoFd7huHuq+8oYpmLbjEEGYsy6MtyM7AwMzLsufaBoXj5XYZ3X39TxwGEwPQ4NRR+mKkoAzMjA0Pc7BtE6ac4F1x+8pVBp/o0g1HDWYb3X/8wMDAwMAQYiTCwMBHXLKDYAa2bHzLcf/OD4ebzbwyn7n9iYGBgYGBmYmSQFGCjjwNuvfwOZ//4/Q/OZmMhzmiKHfDnLyIT/ScjPzGR2oajJvg2y45x8BfFtAbw4Kd3iQiLeiZ0AXpajuKAgQIoDqBHKKDbgRECtHQENrOxRgEtHIHLTIIWUZo7CHmGYCKkJDSI0Uuy4dTungMA0D2HkF+lTRgAAAAASUVORK5CYII=" alt="LinkedIn"></a>
     </div>
-    <p>Extensions requests expire after 7 days.</p>
+    <p>Contact support if you need assistance.</p>
     <p>&copy; 2026 Meetrub. All rights reserved.</p>
     <div class="footer-links">
       <a href="{{help_url}}">Help Center</a>

@@ -68,8 +68,8 @@ const requestDeadlineExtension = async (req, res, next) => {
 
         const chatRoomId = chatRooms.length > 0 ? chatRooms[0].room_id : null;
 
-        // Create extension request (expires in 48 hours)
-        const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+        // Create extension request (expires in 7 days)
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         const { rows: extension } = await db.query(
             `INSERT INTO deadline_extension_requested 
         (project_id, freelancer_id, creator_id, chat_room_id, days, hours, status, expires_at)
@@ -99,8 +99,8 @@ const requestDeadlineExtension = async (req, res, next) => {
                 recipientId: project.creator_user_id,
                 senderId: req.user.user_id,
                 eventType: 'deadline_extension_requested',
-                title: 'Deadline extension requested',
-                body: `${project.freelancer_full_name} has requested a ${extensionText} extension for ${project.service_name || 'your order'}.`,
+                title: 'Deadline Extension Requested',
+                body: `${project.freelancer_full_name} has requested a deadline extension for Order #${project_id}. Please accept or decline within 7 days.`,
                 actionType: 'link',
                 actionRoute: String(extension[0].id),
             }),
@@ -224,8 +224,8 @@ const respondToDeadlineExtension = async (req, res, next) => {
                         recipientId: extension.freelancer_user_id,
                         senderId: req.user.user_id,
                         eventType: 'deadline_extension_accepted',
-                        title: 'Extension request accepted',
-                        body: `${extension.creator_name} has accepted your deadline extension request for ${extension.service_name || 'the order'}.`,
+                        title: 'Extension Request Accepted',
+                        body: `Great news! ${extension.creator_name} has accepted your deadline extension for Order #${extension.project_id}. New deadline: ${newDeadlineStr}.`,
                         actionType: 'link',
                         actionRoute: String(extension.project_id),
                     }),
@@ -278,8 +278,8 @@ const respondToDeadlineExtension = async (req, res, next) => {
                         recipientId: extension.freelancer_user_id,
                         senderId: req.user.user_id,
                         eventType: 'deadline_extension_rejected',
-                        title: 'Extension request declined',
-                        body: `${extension.creator_name} has declined your deadline extension request for ${extension.service_name || 'the order'}.`,
+                        title: 'Extension Request Declined',
+                        body: `${extension.creator_name} has declined your deadline extension for Order #${extension.project_id}. Original deadline remains: ${currentDeadlineStr}.`,
                         actionType: 'link',
                         actionRoute: String(extension.project_id),
                     }),

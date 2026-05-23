@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Suspended - MeetRub</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+    }
+    .header {
+      background-color: #DC2626;
+      padding: 30px 20px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      margin: 0;
+      font-size: 24px;
+    }
+    .logo {
+      text-align: center;
+      padding: 20px;
+      background-color: #ffffff;
+    }
+    .logo img {
+      max-width: 150px;
+      height: auto;
+    }
+    .content {
+      padding: 30px 40px;
+      color: #333333;
+      line-height: 1.6;
+    }
+    .content h2 {
+      color: #DC2626;
+      font-size: 20px;
+      margin-bottom: 15px;
+    }
+    .content p {
+      margin: 10px 0;
+      font-size: 15px;
+    }
+    .reason-box {
+      background-color: #FEF2F2;
+      border-left: 4px solid #DC2626;
+      padding: 20px;
+      margin: 25px 0;
+      border-radius: 4px;
+    }
+    .reason-box h3 {
+      color: #DC2626;
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+    .reason-box p {
+      margin: 0;
+      color: #991B1B;
+      font-size: 15px;
+    }
+    .restriction-box {
+      background-color: #FFF7ED;
+      border: 1px solid #FDBA74;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 6px;
+    }
+    .restriction-box h3 {
+      color: #EA580C;
+      margin: 0 0 15px 0;
+      font-size: 16px;
+    }
+    .restriction-box ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .restriction-box li {
+      margin: 8px 0;
+      color: #9A3412;
+    }
+    .next-steps {
+      background-color: #F3F4F6;
+      padding: 20px;
+      margin: 25px 0;
+      border-radius: 6px;
+    }
+    .next-steps h3 {
+      color: #374151;
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+    .next-steps ol {
+      margin: 10px 0 0 0;
+      padding-left: 20px;
+      color: #4B5563;
+    }
+    .next-steps li {
+      margin: 8px 0;
+    }
+    .footer {
+      background-color: #f9fafb;
+      padding: 30px 40px;
+      text-align: center;
+      color: #6b7280;
+      font-size: 13px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .footer a {
+      color: #6b7280;
+      text-decoration: underline;
+    }
+    .social-links {
+      margin: 20px 0;
+    }
+    .social-links a {
+      display: inline-block;
+      margin: 0 10px;
+      text-decoration: none;
+      color: #6b7280;
+    }
+    @media only screen and (max-width: 600px) {
+      .content {
+        padding: 20px;
+      }
+      .footer {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <!-- Logo -->
+    <div class="logo">
+      <img src="https://meetrub.s3.ap-south-1.amazonaws.com/logo.png" alt="MeetRub Logo">
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+      <h1>⚠️ Account Suspended</h1>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <h2>Important Notice, {{username}}</h2>
+      
+      <p>Your MeetRub creator account has been suspended by our administrative team. This action was taken to maintain the integrity and safety of our platform.</p>
+
+      <div class="reason-box">
+        <h3>Reason for Suspension:</h3>
+        <p>{{reason_for_suspension}}</p>
+      </div>
+
+      <div class="restriction-box">
+        <h3>What This Means:</h3>
+        <ul>
+          <li><strong>Dashboard Access:</strong> Limited access to your creator dashboard</li>
+          <li><strong>Order Placement:</strong> You cannot place new orders</li>
+          <li><strong>Profile Status:</strong> Your profile is hidden from freelancers</li>
+          <li><strong>Messaging:</strong> Limited messaging capabilities</li>
+          <li><strong>Active Orders:</strong> Existing orders may be affected</li>
+        </ul>
+      </div>
+
+      <div class="next-steps">
+        <h3>Next Steps:</h3>
+        <ol>
+          <li>Review our Community Guidelines and Terms of Service</li>
+          <li>Contact our support team to discuss this suspension</li>
+          <li>Provide any necessary information or clarification</li>
+          <li>Wait for our team to review your case</li>
+        </ol>
+      </div>
+
+      <p style="margin-top: 25px;">We take these actions seriously and only after careful consideration. If you believe this is a mistake or would like to appeal this decision, please contact our support team immediately.</p>
+
+      <p style="color: #6b7280; font-size: 14px; margin-top: 30px; padding: 15px; background-color: #F9FAFB; border-radius: 4px;">
+        <strong>Need to discuss this?</strong> Contact our support team at 
+        <a href="mailto:support@meetrub.com" style="color: #DC2626;">support@meetrub.com</a><br>
+        Please reference your creator ID in all communications.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="social-links">
+        <a href="https://facebook.com/meetrub">Facebook</a> |
+        <a href="https://twitter.com/meetrub">Twitter</a> |
+        <a href="https://instagram.com/meetrub">Instagram</a> |
+        <a href="https://linkedin.com/company/meetrub">LinkedIn</a>
+      </div>
+      
+      <p>© 2024 MeetRub. All rights reserved.</p>
+      
+      <p>
+        <a href="https://meetrub.com/help">Help Center</a> |
+        <a href="https://meetrub.com/privacy">Privacy Policy</a> |
+        <a href="https://meetrub.com/terms">Terms of Service</a>
+      </p>
+
+      <p style="margin-top: 15px;">
+        MeetRub - Connecting Creators with Freelancers<br>
+        This email was sent to {{email}}
+      </p>
+    </div>
+  </div>
+</body>
+</html>

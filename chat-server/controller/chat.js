@@ -655,7 +655,7 @@ const chatController = (io) => {
         if (userRole === 'creator') {
           await emitWebNotification(io, recipientId, userId, 'hire_request',
             'New Hire Request',
-            `${username} has sent you a hire request.`,
+            `${username} has sent you a job offer. Check the details.`,
             'link', chatRoomId
           );
 

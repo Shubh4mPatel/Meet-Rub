@@ -6,7 +6,9 @@ const AppError = require("../../../utils/appError");
 const { createPresignedUrl } = require("../../../utils/helper");
 const razorpay = require('../../../config/razorpay');
 const { getLogger } = require('../../../utils/logger');
+const { sendAccountSuspendedEmail, sendAccountRestoredEmail } = require('../../../utils/welcomeEmail');
 const adminLogger = getLogger('admin-controller');
+const logger = getLogger('email');
 
 
 // Approve payout request (admin) — triggers Razorpay payout
@@ -551,9 +553,11 @@ const suspendFreelancerByAdmin = async (req, res, next) => {
       return next(new AppError('Reason for rejection is required', 400));
     }
 
-    // Check if freelancer exists
+    // Check if freelancer exists and get email details
     const queryResult = await query(
-      'SELECT freelancer_id, user_id, verification_status FROM freelancer WHERE freelancer_id = $1',
+      `SELECT f.freelancer_id, f.user_id, f.verification_status, f.freelancer_full_name, f.freelancer_email
+       FROM freelancer f
+       WHERE f.freelancer_id = $1`,
       [freelancer_id]
     );
 
@@ -574,6 +578,13 @@ const suspendFreelancerByAdmin = async (req, res, next) => {
       'UPDATE freelancer SET verification_status = $1, reason_for_suspension = $2 WHERE freelancer_id = $3',
       ['SUSPENDED', reason_for_suspension, freelancer_id]
     );
+
+    // Send suspension email (non-blocking)
+    sendAccountSuspendedEmail('freelancer', {
+      email: freelancer.freelancer_email,
+      username: freelancer.freelancer_full_name,
+      reason: reason_for_suspension,
+    }).catch((err) => logger.error('Failed to send freelancer suspension email:', err));
 
     res.json({
       message: 'Freelancer suspended successfully',
@@ -877,7 +888,9 @@ const suspendCreatorByAdmin = async (req, res, next) => {
     }
 
     const { rows } = await query(
-      'SELECT creator_id, account_status FROM creators WHERE creator_id = $1',
+      `SELECT c.creator_id, c.account_status, c.full_name, c.email
+       FROM creators c
+       WHERE c.creator_id = $1`,
       [creator_id]
     );
 
@@ -893,6 +906,13 @@ const suspendCreatorByAdmin = async (req, res, next) => {
       'UPDATE creators SET account_status = $1, reason_for_suspension = $2, suspended_by = $3, suspended_at = NOW() WHERE creator_id = $4',
       ['SUSPENDED', reason_for_suspension, adminId, creator_id]
     );
+
+    // Send suspension email (non-blocking)
+    sendAccountSuspendedEmail('creator', {
+      email: rows[0].email,
+      username: rows[0].full_name,
+      reason: reason_for_suspension,
+    }).catch((err) => logger.error('Failed to send creator suspension email:', err));
 
     res.json({
       message: 'Creator suspended successfully',
@@ -917,7 +937,9 @@ const revokeCreatorSuspension = async (req, res, next) => {
     }
 
     const { rows } = await query(
-      'SELECT creator_id, account_status FROM creators WHERE creator_id = $1',
+      `SELECT c.creator_id, c.account_status, c.full_name, c.email
+       FROM creators c
+       WHERE c.creator_id = $1`,
       [creator_id]
     );
 
@@ -933,6 +955,12 @@ const revokeCreatorSuspension = async (req, res, next) => {
       'UPDATE creators SET account_status = $1, reason_for_suspension = NULL, suspended_by = NULL, suspended_at = NULL WHERE creator_id = $2',
       ['ACTIVE', creator_id]
     );
+
+    // Send account restored email (non-blocking)
+    sendAccountRestoredEmail('creator', {
+      email: rows[0].email,
+      username: rows[0].full_name,
+    }).catch((err) => logger.error('Failed to send creator restoration email:', err));
 
     res.json({
       message: 'Creator suspension revoked successfully',
@@ -954,7 +982,9 @@ const revokeFreelancerSuspension = async (req, res, next) => {
     }
 
     const { rows } = await query(
-      'SELECT freelancer_id, verification_status FROM freelancer WHERE freelancer_id = $1',
+      `SELECT f.freelancer_id, f.verification_status, f.freelancer_full_name, f.freelancer_email
+       FROM freelancer f
+       WHERE f.freelancer_id = $1`,
       [freelancer_id]
     );
 
@@ -970,6 +1000,12 @@ const revokeFreelancerSuspension = async (req, res, next) => {
       'UPDATE freelancer SET verification_status = $1, reason_for_suspension = NULL WHERE freelancer_id = $2',
       ['VERIFIED', freelancer_id]
     );
+
+    // Send account restored email (non-blocking)
+    sendAccountRestoredEmail('freelancer', {
+      email: rows[0].freelancer_email,
+      username: rows[0].freelancer_full_name,
+    }).catch((err) => logger.error('Failed to send freelancer restoration email:', err));
 
     res.json({
       message: 'Freelancer suspension revoked successfully',
