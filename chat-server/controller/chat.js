@@ -12,10 +12,14 @@ async function emitWebNotification(io, recipientId, senderId, eventType, title, 
       if (recipientActiveRoom === actionRoute) return;
     }
 
-    const savedNotif = await chatModel.saveWebNotification(
-      recipientId, senderId, eventType, title, body, actionType, actionRoute
-    );
-    const recipientSocketId = await redis.get(`user:${recipientId}:socketId`);
+    const [savedNotif, senderImage] = await Promise.all([
+      chatModel.saveWebNotification(recipientId, senderId, eventType, title, body, actionType, actionRoute),
+      chatModel.getSenderProfileImage(senderId),
+    ]);
+    const [recipientSocketId, senderImageUrl] = await Promise.all([
+      redis.get(`user:${recipientId}:socketId`),
+      senderImage ? createPresignedUrl(senderImage) : Promise.resolve(null),
+    ]);
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('notification', {
         id: savedNotif.id,
@@ -26,6 +30,7 @@ async function emitWebNotification(io, recipientId, senderId, eventType, title, 
         action_route: savedNotif.action_route,
         is_read: false,
         created_at: savedNotif.created_at,
+        sender_image: senderImageUrl,
       });
     }
   } catch (error) {
@@ -1387,16 +1392,20 @@ const chatController = (io) => {
 
         // Send top 5 unread notifications to the user on connect
         const recentNotifications = await chatModel.getRecentNotifications(userId, 5);
-        socket.emit("initial_notifications", recentNotifications.map(notif => ({
-          id: notif.id,
-          event_type: notif.event_type,
-          title: notif.title,
-          body: notif.body,
-          action_type: notif.action_type,
-          action_route: notif.action_route,
-          is_read: notif.is_read,
-          created_at: notif.created_at,
-        })));
+        const notificationsWithImages = await Promise.all(
+          recentNotifications.map(async (notif) => ({
+            id: notif.id,
+            event_type: notif.event_type,
+            title: notif.title,
+            body: notif.body,
+            action_type: notif.action_type,
+            action_route: notif.action_route,
+            is_read: notif.is_read,
+            created_at: notif.created_at,
+            sender_image: notif.sender_image ? await createPresignedUrl(notif.sender_image) : null,
+          }))
+        );
+        socket.emit("initial_notifications", notificationsWithImages);
 
       } catch (error) {
         console.error("Error on connection setup:", error);

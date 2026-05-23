@@ -1055,9 +1055,14 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   // Get top 5 unread notifications for a user (sent on connect)
   async getRecentNotifications(userId, limit = 5) {
     const query = `
-      SELECT * FROM web_notifications
-      WHERE recipient_id = $1 AND is_read = false
-      ORDER BY created_at DESC LIMIT $2
+      SELECT wn.*,
+        COALESCE(c.profile_image_url, f.profile_image_url) AS sender_image
+      FROM web_notifications wn
+      LEFT JOIN users u ON wn.sender_id = u.id
+      LEFT JOIN creators c ON u.id = c.user_id
+      LEFT JOIN freelancer f ON u.id = f.user_id
+      WHERE wn.recipient_id = $1 AND wn.is_read = false
+      ORDER BY wn.created_at DESC LIMIT $2
     `;
     try {
       const result = await pool.query(query, [userId, limit]);
@@ -1094,6 +1099,18 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       [userId]
     );
     return result.rows[0]?.user_role || null;
+  },
+
+  async getSenderProfileImage(senderId) {
+    const result = await pool.query(
+      `SELECT COALESCE(c.profile_image_url, f.profile_image_url) AS profile_image_url
+       FROM users u
+       LEFT JOIN creators c ON u.id = c.user_id
+       LEFT JOIN freelancer f ON u.id = f.user_id
+       WHERE u.id = $1`,
+      [senderId]
+    );
+    return result.rows[0]?.profile_image_url || null;
   },
 
   // ========== SUPPORT CHAT METHODS ==========
