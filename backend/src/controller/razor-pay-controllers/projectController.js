@@ -1224,9 +1224,8 @@ const rejectProject = async (req, res, next) => {
       return next(new AppError('Project must be SUBMITTED before rejecting', 400));
     }
 
-    // Update project to REJECTED
     await client.query(
-      `UPDATE projects SET status = 'REJECTED', updated_at = NOW() WHERE id = $1`,
+      `UPDATE projects SET status = 'DISPUTE', updated_at = NOW() WHERE id = $1`,
       [projectId]
     );
 
