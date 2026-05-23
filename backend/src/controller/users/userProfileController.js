@@ -4044,10 +4044,20 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       params: countFilters.params,
     });
 
-    // --- Execute both in parallel ---
-    const [results, countResult] = await Promise.all([
+    const priceRangeQuery = `
+      SELECT MIN(s.service_price) AS min_price, MAX(s.service_price) AS max_price
+      FROM freelancer f
+      JOIN services s ON f.freelancer_id = s.freelancer_id
+      WHERE f.verification_status = 'VERIFIED'
+        AND f.is_active = true
+        AND s.is_active = true
+    `;
+
+    // --- Execute all three in parallel ---
+    const [results, countResult, priceRangeResult] = await Promise.all([
       query(mainQuery, mainParams),
       query(countQuery, countFilters.params),
+      query(priceRangeQuery, []),
     ]);
 
     const totalCount = parseInt(countResult.rows[0].count);
@@ -4089,6 +4099,8 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       })
     );
 
+    const { min_price, max_price } = priceRangeResult.rows[0];
+
     logger.info(`[getAllFreelancers] Responding with ${freelancers.length} freelancers (page ${page}/${totalPages})`);
     return res.status(200).json({
       status: "success",
@@ -4099,6 +4111,10 @@ const getAllfreelancersForcreator = async (req, res, next) => {
           totalPages,
           totalItems: totalCount,
           itemsPerPage: limit,
+        },
+        priceRange: {
+          min: min_price !== null ? parseFloat(min_price) : 0,
+          max: max_price !== null ? parseFloat(max_price) : 0,
         },
       },
     });
