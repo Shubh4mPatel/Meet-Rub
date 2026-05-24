@@ -535,44 +535,27 @@ const resolveDispute = async (req, res, next) => {
       // Just mark as resolved — no money movement
 
     } else if (resolution_action === 'release') {
-      // Release funds to freelancer
-      if (dispute.razorpay_transfer_id) {
-        // Routes flow: release the on-hold transfer
-        await razorpay.transfers.edit(dispute.razorpay_transfer_id, { on_hold: 0 });
-        logger.info(`Dispute ${id}: Released transfer ${dispute.razorpay_transfer_id} via Routes`);
-      } else {
-        // Legacy flow: credit freelancer earnings_balance manually
-        await client.query(
-          `UPDATE freelancer SET earnings_balance = earnings_balance + $1 WHERE freelancer_id = $2`,
-          [dispute.freelancer_amount, dispute.t_freelancer_id]
-        );
-        logger.info(`Dispute ${id}: Added ${dispute.freelancer_amount} to earnings_balance for freelancer ${dispute.t_freelancer_id}`);
-      }
-
-      await client.query(
-        `UPDATE transactions SET status = 'COMPLETED', released_by = $1, released_at = NOW(), updated_at = NOW() WHERE id = $2`,
-        [adminId, dispute.transaction_id]
-      );
-
+      // Mark project as COMPLETED and auto-create payout request
+      // Admin must approve the payout to release funds (same flow as normal delivery approval)
       await client.query(
         `UPDATE projects SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [dispute.project_id]
       );
 
-      // Auto-create payout record so withdrawal list excludes this project
-      // and freelancer history reflects this release.
-      // Routes flow → PROCESSED (transfer.settled webhook will flip it to CREDITED after T+2)
-      // Legacy flow → CREDITED immediately (earnings_balance already credited above)
-      const autoPayoutStatus = dispute.razorpay_transfer_id ? 'PROCESSED' : 'CREDITED';
+      // Auto-create payout request with REQUESTED status
+      // Admin will approve it later, which will:
+      //   1. Release the transfer (set on_hold = 0)
+      //   2. Mark transaction COMPLETED
+      //   3. Wait for transfer.settled webhook to credit earnings_balance
       await client.query(
-        `INSERT INTO payouts (freelancer_id, amount, currency, status, transaction_id, approved_by, approved_at)
-         SELECT f.user_id, $2, $3, $4, $5, $6, NOW()
+        `INSERT INTO payouts (freelancer_id, amount, currency, status, transaction_id)
+         SELECT f.user_id, $2, $3, 'REQUESTED', $4
          FROM freelancer f
          WHERE f.freelancer_id = $1
-           AND NOT EXISTS (SELECT 1 FROM payouts WHERE transaction_id = $5)`,
-        [dispute.t_freelancer_id, dispute.freelancer_amount, process.env.CURRENCY || 'INR', autoPayoutStatus, dispute.transaction_id, adminId]
+           AND NOT EXISTS (SELECT 1 FROM payouts WHERE transaction_id = $4)`,
+        [dispute.t_freelancer_id, dispute.freelancer_amount, process.env.CURRENCY || 'INR', dispute.transaction_id]
       );
-      logger.info(`Dispute ${id}: Auto-created payout (status: ${autoPayoutStatus}) for transaction ${dispute.transaction_id}`);
+      logger.info(`Dispute ${id}: Auto-created payout request (status: REQUESTED) for transaction ${dispute.transaction_id}. Admin must approve to release funds.`);
 
     } else {
       // Refund full amount (including GST) to creator
@@ -625,7 +608,7 @@ const resolveDispute = async (req, res, next) => {
     return res.status(200).json({
       status: 'success',
       message: resolution_action === 'release'
-        ? 'Dispute resolved. Funds released to freelancer.'
+        ? 'Dispute resolved in favor of freelancer. Payout request created. Admin must approve to release funds.'
         : resolution_action === 'refund'
           ? 'Dispute resolved. Full refund initiated to creator.'
           : 'Dispute marked as resolved.',
