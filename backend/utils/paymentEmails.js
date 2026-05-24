@@ -46,7 +46,7 @@ async function sendPaymentSuccessEmailToCreator({
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
-    await sendMail(creatorEmail, `Payment successful — Order #${projectId}`, filled);
+    await sendMail(creatorEmail, `Payment successful — Order #${projectId}`, filled, null, 'payment_success', projectId);
 }
 
 // Send work start notification email to freelancer
@@ -76,7 +76,7 @@ async function sendWorkStartEmailToFreelancer({
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
-    await sendMail(freelancerEmail, `New order — start work — Order #${projectId}`, filled);
+    await sendMail(freelancerEmail, `New order — start work — Order #${projectId}`, filled, null, 'work_start', projectId);
 }
 
 module.exports = {

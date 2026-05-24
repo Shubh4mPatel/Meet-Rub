@@ -36,7 +36,7 @@ async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
-    await sendMail(freelancerEmail, `Offer sent to ${creatorName}`, filled);
+    await sendMail(freelancerEmail, `Offer sent to ${creatorName}`, filled, null, 'offer_sent', null);
 }
 
 async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, amount, deliveryDays, chatRoomId }) {
@@ -57,7 +57,7 @@ async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerNam
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
-    await sendMail(creatorEmail, `New offer from ${freelancerName}`, filled);
+    await sendMail(creatorEmail, `New offer from ${freelancerName}`, filled, null, 'offer_received', null);
 }
 
 async function sendHireRequestEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, amount, deliveryDays, chatRoomId }) {
@@ -77,7 +77,7 @@ async function sendHireRequestEmail({ creatorEmail, creatorName, freelancerName,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
-    await sendMail(creatorEmail, `Your hire request was sent to ${freelancerName}`, filled);
+    await sendMail(creatorEmail, `Your hire request was sent to ${freelancerName}`, filled, null, 'hire_request_sent', null);
 }
 
 async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, chatRoomId }) {
@@ -97,7 +97,7 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
-    await sendMail(freelancerEmail, `New hire request from ${creatorName}`, filled);
+    await sendMail(freelancerEmail, `New hire request from ${creatorName}`, filled, null, 'hire_request_received', null);
 }
 
 module.exports = { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail };

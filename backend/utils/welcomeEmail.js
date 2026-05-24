@@ -32,7 +32,7 @@ async function sendWelcomeEmail(role, email, username) {
       help_url: HELP_URL,
       privacy_url: PRIVACY_URL,
     });
-    await sendMail(email, 'Welcome to Meetrub — complete your profile', filled);
+    await sendMail(email, 'Welcome to Meetrub — complete your profile', filled, null, 'welcome_freelancer', null);
 
   } else if (role === 'creator') {
     const html = fs.readFileSync(
@@ -47,7 +47,7 @@ async function sendWelcomeEmail(role, email, username) {
       help_url: HELP_URL,
       privacy_url: PRIVACY_URL,
     });
-    await sendMail(email, 'Welcome to Meetrub — start hiring freelancers', filled);
+    await sendMail(email, 'Welcome to Meetrub — start hiring freelancers', filled, null, 'welcome_creator', null);
   }
 }
 
@@ -76,7 +76,7 @@ async function sendAdminNewUserEmail(role, username, userEmail, signupTime, ipAd
 
   await Promise.all(
     adminRes.rows.map((admin) =>
-      sendMail(admin.user_email, `New ${role} registered — ${username}`, filled)
+      sendMail(admin.user_email, `New ${role} registered — ${username}`, filled, null, 'admin_new_user', null)
     )
   );
 }
@@ -126,7 +126,7 @@ async function sendAdminDisputeEmail({
 
   await Promise.all(
     adminRes.rows.map((admin) =>
-      sendMail(admin.user_email, `New dispute raised — #${disputeId}`, filled)
+      sendMail(admin.user_email, `New dispute raised — #${disputeId}`, filled, null, 'admin_dispute_raised', projectId)
     )
   );
 }
@@ -151,7 +151,7 @@ async function sendAccountSuspendedEmail(role, { email, username, reason }) {
     ? 'Your MeetRub freelancer account has been suspended'
     : 'Your MeetRub creator account has been suspended';
 
-  await sendMail(email, subject, filled);
+  await sendMail(email, subject, filled, null, 'account_suspended', null);
 }
 
 async function sendAccountRestoredEmail(role, { email, username }) {
@@ -173,7 +173,7 @@ async function sendAccountRestoredEmail(role, { email, username }) {
     ? 'Your MeetRub freelancer account has been restored'
     : 'Your MeetRub creator account has been restored';
 
-  await sendMail(email, subject, filled);
+  await sendMail(email, subject, filled, null, 'account_restored', null);
 }
 
 module.exports = {

@@ -45,7 +45,7 @@ async function sendDeliverySubmittedEmail({ freelancerEmail, freelancerName, pro
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(freelancerEmail, `Delivery submitted — Order #${projectId}`, filled);
+  await sendMail(freelancerEmail, `Delivery submitted — Order #${projectId}`, filled, null, 'delivery_submitted', projectId);
 }
 
 async function sendDeliveryReceivedEmail({
@@ -71,7 +71,7 @@ async function sendDeliveryReceivedEmail({
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(creatorEmail, `New delivery received — Order #${projectId}`, filled);
+  await sendMail(creatorEmail, `New delivery received — Order #${projectId}`, filled, null, 'delivery_received', projectId);
 }
 
 async function sendCreatorRatingRequestEmail({ creatorEmail, creatorName, freelancerName, projectId, serviceTitle }) {
@@ -89,7 +89,7 @@ async function sendCreatorRatingRequestEmail({ creatorEmail, creatorName, freela
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(creatorEmail, `Project completed — rate your freelancer — Order #${projectId}`, filled);
+  await sendMail(creatorEmail, `Project completed — rate your freelancer — Order #${projectId}`, filled, null, 'creator_rating_request', projectId);
 }
 
 async function sendFreelancerRatingRequestEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle }) {
@@ -107,7 +107,7 @@ async function sendFreelancerRatingRequestEmail({ freelancerEmail, freelancerNam
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(freelancerEmail, `Project completed — rate your client — Order #${projectId}`, filled);
+  await sendMail(freelancerEmail, `Project completed — rate your client — Order #${projectId}`, filled, null, 'freelancer_rating_request', projectId);
 }
 
 async function sendOrderApprovedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, amount }) {
@@ -128,7 +128,7 @@ async function sendOrderApprovedEmail({ freelancerEmail, freelancerName, creator
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(freelancerEmail, `Delivery approved — raise withdrawal request — Order #${projectId}`, filled);
+  await sendMail(freelancerEmail, `Delivery approved — raise withdrawal request — Order #${projectId}`, filled, null, 'order_approved', projectId);
 }
 
 async function sendCreatorDisputeEmail({ creatorEmail, creatorName, freelancerName, disputeId, projectId, serviceTitle, disputeReason }) {
@@ -148,7 +148,7 @@ async function sendCreatorDisputeEmail({ creatorEmail, creatorName, freelancerNa
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(creatorEmail, `Dispute raised — Order #${projectId || disputeId}`, filled);
+  await sendMail(creatorEmail, `Dispute raised — Order #${projectId || disputeId}`, filled, null, 'creator_dispute_raised', projectId);
 }
 
 async function sendFreelancerDisputeEmail({ freelancerEmail, freelancerName, creatorName, disputeId, projectId, serviceTitle, disputeReason }) {
@@ -167,7 +167,7 @@ async function sendFreelancerDisputeEmail({ freelancerEmail, freelancerName, cre
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(freelancerEmail, `Dispute raised against you — Order #${projectId || disputeId}`, filled);
+  await sendMail(freelancerEmail, `Dispute raised against you — Order #${projectId || disputeId}`, filled, null, 'freelancer_dispute_raised', projectId);
 }
 
 async function sendPaymentConfirmedEmail({ creatorEmail, creatorName, freelancerName, projectId, serviceTitle, amount, deadline, paymentMethod }) {
@@ -189,7 +189,7 @@ async function sendPaymentConfirmedEmail({ creatorEmail, creatorName, freelancer
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(creatorEmail, `Payment confirmed — Order #${projectId}`, filled);
+  await sendMail(creatorEmail, `Payment confirmed — Order #${projectId}`, filled, null, 'payment_confirmed', projectId);
 }
 
 async function sendOrderActivatedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, amount, deadline }) {
@@ -212,7 +212,7 @@ async function sendOrderActivatedEmail({ freelancerEmail, freelancerName, creato
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(freelancerEmail, `New order activated — Order #${projectId}`, filled);
+  await sendMail(freelancerEmail, `New order activated — Order #${projectId}`, filled, null, 'order_activated', projectId);
 }
 
 async function sendDeadlineExtensionRequestEmail({ creatorEmail, creatorName, freelancerName, projectId, serviceTitle, extensionTime, currentDeadline, newDeadline }) {
@@ -233,7 +233,7 @@ async function sendDeadlineExtensionRequestEmail({ creatorEmail, creatorName, fr
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(creatorEmail, `Deadline extension requested — Order #${projectId}`, filled);
+  await sendMail(creatorEmail, `Deadline extension requested — Order #${projectId}`, filled, null, 'deadline_extension_request', projectId);
 }
 
 async function sendDeadlineExtensionAcceptedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, extensionTime, newDeadline }) {
@@ -253,7 +253,7 @@ async function sendDeadlineExtensionAcceptedEmail({ freelancerEmail, freelancerN
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(freelancerEmail, `Extension request accepted — Order #${projectId}`, filled);
+  await sendMail(freelancerEmail, `Extension request accepted — Order #${projectId}`, filled, null, 'deadline_extension_accepted', projectId);
 }
 
 async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, currentDeadline }) {
@@ -272,7 +272,7 @@ async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerN
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(freelancerEmail, `Extension request declined — Order #${projectId}`, filled);
+  await sendMail(freelancerEmail, `Extension request declined — Order #${projectId}`, filled, null, 'deadline_extension_rejected', projectId);
 }
 
 async function sendDisputeResolvedCreatorEmail({ creatorEmail, creatorName, freelancerName, projectId, disputeId, serviceTitle, resolution, adminNote, amount }) {
@@ -295,7 +295,7 @@ async function sendDisputeResolvedCreatorEmail({ creatorEmail, creatorName, free
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(creatorEmail, `Dispute resolved — Order #${projectId || disputeId}`, filled);
+  await sendMail(creatorEmail, `Dispute resolved — Order #${projectId || disputeId}`, filled, null, 'dispute_resolved_creator', projectId);
 }
 
 async function sendDisputeResolvedFreelancerEmail({ freelancerEmail, freelancerName, creatorName, projectId, disputeId, serviceTitle, resolution, adminNote, amount }) {
@@ -318,7 +318,7 @@ async function sendDisputeResolvedFreelancerEmail({ freelancerEmail, freelancerN
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
-  await sendMail(freelancerEmail, `Dispute resolved — Order #${projectId || disputeId}`, filled);
+  await sendMail(freelancerEmail, `Dispute resolved — Order #${projectId || disputeId}`, filled, null, 'dispute_resolved_freelancer', projectId);
 }
 
 module.exports = {
