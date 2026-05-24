@@ -223,7 +223,7 @@ const handlePaymentCaptured = async (payload) => {
     // Send notifications and emails after successful commit
     if (txRows.length > 0) {
       const projectId = txRows[0].project_id;
-      
+
       // Fetch user details for notifications
       const { rows: projectDetails } = await db.query(
         `SELECT p.id, p.amount, p.end_date,
