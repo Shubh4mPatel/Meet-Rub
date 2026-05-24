@@ -27,7 +27,7 @@ const sendMail = async (to, subject, content, pdfAttachment = null, emailType = 
 
   try {
     await transporter.sendMail(mailOptions);
-    
+
     // Log success to database if emailType provided
     if (emailType) {
       db.query(
@@ -36,7 +36,7 @@ const sendMail = async (to, subject, content, pdfAttachment = null, emailType = 
         [emailType, to, projectId]
       ).catch(err => logger.error(`Failed to log email success to database: ${err.message}`));
     }
-    
+
     logger.info(`Email sent successfully: type=${emailType || 'unknown'}, to=${to}, project_id=${projectId || 'N/A'}`);
   } catch (error) {
     // Log failure to database if emailType provided
@@ -47,7 +47,7 @@ const sendMail = async (to, subject, content, pdfAttachment = null, emailType = 
         [emailType, to, projectId, error.message]
       ).catch(err => logger.error(`Failed to log email failure to database: ${err.message}`));
     }
-    
+
     logger.error(`Email send failed: type=${emailType || 'unknown'}, to=${to}, error=${error.message}`);
     throw error;
   }
