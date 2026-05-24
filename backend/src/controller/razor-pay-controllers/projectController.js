@@ -5,6 +5,7 @@ const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
 const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail, sendCreatorRatingRequestEmail, sendFreelancerRatingRequestEmail, sendOrderApprovedEmail, sendCreatorDisputeEmail, sendFreelancerDisputeEmail } = require('../../../utils/deliveryEmails');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
+const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail } = require('../../../utils/offerEmails');
 
 // Create a new project
 const createProject = async (req, res, next) => {
@@ -944,6 +945,76 @@ const sendHireRequest = async (req, res, next) => {
       actionType: 'link',
       actionRoute: chatRoomId,
     });
+
+    // Get recipient user details for email
+    const { rows: recipientUsers } = await db.query(
+      `SELECT u.user_name, u.user_email FROM users u WHERE u.id = $1`,
+      [recipient_user_id]
+    );
+    const recipientUser = recipientUsers[0];
+
+    // Send emails based on initiator role
+    if (recipientUser) {
+      const emailPromises = [];
+
+      if (initiator_role === 'creator') {
+        // Creator sent a hire request
+        emailPromises.push(
+          sendHireRequestEmail({
+            creatorEmail: req.user.email,
+            creatorName: senderName,
+            freelancerName: recipientUser.user_name,
+            serviceTitle: service_type,
+            amount: price,
+            deliveryDays: delivery_days,
+            chatRoomId,
+          }),
+          sendHireRequestReceivedEmail({
+            freelancerEmail: recipientUser.user_email,
+            freelancerName: recipientUser.user_name,
+            creatorName: senderName,
+            serviceTitle: service_type,
+            amount: price,
+            deliveryDays: delivery_days,
+            chatRoomId,
+          })
+        );
+      } else {
+        // Freelancer sent a package offer
+        emailPromises.push(
+          sendOfferSentEmail({
+            freelancerEmail: req.user.email,
+            freelancerName: senderName,
+            creatorName: recipientUser.user_name,
+            serviceTitle: service_type,
+            amount: price,
+            deliveryDays: delivery_days,
+            chatRoomId,
+          }),
+          sendOfferReceivedEmail({
+            creatorEmail: recipientUser.user_email,
+            creatorName: recipientUser.user_name,
+            freelancerName: senderName,
+            serviceTitle: service_type,
+            amount: price,
+            deliveryDays: delivery_days,
+            chatRoomId,
+          })
+        );
+      }
+
+      // Send emails without blocking the response
+      await Promise.allSettled(emailPromises).then(results => {
+        results.forEach((result, i) => {
+          if (result.status === 'rejected') {
+            const emailTypes = initiator_role === 'creator'
+              ? ['hire request confirmation email', 'hire request received email']
+              : ['offer sent email', 'offer received email'];
+            logger.error(`sendHireRequest: ${emailTypes[i]} failed:`, result.reason?.message);
+          }
+        });
+      });
+    }
 
     logger.info(`[sendHireRequest] package=${customPackage.id} room=${chatRoomId} initiator=${initiator_role}`);
 

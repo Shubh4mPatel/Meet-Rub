@@ -832,8 +832,12 @@ const chatController = (io) => {
           package: updatedPackage,
         });
 
-        // // await sendMessageNotification(io, recipientId, userId, username, "Package rejected", chatRoomId);
-        // await emitNotification(io, recipientId, `Package revoked by ${username}`, "A custom package sent to you has been revoked", 'info', { chatRoomId, packageId });
+        // Notify recipient that package was revoked
+        await emitWebNotification(io, recipientId, userId, 'package_revoked',
+          'Package Revoked',
+          `${username} has revoked their package offer.`,
+          'link', chatRoomId
+        );
 
         console.log(`Package ${packageId} revoked by ${username} (${userId})`);
       } catch (error) {
