@@ -1,5 +1,7 @@
 const nodemailer = require("nodemailer");
-// const { logger } = require('../utils/logger');
+const { pool: db } = require('./dbConfig');
+const { getLogger } = require('../utils/logger');
+const logger = getLogger('email');
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_SERVER_HOST,
@@ -10,7 +12,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const sendMail = async (to, subject, content, pdfAttachment = null) => {
+const sendMail = async (to, subject, content, pdfAttachment = null, emailType = null, projectId = null) => {
   const mailOptions = {
     from: process.env.EMAIL_SERVER_USER,
     to,
@@ -23,7 +25,32 @@ const sendMail = async (to, subject, content, pdfAttachment = null) => {
     mailOptions.attachments = [pdfAttachment];
   }
 
-  await transporter.sendMail(mailOptions);
+  try {
+    await transporter.sendMail(mailOptions);
+    
+    // Log success to database if emailType provided
+    if (emailType) {
+      db.query(
+        `INSERT INTO email_logs (email_type, recipient_email, project_id, status)
+         VALUES ($1, $2, $3, 'sent')`,
+        [emailType, to, projectId]
+      ).catch(err => logger.error(`Failed to log email success to database: ${err.message}`));
+    }
+    
+    logger.info(`Email sent successfully: type=${emailType || 'unknown'}, to=${to}, project_id=${projectId || 'N/A'}`);
+  } catch (error) {
+    // Log failure to database if emailType provided
+    if (emailType) {
+      db.query(
+        `INSERT INTO email_logs (email_type, recipient_email, project_id, status, error_message)
+         VALUES ($1, $2, $3, 'failed', $4)`,
+        [emailType, to, projectId, error.message]
+      ).catch(err => logger.error(`Failed to log email failure to database: ${err.message}`));
+    }
+    
+    logger.error(`Email send failed: type=${emailType || 'unknown'}, to=${to}, error=${error.message}`);
+    throw error;
+  }
 };
 
 

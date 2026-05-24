@@ -1277,3 +1277,14 @@ CREATE INDEX idx_featured_active ON featured_freelancers (service_option_id, pri
 
 CREATE INDEX idx_support_user_lookup ON support_assignments(user_id);
 CREATE INDEX idx_support_admin_lookup ON support_assignments(admin_id);
+
+
+CREATE TABLE email_logs (
+  id SERIAL PRIMARY KEY,
+  email_type VARCHAR(50),
+  recipient_email VARCHAR(255),
+  project_id INTEGER,
+  status VARCHAR(20), -- 'sent', 'failed'
+  error_message TEXT,
+  sent_at TIMESTAMP DEFAULT NOW()
+);
