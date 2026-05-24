@@ -6,7 +6,7 @@ const paymentService = require('../../razor-pay-services/paymentService');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
-const { sendCreatorDisputeEmail, sendFreelancerDisputeEmail } = require('../../../utils/deliveryEmails');
+const { sendCreatorDisputeEmail, sendFreelancerDisputeEmail, sendDisputeResolvedCreatorEmail, sendDisputeResolvedFreelancerEmail } = require('../../../utils/deliveryEmails');
 
 const EXPIRY_SECONDS = 4 * 60 * 60; // 4 hours
 
@@ -601,9 +601,121 @@ const resolveDispute = async (req, res, next) => {
       [JSON.stringify({ note: admin_note || '', action: resolution_action }), adminId, id]
     );
 
+    // Fetch user details for notifications and emails
+    const { rows: userDetails } = await client.query(
+      `SELECT 
+        c.user_id AS creator_user_id, c.full_name AS creator_name, c.email AS creator_email,
+        f.user_id AS freelancer_user_id, f.freelancer_full_name AS freelancer_name, f.freelancer_email AS freelancer_email,
+        d.raised_by, d.project_id, s.service_name
+       FROM disputes d
+       JOIN creators c ON d.creator_id = c.creator_id
+       JOIN freelancer f ON d.freelancer_id = f.freelancer_id
+       LEFT JOIN projects p ON d.project_id = p.id
+       LEFT JOIN services s ON p.service_id = s.id
+       WHERE d.id = $1`,
+      [id]
+    );
+
     await client.query('COMMIT');
 
     logger.info(`Dispute ${id} resolved by admin ${adminId} with action: ${resolution_action}`);
+
+    // Send notifications and emails based on resolution_action
+    if (userDetails.length > 0) {
+      const details = userDetails[0];
+      const CURRENCY = process.env.CURRENCY || '₹';
+
+      if (resolution_action === 'resolve') {
+        // No money involved - notify only the party who raised the dispute
+        const raisedByUserId = details.raised_by === 'creator' ? details.creator_user_id : details.freelancer_user_id;
+        const raisedByName = details.raised_by === 'creator' ? details.creator_name : details.freelancer_name;
+
+        Promise.allSettled([
+          sendNotification({
+            recipientId: raisedByUserId,
+            senderId: adminId,
+            eventType: 'dispute_resolved',
+            title: 'Dispute Resolved',
+            body: `Your dispute has been resolved by admin. ${admin_note ? 'Note: ' + admin_note : ''}`,
+            actionType: 'link',
+            actionRoute: String(details.project_id || id),
+          })
+        ]).then(results => {
+          if (results[0].status === 'rejected') {
+            logger.error(`resolveDispute: notification failed:`, results[0].reason?.message);
+          }
+        });
+
+      } else {
+        // Money involved (release or refund) - notify and email both parties
+        const isRefund = resolution_action === 'refund';
+        const winnerText = isRefund ? 'creator' : 'freelancer';
+        const loserText = isRefund ? 'freelancer' : 'creator';
+
+        Promise.allSettled([
+          // Notification to creator
+          sendNotification({
+            recipientId: details.creator_user_id,
+            senderId: adminId,
+            eventType: isRefund ? 'dispute_refund_approved' : 'dispute_freelancer_won',
+            title: isRefund ? 'Dispute Resolved - Refund Initiated' : 'Dispute Resolved',
+            body: isRefund 
+              ? `Dispute resolved in your favor. Full refund of ${CURRENCY}${dispute.total_amount} has been initiated to your account.`
+              : `Dispute resolved in favor of ${details.freelancer_name}. Freelancer will receive payment.`,
+            actionType: 'link',
+            actionRoute: String(details.project_id),
+          }),
+          // Notification to freelancer
+          sendNotification({
+            recipientId: details.freelancer_user_id,
+            senderId: adminId,
+            eventType: isRefund ? 'dispute_creator_won' : 'dispute_payment_approved',
+            title: isRefund ? 'Dispute Resolved' : 'Dispute Resolved - Payment Approved',
+            body: isRefund
+              ? `Dispute resolved in favor of ${details.creator_name}. Payment has been refunded to creator.`
+              : `Dispute resolved in your favor! Payout request created for ${CURRENCY}${dispute.freelancer_amount}. Admin will release payment soon.`,
+            actionType: 'link',
+            actionRoute: String(details.project_id),
+          }),
+          // Email to creator
+          sendDisputeResolvedCreatorEmail({
+            creatorEmail: details.creator_email,
+            creatorName: details.creator_name,
+            freelancerName: details.freelancer_name,
+            projectId: details.project_id,
+            disputeId: id,
+            serviceTitle: details.service_name,
+            resolution: isRefund ? 'Refund approved - Full refund initiated' : 'Resolved in favor of freelancer',
+            adminNote: admin_note,
+            amount: isRefund ? dispute.total_amount : null,
+          }),
+          // Email to freelancer
+          sendDisputeResolvedFreelancerEmail({
+            freelancerEmail: details.freelancer_email,
+            freelancerName: details.freelancer_name,
+            creatorName: details.creator_name,
+            projectId: details.project_id,
+            disputeId: id,
+            serviceTitle: details.service_name,
+            resolution: isRefund ? 'Resolved in favor of creator - Payment refunded' : 'Payment approved - Payout request created',
+            adminNote: admin_note,
+            amount: isRefund ? null : dispute.freelancer_amount,
+          }),
+        ]).then(results => {
+          results.forEach((result, i) => {
+            if (result.status === 'rejected') {
+              const labels = [
+                'creator notification',
+                'freelancer notification',
+                'creator dispute email',
+                'freelancer dispute email'
+              ];
+              logger.error(`resolveDispute: ${labels[i]} failed:`, result.reason?.message);
+            }
+          });
+        });
+      }
+    }
 
     return res.status(200).json({
       status: 'success',

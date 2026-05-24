@@ -275,6 +275,52 @@ async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerN
   await sendMail(freelancerEmail, `Extension request declined — Order #${projectId}`, filled);
 }
 
+async function sendDisputeResolvedCreatorEmail({ creatorEmail, creatorName, freelancerName, projectId, disputeId, serviceTitle, resolution, adminNote, amount }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/disputeResolved.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username: creatorName,
+    freelancer_username: freelancerName,
+    order_id: String(projectId || disputeId),
+    service_title: serviceTitle || 'your order',
+    resolution: resolution || 'Dispute has been resolved',
+    admin_note: adminNote || 'No additional notes',
+    currency: CURRENCY,
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    dispute_url: `${APP_URL}/creator/disputes/${disputeId}`,
+    order_url: `${APP_URL}/creator/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(creatorEmail, `Dispute resolved — Order #${projectId || disputeId}`, filled);
+}
+
+async function sendDisputeResolvedFreelancerEmail({ freelancerEmail, freelancerName, creatorName, projectId, disputeId, serviceTitle, resolution, adminNote, amount }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/disputeResolved.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    creator_username: creatorName,
+    order_id: String(projectId || disputeId),
+    service_title: serviceTitle || 'your order',
+    resolution: resolution || 'Dispute has been resolved',
+    admin_note: adminNote || 'No additional notes',
+    currency: CURRENCY,
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    dispute_url: `${APP_URL}/freelancer/disputes/${disputeId}`,
+    order_url: `${APP_URL}/freelancer/orders/${projectId}`,
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(freelancerEmail, `Dispute resolved — Order #${projectId || disputeId}`, filled);
+}
+
 module.exports = {
   sendDeliverySubmittedEmail,
   sendDeliveryReceivedEmail,
@@ -288,4 +334,6 @@ module.exports = {
   sendDeadlineExtensionRequestEmail,
   sendDeadlineExtensionAcceptedEmail,
   sendDeadlineExtensionRejectedEmail,
+  sendDisputeResolvedCreatorEmail,
+  sendDisputeResolvedFreelancerEmail,
 };
