@@ -219,6 +219,89 @@ const handlePaymentCaptured = async (payload) => {
 
     await client.query('COMMIT');
     logger.info(`[handlePaymentCaptured] Successfully processed payment ${paymentId} for order ${orderId}`);
+
+    // Send notifications and emails after successful commit
+    if (txRows.length > 0) {
+      const projectId = txRows[0].project_id;
+      
+      // Fetch user details for notifications
+      const { rows: projectDetails } = await db.query(
+        `SELECT p.id, p.amount, p.end_date,
+                c.full_name AS creator_name, c.email AS creator_email, c.user_id AS creator_user_id,
+                f.freelancer_full_name, f.freelancer_email, f.user_id AS freelancer_user_id,
+                s.service_name
+         FROM projects p
+         JOIN creators c ON p.creator_id = c.creator_id
+         JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+         LEFT JOIN services s ON p.service_id = s.id
+         WHERE p.id = $1`,
+        [projectId]
+      );
+
+      if (projectDetails.length > 0) {
+        const proj = projectDetails[0];
+        const { sendNotification } = require('../../controller/notification/notificationServicer');
+        const { sendPaymentConfirmedEmail, sendOrderActivatedEmail } = require('../../../utils/deliveryEmails');
+
+        const deadlineStr = proj.end_date
+          ? new Date(proj.end_date).toLocaleDateString('en-IN', { dateStyle: 'medium' })
+          : 'TBD';
+
+        // Send notifications and emails asynchronously
+        Promise.allSettled([
+          // In-app: payment confirmed to creator
+          sendNotification({
+            recipientId: proj.creator_user_id,
+            senderId: proj.freelancer_user_id,
+            eventType: 'payment_confirmed',
+            title: 'Payment confirmed',
+            body: `Your payment for ${proj.service_name || 'your order'} has been received. ${proj.freelancer_full_name} will now start working.`,
+            actionType: 'link',
+            actionRoute: String(proj.id),
+          }),
+          // In-app: order activated to freelancer
+          sendNotification({
+            recipientId: proj.freelancer_user_id,
+            senderId: proj.creator_user_id,
+            eventType: 'order_activated',
+            title: 'New order activated',
+            body: `${proj.creator_name} has paid for ${proj.service_name || 'an order'}. Funds are secured in escrow.`,
+            actionType: 'link',
+            actionRoute: String(proj.id),
+          }),
+          // Email: payment confirmed to creator
+          sendPaymentConfirmedEmail({
+            creatorEmail: proj.creator_email,
+            creatorName: proj.creator_name,
+            freelancerName: proj.freelancer_full_name,
+            projectId: proj.id,
+            serviceTitle: proj.service_name,
+            amount: proj.amount,
+            deadline: deadlineStr,
+            paymentMethod: 'Razorpay',
+          }),
+          // Email: order activated to freelancer
+          sendOrderActivatedEmail({
+            freelancerEmail: proj.freelancer_email,
+            freelancerName: proj.freelancer_full_name,
+            creatorName: proj.creator_name,
+            projectId: proj.id,
+            serviceTitle: proj.service_name,
+            amount: proj.amount,
+            deadline: deadlineStr,
+          }),
+        ]).then((results) => {
+          results.forEach((result, i) => {
+            if (result.status === 'rejected') {
+              const labels = ['payment_confirmed notification', 'order_activated notification', 'payment confirmed email', 'order activated email'];
+              logger.error(`[handlePaymentCaptured] ${labels[i]} failed: ${result.reason?.message}`);
+            }
+          });
+        }).catch(err => {
+          logger.error(`[handlePaymentCaptured] Promise.allSettled error: ${err.message}`);
+        });
+      }
+    }
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error(`[handlePaymentCaptured] Error processing payment ${paymentId}:`, error);
