@@ -2,6 +2,7 @@ const chatModel = require("../model/chatmodel");
 const redis = require("../config/reddis");
 const { createPresignedUrl } = require("../utils/helper");
 const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail } = require("../utils/offerEmails");
+const { sendDeadlineExtensionRequestEmail, sendDeadlineExtensionAcceptedEmail, sendDeadlineExtensionRejectedEmail } = require("../utils/deliveryEmails");
 
 // Save a web notification to DB and emit live to recipient if online.
 // For new_message: skips save and emit entirely if recipient is already in that chat room.
@@ -904,6 +905,45 @@ const chatController = (io) => {
           'link', chatRoomId
         );
 
+        // Send email to creator
+        try {
+          const [creatorInfo, freelancerInfo] = await Promise.all([
+            chatModel.getUserInfo(recipientId),
+            chatModel.getUserInfo(userId)
+          ]);
+
+          const extensionText = extensionRequest.days > 0
+            ? `${extensionRequest.days} day${extensionRequest.days > 1 ? 's' : ''}${extensionRequest.hours > 0 ? ` and ${extensionRequest.hours} hour${extensionRequest.hours > 1 ? 's' : ''}` : ''}`
+            : `${extensionRequest.hours} hour${extensionRequest.hours > 1 ? 's' : ''}`;
+
+          const currentDeadline = projectInfo?.end_date
+            ? new Date(projectInfo.end_date).toLocaleDateString('en-IN', { dateStyle: 'medium' })
+            : 'TBD';
+
+          // For preview: Calculate from DATE only (ignore time) to match user expectation
+          // since we only show date in email, not datetime
+          const baseDate = new Date(projectInfo?.end_date || new Date());
+          baseDate.setHours(0, 0, 0, 0); // Reset to start of day
+          const totalMillisecondsToAdd = (extensionRequest.days * 24 * 60 * 60 * 1000) + (extensionRequest.hours * 60 * 60 * 1000);
+          const newEndDate = new Date(baseDate.getTime() + totalMillisecondsToAdd);
+          const newDeadline = newEndDate.toLocaleDateString('en-IN', { dateStyle: 'medium' });
+
+          await sendDeadlineExtensionRequestEmail({
+            creatorEmail: creatorInfo.email,
+            creatorName: creatorInfo.name,
+            freelancerName: freelancerInfo.name,
+            projectId: extensionRequest.project_id,
+            serviceTitle: projectInfo?.service_name || 'Your order',
+            extensionTime: extensionText,
+            currentDeadline,
+            newDeadline,
+          });
+
+          console.log(`Deadline extension request email sent to ${creatorInfo.email}`);
+        } catch (emailError) {
+          console.error('Error sending deadline extension request email:', emailError);
+        }
+
         console.log(`Deadline extension request sent by ${username} (${userId})`);
       } catch (error) {
         console.error("Error sending deadline extension request:", error);
@@ -953,6 +993,36 @@ const chatController = (io) => {
           'link', chatRoomId
         );
 
+        // Send email to freelancer
+        try {
+          const [creatorInfo, freelancerInfo] = await Promise.all([
+            chatModel.getUserInfo(userId),
+            chatModel.getUserInfo(recipientId)
+          ]);
+
+          const extensionText = updatedRequest.days > 0
+            ? `${updatedRequest.days} day${updatedRequest.days > 1 ? 's' : ''}${updatedRequest.hours > 0 ? ` and ${updatedRequest.hours} hour${updatedRequest.hours > 1 ? 's' : ''}` : ''}`
+            : `${updatedRequest.hours} hour${updatedRequest.hours > 1 ? 's' : ''}`;
+
+          const newDeadline = updatedRequest.project?.end_date
+            ? new Date(updatedRequest.project.end_date).toLocaleDateString('en-IN', { dateStyle: 'medium' })
+            : 'TBD';
+
+          await sendDeadlineExtensionAcceptedEmail({
+            freelancerEmail: freelancerInfo.email,
+            freelancerName: freelancerInfo.name,
+            creatorName: creatorInfo.name,
+            projectId: updatedRequest.project_id,
+            serviceTitle: updatedRequest.project?.service_name || 'Your order',
+            extensionTime: extensionText,
+            newDeadline,
+          });
+
+          console.log(`Deadline extension accepted email sent to ${freelancerInfo.email}`);
+        } catch (emailError) {
+          console.error('Error sending deadline extension accepted email:', emailError);
+        }
+
         console.log(`Deadline extension ${requestId} accepted by ${username} (${userId})`);
       } catch (error) {
         console.error("Error accepting deadline extension:", error);
@@ -991,6 +1061,31 @@ const chatController = (io) => {
           `${username} has rejected your deadline extension request.`,
           'link', chatRoomId
         );
+
+        // Send email to freelancer
+        try {
+          const [creatorInfo, freelancerInfo] = await Promise.all([
+            chatModel.getUserInfo(userId),
+            chatModel.getUserInfo(recipientId)
+          ]);
+
+          const currentDeadline = updatedRequest.project?.end_date
+            ? new Date(updatedRequest.project.end_date).toLocaleDateString('en-IN', { dateStyle: 'medium' })
+            : 'TBD';
+
+          await sendDeadlineExtensionRejectedEmail({
+            freelancerEmail: freelancerInfo.email,
+            freelancerName: freelancerInfo.name,
+            creatorName: creatorInfo.name,
+            projectId: updatedRequest.project_id,
+            serviceTitle: updatedRequest.project?.service_name || 'Your order',
+            currentDeadline,
+          });
+
+          console.log(`Deadline extension rejected email sent to ${freelancerInfo.email}`);
+        } catch (emailError) {
+          console.error('Error sending deadline extension rejected email:', emailError);
+        }
 
         console.log(`Deadline extension ${requestId} rejected by ${username} (${userId})`);
       } catch (error) {

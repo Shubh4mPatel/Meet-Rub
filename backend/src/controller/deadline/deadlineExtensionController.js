@@ -89,10 +89,15 @@ const requestDeadlineExtension = async (req, res, next) => {
             ? new Date(project.end_date).toLocaleDateString('en-IN', { dateStyle: 'medium' })
             : 'TBD';
 
-        const newEndDate = new Date(project.end_date || new Date());
-        newEndDate.setDate(newEndDate.getDate() + totalDays);
-        newEndDate.setHours(newEndDate.getHours() + totalHours);
+        // For preview: Calculate from DATE only (ignore time) to match user expectation
+        // since we only show date in email, not datetime
+        const baseDate = new Date(project.end_date || new Date());
+        baseDate.setHours(0, 0, 0, 0); // Reset to start of day
+        const totalMillisecondsToAdd = (totalDays * 24 * 60 * 60 * 1000) + (totalHours * 60 * 60 * 1000);
+        const newEndDate = new Date(baseDate.getTime() + totalMillisecondsToAdd);
         const newDeadlineStr = newEndDate.toLocaleDateString('en-IN', { dateStyle: 'medium' });
+
+        logger.info(`Sending deadline extension notifications for project_id=${project_id}, creator=${project.creator_email}`);
 
         Promise.allSettled([
             sendNotification({
@@ -116,11 +121,15 @@ const requestDeadlineExtension = async (req, res, next) => {
             }),
         ]).then((results) => {
             results.forEach((result, i) => {
+                const labels = ['extension_requested notification', 'extension request email'];
                 if (result.status === 'rejected') {
-                    const labels = ['extension_requested notification', 'extension request email'];
                     logger.error(`requestDeadlineExtension: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
+                } else {
+                    logger.info(`requestDeadlineExtension: ${labels[i]} sent successfully`);
                 }
             });
+        }).catch(err => {
+            logger.error(`requestDeadlineExtension: Promise.allSettled error: ${err.message}`, err.stack);
         });
 
         return res.status(201).json({
@@ -219,6 +228,8 @@ const respondToDeadlineExtension = async (req, res, next) => {
 
                 const newDeadlineStr = newEndDate.toLocaleDateString('en-IN', { dateStyle: 'medium' });
 
+                logger.info(`Sending extension accepted notifications for project_id=${extension.project_id}, freelancer=${extension.freelancer_email}`);
+
                 Promise.allSettled([
                     sendNotification({
                         recipientId: extension.freelancer_user_id,
@@ -240,11 +251,15 @@ const respondToDeadlineExtension = async (req, res, next) => {
                     }),
                 ]).then((results) => {
                     results.forEach((result, i) => {
+                        const labels = ['extension_accepted notification', 'extension accepted email'];
                         if (result.status === 'rejected') {
-                            const labels = ['extension_accepted notification', 'extension accepted email'];
                             logger.error(`respondToDeadlineExtension: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
+                        } else {
+                            logger.info(`respondToDeadlineExtension: ${labels[i]} sent successfully`);
                         }
                     });
+                }).catch(err => {
+                    logger.error(`respondToDeadlineExtension (accept): Promise.allSettled error: ${err.message}`, err.stack);
                 });
 
                 return res.status(200).json({
@@ -273,6 +288,8 @@ const respondToDeadlineExtension = async (req, res, next) => {
                     ? new Date(extension.current_end_date).toLocaleDateString('en-IN', { dateStyle: 'medium' })
                     : 'TBD';
 
+                logger.info(`Sending extension rejected notifications for project_id=${extension.project_id}, freelancer=${extension.freelancer_email}`);
+
                 Promise.allSettled([
                     sendNotification({
                         recipientId: extension.freelancer_user_id,
@@ -293,11 +310,15 @@ const respondToDeadlineExtension = async (req, res, next) => {
                     }),
                 ]).then((results) => {
                     results.forEach((result, i) => {
+                        const labels = ['extension_rejected notification', 'extension rejected email'];
                         if (result.status === 'rejected') {
-                            const labels = ['extension_rejected notification', 'extension rejected email'];
                             logger.error(`respondToDeadlineExtension: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
+                        } else {
+                            logger.info(`respondToDeadlineExtension: ${labels[i]} sent successfully`);
                         }
                     });
+                }).catch(err => {
+                    logger.error(`respondToDeadlineExtension (reject): Promise.allSettled error: ${err.message}`, err.stack);
                 });
 
                 return res.status(200).json({

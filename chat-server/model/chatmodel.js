@@ -1205,6 +1205,33 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       throw error;
     }
   },
+
+  // Get user info (email and name) by userId
+  async getUserInfo(userId) {
+    try {
+      const result = await pool.query(
+        `SELECT 
+          u.id, 
+          u.user_role,
+          COALESCE(c.email, f.freelancer_email) AS email,
+          COALESCE(c.full_name, f.freelancer_full_name) AS name
+         FROM users u
+         LEFT JOIN creators c ON u.id = c.user_id
+         LEFT JOIN freelancer f ON u.id = f.user_id
+         WHERE u.id = $1`,
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        throw new Error(`User not found: ${userId}`);
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      console.error(`Error getting user info for userId=${userId}:`, error);
+      throw error;
+    }
+  },
 };
 
 /// we are storing date time in the custome package and in the project we have only end date col so add date and time and fill that col and also add no of units per service and also we have to ask question about the hire feature will freelancer have to accept that what will happen when i heir a freelancer
