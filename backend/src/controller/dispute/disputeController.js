@@ -659,7 +659,7 @@ const resolveDispute = async (req, res, next) => {
             senderId: adminId,
             eventType: isRefund ? 'dispute_refund_approved' : 'dispute_freelancer_won',
             title: isRefund ? 'Dispute Resolved - Refund Initiated' : 'Dispute Resolved',
-            body: isRefund 
+            body: isRefund
               ? `Dispute resolved in your favor. Full refund of ${CURRENCY}${dispute.total_amount} has been initiated to your account.`
               : `Dispute resolved in favor of ${details.freelancer_name}. Freelancer will receive payment.`,
             actionType: 'link',
