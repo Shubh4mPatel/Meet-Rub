@@ -98,6 +98,37 @@ async function createPresignedUrl(bucketName, objectName, expirySeconds) {
   }
 }
 
+// Generate presigned URL with inline disposition (viewable in browser, can also download)
+async function createDownloadablePresignedUrl(bucketName, objectName, expirySeconds, filename) {
+  try {
+    const presignedUrl = await new Promise((resolve, reject) => {
+      minioClient.presignedGetObject(
+        bucketName,
+        objectName,
+        expirySeconds,
+        {
+          'response-content-disposition': `inline; filename="${encodeURIComponent(filename || 'download')}"`
+        },
+        (err, url) => {
+          if (err) {
+            return reject(err);
+          }
+          resolve(url);
+        }
+      );
+    });
+    
+    // Replace MinIO server URL with staging domain
+    const parsedUrl = new URL(presignedUrl);
+    const pathAndQuery = parsedUrl.pathname + parsedUrl.search;
+    const modifiedUrl = `https://staging.meetrub.com${pathAndQuery}`;
+    
+    return modifiedUrl;
+  } catch (err) {
+    throw err;
+  }
+}
+
 function generateTokens(user, roleWiseId, permissions = null) {
     const payload = {
         user_id: user.id,
@@ -113,4 +144,4 @@ function generateTokens(user, roleWiseId, permissions = null) {
     return { accessToken, refreshToken };
 }
 
-module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile, createPresignedUrl, generateTokens, loadUsernamesIntoRedis, USERNAMES_SET_KEY };
+module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile, createPresignedUrl, createDownloadablePresignedUrl, generateTokens, loadUsernamesIntoRedis, USERNAMES_SET_KEY };
