@@ -558,25 +558,125 @@ const resolveDispute = async (req, res, next) => {
       logger.info(`Dispute ${id}: Auto-created payout request (status: REQUESTED) for transaction ${dispute.transaction_id}. Admin must approve to release funds.`);
 
     } else {
-      // Refund full amount (including GST) to creator
+      // Two-step refund: reverse transfer first, then refund customer.
+      // Each state transition is written to dispute_refunds on a side channel
+      // (db.query uses a separate pool connection) so the audit trail persists
+      // even if the main transaction rolls back after a Razorpay side effect.
       if (!dispute.razorpay_payment_id) {
         await client.query('ROLLBACK');
         return next(new AppError('No Razorpay payment ID found for this transaction', 400));
       }
 
-      const refundAmountPaise = Math.round(parseFloat(dispute.total_amount) * 100);
+      // Block retries: one attempt per dispute. If a row already exists,
+      // resolution requires manual intervention (Razorpay dashboard + DB).
+      const { rows: existingAttempts } = await db.query(
+        `SELECT id, state FROM dispute_refunds WHERE dispute_id = $1 LIMIT 1`,
+        [id]
+      );
+      if (existingAttempts.length > 0) {
+        await client.query('ROLLBACK');
+        return next(new AppError(
+          `A refund attempt already exists for this dispute (state: ${existingAttempts[0].state}). Manual intervention required via Razorpay dashboard.`,
+          409
+        ));
+      }
 
-      // Routes flow: refund with reverse_all to atomically reverse transfer + refund
-      const refund = await razorpay.payments.refund(dispute.razorpay_payment_id, {
-        amount: refundAmountPaise,
-        reverse_all: dispute.razorpay_transfer_id ? 1 : undefined,
-        notes: {
-          dispute_id: id,
-          reason: 'Dispute resolved in creator favour',
-        },
-      });
+      const refundAmountPaise = Math.round(parseFloat(dispute.total_amount) * 100);
+      const freelancerAmountPaise = Math.round(parseFloat(dispute.freelancer_amount || 0) * 100);
+
+      // Insert tracking row up-front so we have a record even if Razorpay calls
+      // throw before we can update state below.
+      const { rows: [refundRow] } = await db.query(
+        `INSERT INTO dispute_refunds
+           (dispute_id, transaction_id, project_id, razorpay_payment_id,
+            razorpay_transfer_id, reversal_amount, refund_amount, state, initiated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'initiated', $8)
+         RETURNING id`,
+        [
+          id,
+          dispute.transaction_id,
+          dispute.project_id,
+          dispute.razorpay_payment_id,
+          dispute.razorpay_transfer_id || null,
+          dispute.razorpay_transfer_id ? parseFloat(dispute.freelancer_amount || 0) : null,
+          parseFloat(dispute.total_amount),
+          adminId,
+        ]
+      );
+      const refundRowId = refundRow.id;
+
+      // Step 1: Reverse transfer (linked account → platform). Skipped if no
+      // transfer exists (payment captured but never routed).
       if (dispute.razorpay_transfer_id) {
-        logger.info(`Dispute ${id}: Refund with reverse_all for transfer ${dispute.razorpay_transfer_id}`);
+        try {
+          const reversal = await razorpay.transfers.reverse(dispute.razorpay_transfer_id, {
+            amount: freelancerAmountPaise,
+            notes: { dispute_id: id, reason: 'Dispute reversal — refund pending' },
+          });
+          await db.query(
+            `UPDATE dispute_refunds
+               SET state = 'reversal_succeeded', razorpay_reversal_id = $1,
+                   reversed_at = NOW(), updated_at = NOW()
+             WHERE id = $2`,
+            [reversal.id, refundRowId]
+          );
+          logger.info(`Dispute ${id}: Reversal succeeded reversal_id=${reversal.id} transfer_id=${dispute.razorpay_transfer_id} amount=${dispute.freelancer_amount}`);
+        } catch (reversalErr) {
+          await db.query(
+            `UPDATE dispute_refunds
+               SET state = 'reversal_failed', error_step = 'reversal',
+                   error_code = $1, error_description = $2, error_payload = $3::jsonb,
+                   updated_at = NOW()
+             WHERE id = $4`,
+            [
+              reversalErr?.error?.code || reversalErr?.statusCode?.toString() || null,
+              reversalErr?.error?.description || reversalErr?.message || null,
+              JSON.stringify(reversalErr?.error || { message: reversalErr?.message }),
+              refundRowId,
+            ]
+          );
+          logger.error(`Dispute ${id}: Reversal failed transfer_id=${dispute.razorpay_transfer_id}`, reversalErr);
+          throw reversalErr;
+        }
+      }
+
+      // Step 2: Refund customer (platform → creator). If this throws after
+      // Step 1 succeeded, Razorpay reversal is non-reversible — money sits on
+      // platform balance. dispute_refunds row will be 'refund_failed' so admin
+      // can find it and refund manually via Razorpay dashboard.
+      try {
+        const refund = await razorpay.payments.refund(dispute.razorpay_payment_id, {
+          amount: refundAmountPaise,
+          notes: { dispute_id: id, reason: 'Dispute resolved in creator favour' },
+        });
+        await db.query(
+          `UPDATE dispute_refunds
+             SET state = 'completed', razorpay_refund_id = $1,
+                 refunded_at = NOW(), updated_at = NOW()
+           WHERE id = $2`,
+          [refund.id, refundRowId]
+        );
+        logger.info(`Dispute ${id}: Refund completed refund_id=${refund.id} payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`);
+      } catch (refundErr) {
+        await db.query(
+          `UPDATE dispute_refunds
+             SET state = 'refund_failed', error_step = 'refund',
+                 error_code = $1, error_description = $2, error_payload = $3::jsonb,
+                 updated_at = NOW()
+           WHERE id = $4`,
+          [
+            refundErr?.error?.code || refundErr?.statusCode?.toString() || null,
+            refundErr?.error?.description || refundErr?.message || null,
+            JSON.stringify(refundErr?.error || { message: refundErr?.message }),
+            refundRowId,
+          ]
+        );
+        if (dispute.razorpay_transfer_id) {
+          logger.error(`Dispute ${id}: CRITICAL — reversal succeeded but customer refund failed. Funds are on platform balance; refund creator manually via Razorpay dashboard. payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`, refundErr);
+        } else {
+          logger.error(`Dispute ${id}: Refund failed payment_id=${dispute.razorpay_payment_id}`, refundErr);
+        }
+        throw refundErr;
       }
 
       await client.query(
@@ -588,11 +688,9 @@ const resolveDispute = async (req, res, next) => {
         `UPDATE projects SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
         [dispute.project_id]
       );
-
-      logger.info(`Razorpay refund triggered: refund_id=${refund.id} payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`);
     }
 
-    // Mark dispute resolved
+    // Mark dispute resolved. Refund/reversal IDs live in dispute_refunds.
     const { rows: resolved } = await client.query(
       `UPDATE disputes
        SET status = 'resolved', admin_note = $1::jsonb, admin_id = $2, updated_at = NOW()
