@@ -1415,10 +1415,11 @@ const rejectProject = async (req, res, next) => {
       [projectId]
     );
 
-    // Create dispute with 'rejected' status (trigger will auto-set is_rejected=true)
+    // status defaults to 'pending' (appears in admin Current Disputes queue);
+    // is_rejected=true marks this as a project-rejection dispute.
     const { rows: disputeResult } = await client.query(
-      `INSERT INTO disputes (creator_id, freelancer_id, reason_of_dispute, description, raised_by, project_id, status)
-       VALUES ($1, $2, $3, $4, 'creator', $5, 'rejected')
+      `INSERT INTO disputes (creator_id, freelancer_id, reason_of_dispute, description, raised_by, project_id, is_rejected)
+       VALUES ($1, $2, $3, $4, 'creator', $5, true)
        RETURNING id`,
       [creatorId, project.freelancer_id, reason_of_dispute, description || null, projectId]
     );

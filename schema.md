@@ -356,29 +356,6 @@ TABLESPACE pg_default;
 ALTER TABLE IF EXISTS public.disputes
     OWNER to postgres;
 
--- Trigger function to auto-set is_rejected when creator rejects
-CREATE OR REPLACE FUNCTION set_dispute_rejected()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- If status is 'rejected' and raised_by is 'creator', set is_rejected to true
-    IF NEW.status = 'rejected' AND NEW.raised_by = 'creator' THEN
-        NEW.is_rejected := true;
-    END IF;
-
-    -- Update the updated_at timestamp
-    NEW.updated_at := now();
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create trigger
-DROP TRIGGER IF EXISTS trigger_set_dispute_rejected ON public.disputes;
-CREATE TRIGGER trigger_set_dispute_rejected
-    BEFORE INSERT OR UPDATE ON public.disputes
-    FOR EACH ROW
-    EXECUTE FUNCTION set_dispute_rejected();
-
 -- Index for better query performance on common lookups
 CREATE INDEX IF NOT EXISTS idx_disputes_status ON public.disputes(status);
 CREATE INDEX IF NOT EXISTS idx_disputes_creator_id ON public.disputes(creator_id);
