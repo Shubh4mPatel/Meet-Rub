@@ -10,7 +10,6 @@ const { socketAuth } = require('../middleware/authentication');
 const { startMasterWorker } = require('../consumers/worker');
 const { startNotificationSubscriber, stopNotificationSubscriber } = require('../consumers/notificationSubscriber');
 const { chatController } = require('../controller/chat');
-const { rebuildAdminAssignmentCounters } = require('../utils/supportHelper');
 const AppError = require('../utils/appError');
 const cors = require('cors');
 
@@ -125,7 +124,6 @@ if (process.env.NODE_ENV !== 'development') {
     manageLogFiles();
     // startMasterWorker();
     startNotificationSubscriber(io);
-    await rebuildAdminAssignmentCounters();
     logger.info(`Server running in ${process.env.NODE_ENV} mode on :${PORT}`);
   });
 } else {
@@ -133,7 +131,6 @@ if (process.env.NODE_ENV !== 'development') {
     // startMasterWorker();
     manageLogFiles();
     startNotificationSubscriber(io);
-    await rebuildAdminAssignmentCounters();
     logger.info(`Server running in ${process.env.NODE_ENV} mode on :${PORT}`);
   });
 }

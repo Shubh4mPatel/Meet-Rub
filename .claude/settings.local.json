@@ -81,7 +81,12 @@
       "Bash(node --check backend/src/controller/users/freelancerReviewsController.js)",
       "mcp__code-review-graph__query_graph_tool",
       "Bash(node --check backend/src/controller/razor-pay-controllers/adminController.js)",
-      "Bash(node --check chat-server/model/chatmodel.js)"
+      "Bash(node --check chat-server/model/chatmodel.js)",
+      "Bash(node --check controller/chat.js)",
+      "Bash(node --check model/chatmodel.js)",
+      "Bash(node --check src/server.js)",
+      "Bash(node --check utils/supportHelper.js)",
+      "Bash(npx eslint *)"
     ],
     "additionalDirectories": [
       "/tmp"

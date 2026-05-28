@@ -92,10 +92,11 @@ const chatModel = {
     m.deadline_extension_id,
     m.custom_package_id,
     m.file_url,
-    COALESCE(f.user_name, c.user_name) as sender_username,
+    COALESCE(a.full_name, c.full_name, f.freelancer_full_name, c.user_name, f.user_name, u.user_name) as sender_username,
     CASE
         WHEN f.freelancer_id IS NOT NULL THEN 'freelancer'
         WHEN c.creator_id IS NOT NULL THEN 'creator'
+        WHEN a.id IS NOT NULL THEN 'admin'
     END as sender_type,
     der.project_id as der_project_id,
     der.freelancer_id as der_freelancer_id,
@@ -134,8 +135,10 @@ const chatModel = {
     cp_proj.id AS cp_project_id,
     cp_proj.status AS cp_project_status
 FROM messages m
+LEFT JOIN users u ON m.sender_id = u.id
 LEFT JOIN freelancer f ON m.sender_id = f.user_id
 LEFT JOIN creators c ON m.sender_id = c.user_id
+LEFT JOIN admin a ON m.sender_id = a.user_id
 LEFT JOIN deadline_extension_requested der ON m.deadline_extension_id = der.id
 LEFT JOIN projects dp ON der.project_id = dp.id
 LEFT JOIN services ds ON dp.service_id = ds.id
@@ -238,7 +241,9 @@ LIMIT $2 OFFSET $3;
     }
   },
 
-  // Get user's all chat rooms with last message
+  // Get user's all chat rooms with last message.
+  // Excludes any room registered in support_rooms — those are surfaced
+  // through the dedicated support inbox instead.
   async getUserChatRooms(userId) {
     const query = `
 SELECT
@@ -288,7 +293,8 @@ LEFT JOIN LATERAL (
     AND recipient_id = $1
     AND is_read = FALSE
 ) unread ON true
-WHERE cr.user1_id = $1 OR cr.user2_id = $1
+WHERE (cr.user1_id = $1 OR cr.user2_id = $1)
+  AND NOT EXISTS (SELECT 1 FROM support_rooms sr WHERE sr.room_id = cr.room_id)
 ORDER BY m.created_at DESC NULLS LAST; `;
     try {
       const result = await pool.query(query, [userId]);
@@ -1035,6 +1041,24 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     }
   },
 
+  // Mark every web_notification for a specific room as read for a user
+  // — used when a user/admin opens a support room so the notif badge clears.
+  async markNotificationsByRoomAsRead(userId, roomId) {
+    const query = `
+      UPDATE web_notifications
+      SET is_read = true
+      WHERE recipient_id = $1 AND action_route = $2 AND is_read = false
+      RETURNING id
+    `;
+    try {
+      const result = await pool.query(query, [userId, roomId]);
+      return result.rowCount;
+    } catch (error) {
+      console.error("Error marking notifications by room as read:", error);
+      throw error;
+    }
+  },
+
   // Mark all notifications as read for a user
   async markAllNotificationsAsRead(userId) {
     const query = `
@@ -1115,94 +1139,309 @@ ORDER BY m.created_at DESC NULLS LAST; `;
 
   // ========== SUPPORT CHAT METHODS ==========
 
-  // Get all admin user IDs
-  async getAllAdminIds() {
-    const query = `
-      SELECT u.id FROM users u
-      INNER JOIN admin a ON u.id = a.user_id
-      WHERE u.is_active = true AND a.is_active = true
-    `;
-    try {
-      const result = await pool.query(query);
-      return result.rows.map(row => row.id);
-    } catch (error) {
-      console.error("Error fetching admin IDs:", error);
-      throw error;
-    }
-  },
-
-  // Check if user already has a support assignment
-  async getSupportAssignment(userId) {
-    const query = `
-      SELECT user_id, admin_id, room_id, created_at
-      FROM support_assignments
-      WHERE user_id = $1
-    `;
+  // Get support room by user_id
+  async getSupportRoomByUserId(userId) {
+    const query = `SELECT * FROM support_rooms WHERE user_id = $1`;
     try {
       const result = await pool.query(query, [userId]);
       return result.rows[0] || null;
     } catch (error) {
-      console.error("Error fetching support assignment:", error);
+      console.error("Error getting support room:", error);
       throw error;
     }
   },
 
-  // Create new support assignment
-  async createSupportAssignment(userId, adminId, roomId) {
-    const query = `
-      INSERT INTO support_assignments (user_id, admin_id, room_id)
-      VALUES ($1, $2, $3)
-      RETURNING *
-    `;
+  // Create-or-fetch support room. Returns { room, isNew }.
+  // DO NOTHING + RETURNING only returns rows actually inserted, so we can
+  // distinguish a brand-new room from an existing one without a race.
+  async createSupportRoom(userId) {
+    const roomId = `support-${userId}`;
     try {
-      const result = await pool.query(query, [userId, adminId, roomId]);
-      return result.rows[0];
+      const inserted = await pool.query(
+        `INSERT INTO support_rooms (room_id, user_id)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id) DO NOTHING
+         RETURNING *`,
+        [roomId, userId]
+      );
+      if (inserted.rows[0]) {
+        return { room: inserted.rows[0], isNew: true };
+      }
+      const existing = await pool.query(
+        `SELECT * FROM support_rooms WHERE user_id = $1`,
+        [userId]
+      );
+      return { room: existing.rows[0], isNew: false };
     } catch (error) {
-      console.error("Error creating support assignment:", error);
+      console.error("Error creating support room:", error);
       throw error;
     }
   },
 
-  // Get count of assignments per admin from database (for Redis rebuild)
-  async getAssignmentCountsPerAdmin() {
+  // Check if a given room_id belongs to the support system
+  async isSupportRoom(roomId) {
+    const query = `SELECT 1 FROM support_rooms WHERE room_id = $1`;
+    try {
+      const result = await pool.query(query, [roomId]);
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error("Error checking support room:", error);
+      throw error;
+    }
+  },
+
+  // Get support room row by room_id (for resolving the owner user_id in admin sends)
+  async getSupportRoomByRoomId(roomId) {
+    const query = `SELECT * FROM support_rooms WHERE room_id = $1`;
+    try {
+      const result = await pool.query(query, [roomId]);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error("Error getting support room by roomId:", error);
+      throw error;
+    }
+  },
+
+  // Latest message id in a room — used to advance read pointer on leave/open
+  async getLatestMessageIdInRoom(roomId) {
+    const query = `SELECT id FROM messages WHERE room_id = $1 ORDER BY id DESC LIMIT 1`;
+    try {
+      const result = await pool.query(query, [roomId]);
+      return result.rows[0]?.id || null;
+    } catch (error) {
+      console.error("Error getting latest message id:", error);
+      throw error;
+    }
+  },
+
+  // All active admins whose permissions include chat.view — resolved dynamically
+  async getAdminsWithChatPermission() {
     const query = `
-      SELECT admin_id, COUNT(*) as count
-      FROM support_assignments
-      GROUP BY admin_id
+      SELECT u.id AS user_id, a.full_name AS name
+      FROM users u
+      INNER JOIN admin a ON u.id = a.user_id
+      WHERE u.is_active = true
+        AND a.is_active = true
+        AND a.permissions->'chat' ? 'view'
     `;
     try {
       const result = await pool.query(query);
-      const counts = {};
-      result.rows.forEach(row => {
-        counts[row.admin_id] = parseInt(row.count);
-      });
-      return counts;
+      return result.rows;
     } catch (error) {
-      console.error("Error getting assignment counts:", error);
+      console.error("Error fetching admins with chat permission:", error);
       throw error;
     }
   },
 
-  // Get or create support chat room (uses same format as regular chats)
-  async getOrCreateSupportChatRoom(userId, adminId) {
-    // Use standard room ID format: smaller_id-larger_id
-    const [smallerId, largerId] = [userId, adminId].sort((a, b) => a - b);
-    const roomId = `${smallerId}-${largerId}`;
-
+  // Live per-user permission re-check (defense against revoked-mid-session admins)
+  async adminHasChatPermission(userId) {
     const query = `
-      INSERT INTO chat_rooms (room_id, user1_id, user2_id)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (room_id)
-      DO UPDATE SET room_id = EXCLUDED.room_id
+      SELECT 1 FROM admin
+      WHERE user_id = $1
+        AND is_active = true
+        AND permissions->'chat' ? 'view'
+    `;
+    try {
+      const result = await pool.query(query, [userId]);
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error("Error checking admin chat permission:", error);
+      throw error;
+    }
+  },
+
+  // Admin support inbox — all open rooms with last message + unread count
+  async getSupportRoomsForAdmin(adminId) {
+    const query = `
+      SELECT
+        sr.room_id,
+        sr.user_id,
+        sr.status,
+        sr.created_at AS room_created_at,
+        COALESCE(c.full_name, f.freelancer_full_name, c.user_name, f.user_name, u.user_name) AS user_name,
+        COALESCE(f.profile_image_url, c.profile_image_url) AS user_avatar,
+        CASE
+          WHEN f.freelancer_id IS NOT NULL THEN 'freelancer'
+          WHEN c.creator_id IS NOT NULL THEN 'creator'
+          ELSE 'user'
+        END AS user_role,
+        m.message AS last_message,
+        m.created_at AS last_message_time,
+        m.sender_id AS last_message_sender_id,
+        COALESCE(
+          (SELECT COUNT(*)::int FROM messages msg
+           WHERE msg.room_id = sr.room_id
+             AND msg.sender_id != $1
+             AND (
+               rs.last_read_message_id IS NULL
+               OR msg.id > rs.last_read_message_id
+             )
+          ), 0
+        ) AS unread_count
+      FROM support_rooms sr
+      INNER JOIN users u ON sr.user_id = u.id
+      LEFT JOIN freelancer f ON u.id = f.user_id
+      LEFT JOIN creators c ON u.id = c.user_id
+      LEFT JOIN LATERAL (
+        SELECT message, created_at, sender_id
+        FROM messages
+        WHERE room_id = sr.room_id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) m ON true
+      LEFT JOIN support_room_read_status rs
+        ON rs.room_id = sr.room_id AND rs.user_id = $1
+      WHERE sr.status = 'open'
+      ORDER BY m.created_at DESC NULLS LAST
+    `;
+    try {
+      const result = await pool.query(query, [adminId]);
+      return result.rows;
+    } catch (error) {
+      console.error("Error getting support rooms for admin:", error);
+      throw error;
+    }
+  },
+
+  // Room participants: the user who opened support + all currently eligible admins (dynamic)
+  async getSupportRoomParticipants(roomId) {
+    const userQuery = `
+      SELECT
+        sr.user_id,
+        COALESCE(c.full_name, f.freelancer_full_name, c.user_name, f.user_name, u.user_name) AS name,
+        COALESCE(f.profile_image_url, c.profile_image_url) AS avatar,
+        CASE
+          WHEN f.freelancer_id IS NOT NULL THEN 'freelancer'
+          WHEN c.creator_id IS NOT NULL THEN 'creator'
+          ELSE 'user'
+        END AS role
+      FROM support_rooms sr
+      INNER JOIN users u ON sr.user_id = u.id
+      LEFT JOIN freelancer f ON u.id = f.user_id
+      LEFT JOIN creators c ON u.id = c.user_id
+      WHERE sr.room_id = $1
+    `;
+    const adminsQuery = `
+      SELECT u.id AS user_id, a.full_name AS name
+      FROM users u
+      INNER JOIN admin a ON u.id = a.user_id
+      WHERE u.is_active = true
+        AND a.is_active = true
+        AND a.permissions->'chat' ? 'view'
+    `;
+    try {
+      const [userResult, adminsResult] = await Promise.all([
+        pool.query(userQuery, [roomId]),
+        pool.query(adminsQuery),
+      ]);
+      return {
+        user: userResult.rows[0] || null,
+        admins: adminsResult.rows,
+      };
+    } catch (error) {
+      console.error("Error getting support room participants:", error);
+      throw error;
+    }
+  },
+
+  // Save a support message — recipient_id is NULL (group room, no single recipient)
+  async saveSupportMessage(roomId, senderId, message, messageType = 'text', fileUrl = null) {
+    const query = `
+      INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type, file_url, created_at)
+      VALUES ($1, $2, NULL, $3, $4, $5, $6)
       RETURNING *
     `;
-
     try {
-      const result = await pool.query(query, [roomId, smallerId, largerId]);
+      const result = await pool.query(query, [
+        roomId, senderId, message, messageType, fileUrl, new Date().toISOString(),
+      ]);
       return result.rows[0];
     } catch (error) {
-      console.error("Error creating/getting support chat room:", error);
+      console.error("Error saving support message:", error);
       throw error;
+    }
+  },
+
+  // Upsert read pointer for a user in a support room
+  async updateSupportReadStatus(roomId, userId, lastMessageId) {
+    if (!lastMessageId) return;
+    const query = `
+      INSERT INTO support_room_read_status (room_id, user_id, last_read_message_id, updated_at)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (room_id, user_id)
+      DO UPDATE SET last_read_message_id = GREATEST(support_room_read_status.last_read_message_id, EXCLUDED.last_read_message_id),
+                    updated_at = NOW()
+    `;
+    try {
+      await pool.query(query, [roomId, userId, lastMessageId]);
+    } catch (error) {
+      console.error("Error updating support read status:", error);
+      throw error;
+    }
+  },
+
+  // Unread count for one admin in one support room
+  async getSupportUnreadCountForRoom(roomId, userId) {
+    const query = `
+      SELECT COUNT(*)::int AS unread_count
+      FROM messages m
+      LEFT JOIN support_room_read_status rs
+        ON rs.room_id = m.room_id AND rs.user_id = $2
+      WHERE m.room_id = $1
+        AND m.sender_id != $2
+        AND (rs.last_read_message_id IS NULL OR m.id > rs.last_read_message_id)
+    `;
+    try {
+      const result = await pool.query(query, [roomId, userId]);
+      return result.rows[0]?.unread_count || 0;
+    } catch (error) {
+      console.error("Error getting support unread count:", error);
+      throw error;
+    }
+  },
+
+  // Total unread across all support rooms for a user (drives the badge)
+  async getSupportUnreadCountTotal(userId) {
+    const query = `
+      SELECT COALESCE(SUM(
+        (SELECT COUNT(*)::int FROM messages m
+         WHERE m.room_id = sr.room_id
+           AND m.sender_id != $1
+           AND (rs.last_read_message_id IS NULL OR m.id > rs.last_read_message_id)
+        )
+      ), 0)::int AS total
+      FROM support_rooms sr
+      LEFT JOIN support_room_read_status rs
+        ON rs.room_id = sr.room_id AND rs.user_id = $1
+      WHERE sr.status = 'open'
+    `;
+    try {
+      const result = await pool.query(query, [userId]);
+      return result.rows[0]?.total || 0;
+    } catch (error) {
+      console.error("Error getting total support unread count:", error);
+      throw error;
+    }
+  },
+
+  // Resolve a user's preferred display name. Prefers full_name (display)
+  // over user_name (handle) so chat headers/labels read like real people.
+  async getDisplayName(userId) {
+    const query = `
+      SELECT COALESCE(a.full_name, c.full_name, f.freelancer_full_name,
+                      c.user_name, f.user_name, u.user_name) AS name
+      FROM users u
+      LEFT JOIN admin a ON u.id = a.user_id
+      LEFT JOIN creators c ON u.id = c.user_id
+      LEFT JOIN freelancer f ON u.id = f.user_id
+      WHERE u.id = $1
+    `;
+    try {
+      const result = await pool.query(query, [userId]);
+      return result.rows[0]?.name || null;
+    } catch (error) {
+      console.error("Error resolving display name:", error);
+      return null;
     }
   },
 
