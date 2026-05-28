@@ -830,7 +830,7 @@ const sendHireRequest = async (req, res, next) => {
       package_type,
       service_type,
       delivery_days: bodyDeliveryDays,
-      delivery_time: bodyDeliveryTime,
+      delivery_days: bodyDeliveryTime,
     } = req.body;
 
     if (!recipient_user_id || !plan_type || !price || !units || !package_type || !service_type) {
@@ -880,6 +880,14 @@ const sendHireRequest = async (req, res, next) => {
       ? parseInt(bodyDeliveryDays) || 0
       : (parseInt(freelancerRow.delivery_days) || 0) * parseInt(units);
     const delivery_time = bodyDeliveryTime !== undefined ? parseInt(bodyDeliveryTime) || 0 : 0;
+
+    // Validate delivery_days and delivery_time are positive non-zero values
+    if (delivery_days <= 0) {
+      return next(new AppError('delivery_days must be a positive non-zero value', 400));
+    }
+    if (bodyDeliveryTime !== undefined && delivery_time <= 0) {
+      return next(new AppError('delivery_time must be a positive non-zero value when provided', 400));
+    }
 
     // Get or create chat room
     const [smallerId, largerId] = [senderUserId, recipient_user_id].sort((a, b) => a - b);

@@ -64,13 +64,13 @@ async function createDownloadablePresignedUrl(objectPath, filename) {
     console.log('[createDownloadablePresignedUrl] Using bucket:', bucket);
     console.log('[createDownloadablePresignedUrl] Using object:', object);
 
-    // Generate presigned URL with Content-Disposition header to force download
+    // Generate presigned URL with inline disposition (viewable in browser)
     const url = await minioClient.presignedGetObject(
       bucket,
       object,
       PRESIGNED_EXPIRY,
       {
-        'response-content-disposition': `attachment; filename="${encodeURIComponent(filename || 'download')}"`
+        'response-content-disposition': `inline; filename="${encodeURIComponent(filename || 'download')}"`
       }
     );
 

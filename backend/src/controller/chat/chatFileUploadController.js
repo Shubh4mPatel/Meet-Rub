@@ -1,6 +1,6 @@
 const { minioClient } = require('../../../config/minio');
 const AppError = require('../../../utils/appError');
-const { createPresignedUrl } = require('../../../utils/helper');
+const { createDownloadablePresignedUrl } = require('../../../utils/helper');
 const { logger } = require('../../../utils/logger');
 
 const BUCKET_NAME = process.env.BUCKET_NAME || 'meet-rub-assets';
@@ -63,14 +63,12 @@ const uploadChatFile = async (req, res, next) => {
     uploadedObjectName = objectName;
     logger.info(`File uploaded successfully to MinIO: ${objectName}`);
 
-    // Generate presigned URL with download headers (force download)
-    const presignedUrl = await minioClient.presignedGetObject(
+    // Generate presigned URL with inline disposition (viewable in browser)
+    const presignedUrl = await createDownloadablePresignedUrl(
       BUCKET_NAME,
       objectName,
       EXPIRY_SECONDS,
-      {
-        'response-content-disposition': `attachment; filename="${encodeURIComponent(file.originalname)}"`
-      }
+      file.originalname
     );
 
     // Determine file type
