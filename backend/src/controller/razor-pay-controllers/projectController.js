@@ -830,7 +830,7 @@ const sendHireRequest = async (req, res, next) => {
       package_type,
       service_type,
       delivery_days: bodyDeliveryDays,
-      delivery_days: bodyDeliveryTime,
+      delivery_time: bodyDeliveryTime,
     } = req.body;
 
     if (!recipient_user_id || !plan_type || !price || !units || !package_type || !service_type) {
@@ -885,8 +885,8 @@ const sendHireRequest = async (req, res, next) => {
     if (delivery_days <= 0) {
       return next(new AppError('delivery_days must be a positive non-zero value', 400));
     }
-    if (bodyDeliveryTime !== undefined && delivery_time <= 0) {
-      return next(new AppError('delivery_time must be a positive non-zero value when provided', 400));
+    if (bodyDeliveryTime !== undefined && delivery_time < 0) {
+      return next(new AppError('delivery_time must be a non-negative value when provided', 400));
     }
 
     // Get or create chat room
