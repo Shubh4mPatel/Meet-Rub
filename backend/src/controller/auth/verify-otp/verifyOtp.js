@@ -78,29 +78,20 @@ const creatorSchema = Joi.object({
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .optional(),
   niche: Joi.string().required(), // JSON stringified array
-  socialLinks: Joi.string().required().custom((value, helpers) => {
+  // Social links are optional. Accept an object or array of links; only
+  // validate that the value, when provided, is parseable JSON.
+  socialLinks: Joi.string().optional().allow('', null).custom((value, helpers) => {
+    if (!value || value.trim() === '') {
+      return value;
+    }
     try {
-      const parsed = JSON.parse(value);
-      // Must be a non-null object (not array)
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        return helpers.error('any.invalid');
-      }
-      const entries = Object.entries(parsed);
-      if (entries.length === 0) {
-        return helpers.error('any.invalid');
-      }
-      // At least one platform must have a non-empty URL string as value
-      const hasValidLink = entries.some(([, url]) => typeof url === 'string' && url.trim() !== '');
-      if (!hasValidLink) {
-        return helpers.error('any.invalid');
-      }
+      JSON.parse(value);
       return value;
     } catch (error) {
       return helpers.error('any.invalid');
     }
   }, 'Social links validation').messages({
-    'any.required': 'At least one social link is required',
-    'any.invalid': 'At least one valid social link with URL is required'
+    'any.invalid': 'Social links must be valid JSON'
   })
 });
 
