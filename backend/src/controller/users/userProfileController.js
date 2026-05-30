@@ -1181,8 +1181,8 @@ const getAllFreelancers = async (req, res, next) => {
 
     // Always return service_title: matching service when filtered, oldest service when not
     const profileTitleSubquery = serviceTypes.length > 0
-      ? `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1)`
-      : `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at ASC LIMIT 1)`;
+      ? `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1)`
+      : `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ORDER BY s2.created_at ASC LIMIT 1)`;
 
     let queryText = `
       SELECT
@@ -1195,11 +1195,11 @@ const getAllFreelancers = async (req, res, next) => {
         f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
-        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
         ${featuredSelect}
       FROM freelancer f
-      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       ${featuredJoin}
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
     `;
@@ -1270,7 +1270,7 @@ const getAllFreelancers = async (req, res, next) => {
     let countQuery = `
       SELECT COUNT(DISTINCT f.freelancer_id) as count
       FROM freelancer f
-      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       WHERE 1=1
     `;
 
@@ -1490,7 +1490,7 @@ const getFreelancerById = async (req, res, next) => {
     const { rows: freelancerServices } = await query(
       `SELECT id, service_name, service_title, about_service, service_description, service_price,
               min_delivery_days::text || '-' || max_delivery_days::text AS delivery_time, thumbnail_file
-     FROM services WHERE freelancer_id = $1`,
+     FROM services WHERE freelancer_id = $1 AND is_deleted = FALSE`,
       [freelancerId]
     );
 
@@ -1947,8 +1947,8 @@ const getWishlistFreelancers = async (req, res, next) => {
     // Build the query based on filters
     // Always return service_title: matching service when filtered, oldest service when not
     const profileTitleSubquery = serviceTypes.length > 0
-      ? "(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1)"
-      : "(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at ASC LIMIT 1)";
+      ? "(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ORDER BY s2.created_at DESC LIMIT 1)"
+      : "(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ORDER BY s2.created_at ASC LIMIT 1)";
 
     let queryText = `
       SELECT
@@ -1962,11 +1962,11 @@ const getWishlistFreelancers = async (req, res, next) => {
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         w.created_at as wishlist_added_at,
-        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
       FROM freelancer f
       INNER JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
-      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       WHERE 1=1 AND f.verification_status = 'VERIFIED' AND f.is_active = true
     `;
 
@@ -2041,7 +2041,7 @@ const getWishlistFreelancers = async (req, res, next) => {
       SELECT COUNT(DISTINCT f.freelancer_id) as count
       FROM freelancer f
       INNER JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
-      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       WHERE 1=1 AND f.verification_status = 'VERIFIED' AND f.is_active = true
     `;
 
@@ -2220,7 +2220,7 @@ const getUserProfileProgress = async (req, res, next) => {
       }
     }
     const { rows: freelancerServices } = await query(
-      "SELECT id FROM services WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1)",
+      "SELECT id FROM services WHERE freelancer_id=(SELECT freelancer_id FROM freelancer WHERE user_id=$1) AND is_deleted = FALSE",
       [user.user_id]
     );
     if (freelancerServices.length > 0) {
@@ -2957,11 +2957,11 @@ const getFreelancerForAdmin = async (req, res, next) => {
         f.reason_for_suspension,
         f.rating,
         f.worked_with,
-        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.service_name FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as matched_service_title,
         (SELECT COALESCE(array_agg(DISTINCT s3.service_name), ARRAY[]::text[])
         FROM services s3
-        WHERE s3.freelancer_id = f.freelancer_id) as all_services,
+        WHERE s3.freelancer_id = f.freelancer_id AND s3.is_deleted = FALSE) as all_services,
         COALESCE(
           json_agg(
             DISTINCT jsonb_build_object(
@@ -2974,7 +2974,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
         ) AS featured_services,
         CASE WHEN COUNT(ff.id) FILTER (WHERE ff.is_active = true) > 0 THEN true ELSE false END AS is_featured
       FROM freelancer f
-      ${serviceTypes.length > 0 ? 'LEFT JOIN services s ON f.freelancer_id = s.freelancer_id' : ''}
+      ${serviceTypes.length > 0 ? 'LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE' : ''}
       LEFT JOIN featured_freelancers ff ON f.freelancer_id = ff.freelancer_id AND ff.is_active = true
       LEFT JOIN service_options so ON ff.service_option_id = so.id
       WHERE ${whereClause}
@@ -2988,7 +2988,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
     const countQueryText = `
       SELECT COUNT(DISTINCT f.freelancer_id) as total
       FROM freelancer f
-      ${serviceTypes.length > 0 ? 'LEFT JOIN services s ON f.freelancer_id = s.freelancer_id' : ''}
+      ${serviceTypes.length > 0 ? 'LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE' : ''}
       WHERE ${whereClause}
     `;
 
@@ -3181,7 +3181,7 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
       `SELECT service_name,
               min_delivery_days::text || '-' || max_delivery_days::text AS delivery_time
        FROM services
-       WHERE freelancer_id = $1`,
+       WHERE freelancer_id = $1 AND is_deleted = FALSE`,
       [freelancer_id]
     );
 
@@ -3355,7 +3355,7 @@ const getFreeLancerByUserId = async (req, res, next) => {
 
     // Fetch freelancer service names
     const { rows: services } = await query(
-      `SELECT DISTINCT service_name FROM services WHERE freelancer_id = $1`,
+      `SELECT DISTINCT service_name FROM services WHERE freelancer_id = $1 AND is_deleted = FALSE`,
       [freelancer.freelancer_id]
     );
 
@@ -3433,8 +3433,8 @@ const getFreelancerForSuggestion = async (req, res, next) => {
 
     // Always return service_title: matching service when filtered, oldest service when not
     const profileTitleSubquery = serviceTypes.length > 0
-      ? `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1)`
-      : `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at ASC LIMIT 1)`;
+      ? `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1)`
+      : `(SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ORDER BY s2.created_at ASC LIMIT 1)`;
 
     let queryText = `
       SELECT
@@ -3447,10 +3447,10 @@ const getFreelancerForSuggestion = async (req, res, next) => {
         f.worked_with,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
-        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
-        (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
+        (SELECT s2.min_delivery_days::text || '-' || s2.max_delivery_days::text FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceSubquery} ORDER BY s2.created_at DESC LIMIT 1) as delivery_time
       FROM freelancer f
-      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       WHERE 1=1 and f.verification_status = 'VERIFIED' and f.is_active = true
     `;
 
@@ -3520,7 +3520,7 @@ const getFreelancerForSuggestion = async (req, res, next) => {
     let countQuery = `
       SELECT COUNT(DISTINCT f.freelancer_id) as count
       FROM freelancer f
-      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       WHERE 1=1
     `;
 
@@ -3767,7 +3767,7 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
               min_delivery_days::text || '-' || max_delivery_days::text AS delivery_time,
               plan_type, thumbnail_file, is_active, created_at, updated_at
        FROM services
-       WHERE freelancer_id = $1
+       WHERE freelancer_id = $1 AND is_deleted = FALSE
        ORDER BY service_name, created_at DESC`,
       [freelancerId]
     );
@@ -3989,12 +3989,12 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         ls.max_delivery_days
         ${featuredSelect}
       FROM freelancer f
-      JOIN services s ON f.freelancer_id = s.freelancer_id
+      JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       LEFT JOIN LATERAL (
         SELECT s2.thumbnail_file, s2.service_title, s2.min_delivery_days, s2.max_delivery_days
         FROM services s2
-        WHERE s2.freelancer_id = f.freelancer_id
+        WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE
           ${lateralServiceFilter}
         ORDER BY s2.created_at ${lateralOrder}
         LIMIT 1
@@ -4033,7 +4033,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     const countQuery = `
       SELECT COUNT(DISTINCT f.freelancer_id) AS count
       FROM freelancer f
-      JOIN services s ON f.freelancer_id = s.freelancer_id
+      JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       WHERE f.verification_status = 'VERIFIED'
         AND f.is_active = true
         ${countFilters.whereClause}
@@ -4047,7 +4047,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     const priceRangeQuery = `
       SELECT MIN(s.service_price) AS min_price, MAX(s.service_price) AS max_price
       FROM freelancer f
-      JOIN services s ON f.freelancer_id = s.freelancer_id
+      JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       WHERE f.verification_status = 'VERIFIED'
         AND f.is_active = true
         AND s.is_active = true

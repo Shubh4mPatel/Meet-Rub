@@ -240,7 +240,7 @@ const addServicesByFreelancer = async (req, res, next) => {
 
     // Check duplicate for this specific plan type
     const { rows: existingService } = await query(
-      `SELECT * FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type=$3`,
+      `SELECT * FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type=$3 AND is_deleted = FALSE`,
       [freelancer_id, service, normalizedPlanType]
     );
 
@@ -294,7 +294,7 @@ const addServicesByFreelancer = async (req, res, next) => {
     } else if (normalizedPlanType !== 'basic') {
       // Reuse the thumbnail from the basic plan for the same service
       const { rows: basicPlan } = await query(
-        `SELECT thumbnail_file FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type='basic'`,
+        `SELECT thumbnail_file FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type='basic' AND is_deleted = FALSE`,
         [freelancer_id, service]
       );
       thumbnailFileUrl = basicPlan[0]?.thumbnail_file || null;
@@ -306,7 +306,7 @@ const addServicesByFreelancer = async (req, res, next) => {
     let resolvedAboutService = aboutService?.trim() || null;
     if (normalizedPlanType !== 'basic' && (!resolvedServiceTitle || !resolvedAboutService)) {
       const { rows: basicPlanMeta } = await query(
-        `SELECT service_title, about_service FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type='basic'`,
+        `SELECT service_title, about_service FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type='basic' AND is_deleted = FALSE`,
         [freelancer_id, service]
       );
       if (!resolvedServiceTitle) resolvedServiceTitle = basicPlanMeta[0]?.service_title || null;
@@ -404,7 +404,7 @@ const updateServiceByFreelancer = async (req, res, next) => {
 
     // Fetch existing service data
     const { rows: existingService } = await client.query(
-      `SELECT thumbnail_file FROM services WHERE id=$1 AND freelancer_id=$2`,
+      `SELECT thumbnail_file FROM services WHERE id=$1 AND freelancer_id=$2 AND is_deleted = FALSE`,
       [serviceId, freelancer_id]
     );
 
@@ -534,7 +534,6 @@ const updateServiceByFreelancer = async (req, res, next) => {
 
 // ✅ Freelancer Delete their service
 const deleteServiceByFreelancer = async (req, res, next) => {
-  const BUCKET_NAME = "meet-rub-assets";
 
   try {
     logger.info("Request query parameters:", req.query);
@@ -548,9 +547,9 @@ const deleteServiceByFreelancer = async (req, res, next) => {
       return next(new AppError("Please provide service ID", 400));
     }
 
-    // Fetch service data to get thumbnail file path
+    // Verify service exists and belongs to this freelancer
     const { rows: serviceData } = await query(
-      `SELECT thumbnail_file FROM services WHERE id=$1 AND freelancer_id=$2`,
+      `SELECT id FROM services WHERE id=$1 AND freelancer_id=$2 AND is_deleted = FALSE`,
       [id, freelancer_id]
     );
 
@@ -559,21 +558,9 @@ const deleteServiceByFreelancer = async (req, res, next) => {
       return next(new AppError("Service not found", 404));
     }
 
-    // Delete thumbnail file from MinIO if exists
-    if (serviceData[0].thumbnail_file) {
-      try {
-        const objectName = serviceData[0].thumbnail_file.split("/").slice(1).join("/");
-        await minioClient.removeObject(BUCKET_NAME, objectName);
-        logger.info(`Thumbnail file deleted from MinIO: ${objectName}`);
-      } catch (minioError) {
-        logger.warn(`Failed to delete thumbnail file from MinIO:`, minioError);
-        // Continue with service deletion even if file deletion fails
-      }
-    }
-
-    // Delete service from database
+    // Soft delete: mark as deleted without removing data or MinIO files
     const { rowCount } = await query(
-      `DELETE FROM services WHERE id=$1 AND freelancer_id=$2`,
+      `UPDATE services SET is_deleted = TRUE, updated_at = NOW() WHERE id=$1 AND freelancer_id=$2`,
       [id, freelancer_id]
     );
 
@@ -582,7 +569,7 @@ const deleteServiceByFreelancer = async (req, res, next) => {
       return next(new AppError("Service not found", 404));
     }
 
-    logger.info(`Service ID ${id} deleted successfully`);
+    logger.info(`Service ID ${id} soft-deleted successfully`);
     return res.status(200).json({
       status: "success",
       message: "Service deleted successfully",
@@ -603,7 +590,7 @@ const getServicesByFreelaner = async (req, res, next) => {
     const freelancer_id = user.roleWiseId;
 
     const { rows: services } = await query(
-      `SELECT * FROM services WHERE freelancer_id=$1 ORDER BY created_at DESC`,
+      `SELECT * FROM services WHERE freelancer_id=$1 AND is_deleted = FALSE ORDER BY created_at DESC`,
       [freelancer_id]
     );
 
@@ -897,7 +884,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     // Fallback to freelancer.profile_title if service_title is NULL
     const serviceFilter = desiredService ? `AND s2.service_name = '${desiredService}'` : '';
     const profileTitleSubquery = desiredService
-      ? `COALESCE((SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ${serviceFilter} ORDER BY s2.created_at DESC LIMIT 1), f.profile_title)`
+      ? `COALESCE((SELECT s2.service_title FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceFilter} ORDER BY s2.created_at DESC LIMIT 1), f.profile_title)`
       : "f.profile_title";
 
     let queryText = `
@@ -912,9 +899,9 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist,
-        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id ORDER BY s2.created_at DESC LIMIT 1) as service_banner
+        (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ORDER BY s2.created_at DESC LIMIT 1) as service_banner
       FROM freelancer f
-      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       WHERE f.freelancer_id = ANY($2::int[])
     `;
@@ -937,7 +924,7 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     const priceRangeQuery = `
       SELECT MIN(s.service_price) AS min_price, MAX(s.service_price) AS max_price
       FROM freelancer f
-      JOIN services s ON f.freelancer_id = s.freelancer_id
+      JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       WHERE f.freelancer_id = ANY($1::int[])
         AND s.is_active = true
     `;

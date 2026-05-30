@@ -844,6 +844,7 @@ const sendHireRequest = async (req, res, next) => {
        LEFT JOIN services s ON s.freelancer_id = f.freelancer_id
          AND s.service_name = $3
          AND LOWER(s.plan_type) = LOWER($4)
+         AND s.is_deleted = FALSE
        WHERE f.user_id = $1 OR f.user_id = $2`,
       [senderUserId, recipient_user_id, service_type, plan_type]
     );

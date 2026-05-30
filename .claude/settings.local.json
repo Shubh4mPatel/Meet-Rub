@@ -86,7 +86,11 @@
       "Bash(node --check model/chatmodel.js)",
       "Bash(node --check src/server.js)",
       "Bash(node --check utils/supportHelper.js)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(awk 'NR>=2962 && NR<=2965' backend/src/controller/users/userProfileController.js)",
+      "Bash(awk 'NR>=3182 && NR<=3185' backend/src/controller/users/userProfileController.js)",
+      "Bash(awk 'NR>=3768 && NR<=3771' backend/src/controller/users/userProfileController.js)",
+      "Bash(awk 'NR>=3995 && NR<=3998' backend/src/controller/users/userProfileController.js)"
     ],
     "additionalDirectories": [
       "/tmp"
