@@ -30,7 +30,7 @@ const freelancerSchema = Joi.object({
   lastName: Joi.string().required(),
   userName: Joi.string().required(),
   dateOfBirth: Joi.string().optional(), // comes as string from FormData
-  profileTitle: Joi.string().optional(),
+  profileTitle: Joi.string().optional().allow('', null),
   serviceOffered: Joi.string().optional().allow('', null), // JSON stringified array
   niche: Joi.string().required(), // JSON stringified array
   govId: Joi.string().optional().allow('', null),
