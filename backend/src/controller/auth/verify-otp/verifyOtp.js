@@ -31,13 +31,13 @@ const freelancerSchema = Joi.object({
   userName: Joi.string().required(),
   dateOfBirth: Joi.string().optional(), // comes as string from FormData
   profileTitle: Joi.string().optional(),
-  serviceOffered: Joi.string().required(), // JSON stringified array
+  serviceOffered: Joi.string().optional().allow('', null), // JSON stringified array
   niche: Joi.string().required(), // JSON stringified array
-  govId: Joi.string().required(),
+  govId: Joi.string().optional().allow('', null),
   phoneNumber: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .optional(),
-  govIdType: Joi.string().required(),
+  govIdType: Joi.string().optional().allow('', null),
   panCardNumber: Joi.string()
     .pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/)
     .custom((value, helpers) => {
@@ -216,7 +216,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
         }
 
         // Parse JSON strings from FormData
-        const parsedServiceOffered = JSON.parse(serviceOffered);
+        const parsedServiceOffered = serviceOffered ? JSON.parse(serviceOffered) : [];
         const parsedNiche = JSON.parse(niche);
 
         const fullName = `${firstName} ${lastName}`;
@@ -230,10 +230,6 @@ const verifyOtpAndProcess = async (req, res, next) => {
         const govIdFile = req.files?.govIdImage?.[0];
         const panCardFile = req.files?.panCardImage?.[0];
 
-        if (!govIdFile) {
-          return next(new AppError("Government ID document is required", 400));
-        }
-
         if (!panCardFile) {
           return next(new AppError("PAN card image is required", 400));
         }
@@ -243,11 +239,15 @@ const verifyOtpAndProcess = async (req, res, next) => {
         }
 
         const BUCKET_NAME = "meet-rub-assets";
-        const fileExt = path.extname(govIdFile.originalname);
-        const fileName = `${crypto.randomUUID()}${fileExt}`;
-        const folder = `freelancer/goverment-doc/${govIdType}`;
-        const objectName = `${folder}/${fileName}`;
-        const govIdUrl = `${BUCKET_NAME}/${objectName}`;
+        let objectName = null;
+        let govIdUrl = null;
+        if (govIdFile) {
+          const fileExt = path.extname(govIdFile.originalname);
+          const fileName = `${crypto.randomUUID()}${fileExt}`;
+          const folder = `freelancer/goverment-doc/${govIdType || 'aadhar'}`;
+          objectName = `${folder}/${fileName}`;
+          govIdUrl = `${BUCKET_NAME}/${objectName}`;
+        }
 
         const panFileExt = path.extname(panCardFile.originalname);
         const panFileName = `${crypto.randomUUID()}${panFileExt}`;
@@ -276,13 +276,15 @@ const verifyOtpAndProcess = async (req, res, next) => {
           );
 
           try {
-            await minioClient.putObject(
-              BUCKET_NAME,
-              objectName,
-              govIdFile.buffer,
-              govIdFile.size,
-              { "Content-Type": govIdFile.mimetype }
-            );
+            if (govIdFile) {
+              await minioClient.putObject(
+                BUCKET_NAME,
+                objectName,
+                govIdFile.buffer,
+                govIdFile.size,
+                { "Content-Type": govIdFile.mimetype }
+              );
+            }
             await minioClient.putObject(
               BUCKET_NAME,
               panObjectName,
@@ -306,7 +308,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
             [
               newUserResMeetRub[0].id,
               profileTitle,
-              govIdType,
+              govIdType || null,
               govIdUrl,
               firstName,
               lastName,
@@ -316,7 +318,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
               currentDateTime,
               fullName,
               email,
-              govId,
+              govId || null,
               parsedNiche,
               userName,
               parsedServiceOffered,
@@ -351,7 +353,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
             console.error("Failed to cleanup Redis username:", redisError);
           }
           try {
-            await minioClient.removeObject(BUCKET_NAME, objectName);
+            if (objectName) {
+              await minioClient.removeObject(BUCKET_NAME, objectName);
+            }
             await minioClient.removeObject(BUCKET_NAME, panObjectName);
             console.log("Rolled back MinIO uploads due to database error");
           } catch (minioError) {
