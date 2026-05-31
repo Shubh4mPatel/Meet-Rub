@@ -172,20 +172,24 @@ const getUserProfile = async (req, res, next) => {
           [user.user_id]
         );
 
-        if (!rows[0]?.gov_id_url) {
+        // Aadhaar is optional, so require at least one document (Aadhaar OR PAN)
+        if (!rows[0] || (!rows[0].gov_id_url && !rows[0].pan_card_image_url)) {
           logger.warn("Gov ID not uploaded");
           return next(new AppError("No govt ID found", 404));
         }
 
-        const parts = rows[0].gov_id_url.split("/");
-        const bucketName = parts[0];
-        const objectName = parts.slice(1).join("/");
+        let signedUrl = null;
+        if (rows[0].gov_id_url) {
+          const parts = rows[0].gov_id_url.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
 
-        const signedUrl = await createPresignedUrl(
-          bucketName,
-          objectName,
-          expirySeconds
-        );
+          signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+        }
 
         let panCardSignedUrl = null;
         if (rows[0]?.pan_card_image_url) {
