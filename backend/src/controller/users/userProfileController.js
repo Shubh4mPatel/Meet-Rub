@@ -3273,6 +3273,10 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
           requirements: requirements,
           ...(requirements_fetch_failed && { requirements_fetch_failed: true }),
         },
+        // PAN details
+        pan_details: freelancer.has_pan ? {
+          pan_card_number: freelancer.pan_card_number
+        } : null,
         // Bank details (masked)
         bank_details: freelancer.has_bank_details ? {
           account_holder_name: freelancer.bank_account_holder_name,
