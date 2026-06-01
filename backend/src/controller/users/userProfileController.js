@@ -3094,6 +3094,7 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         razorpay_onboarding_error_at,
         razorpay_product_id,
         pan_card_number,
+        pan_card_image_url,
         CASE
           WHEN bank_account_no IS NOT NULL AND bank_ifsc_code IS NOT NULL THEN true
           ELSE false
@@ -3175,6 +3176,32 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
       } catch (error) {
         logger.error(`Error generating signed URL for govt ID: ${error}`);
         freelancer.gov_id_url = null;
+      }
+    }
+
+    // Generate presigned URL for PAN card image if it exists
+    if (freelancer.pan_card_image_url) {
+      try {
+        const panImagePath = freelancer.pan_card_image_url;
+        const firstSlashIndex = panImagePath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = panImagePath.substring(0, firstSlashIndex);
+          const objectName = panImagePath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancer.pan_card_image_url = signedUrl;
+        } else {
+          logger.warn(`Invalid PAN card image URL format: ${panImagePath}`);
+          freelancer.pan_card_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for PAN card image: ${error}`);
+        freelancer.pan_card_image_url = null;
       }
     }
 
@@ -3275,7 +3302,8 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         },
         // PAN details
         pan_details: freelancer.has_pan ? {
-          pan_card_number: freelancer.pan_card_number
+          pan_card_number: freelancer.pan_card_number,
+          pan_card_image_url: freelancer.pan_card_image_url
         } : null,
         // Bank details (masked)
         bank_details: freelancer.has_bank_details ? {
