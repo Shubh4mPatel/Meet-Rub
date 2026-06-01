@@ -2205,9 +2205,7 @@ const getUserProfileProgress = async (req, res, next) => {
       if (
         freelancer.date_of_birth &&
         freelancer.phone_number &&
-        freelancer.profile_title &&
-        freelancer.profile_image_url &&
-        freelancer.freelancer_thumbnail_image
+        freelancer.profile_image_url
       ) {
         freelancerProgressWeights.ProfileInfo += 20;
       }
