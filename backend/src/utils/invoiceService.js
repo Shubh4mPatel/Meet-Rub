@@ -191,8 +191,9 @@ async function generateAndSendInvoices(projectId) {
 
     await client.query('COMMIT');
 
-    // ── Send email with both PDFs attached ──
-    await sendInvoiceEmail({
+    // ── Send TWO separate emails ──
+    // Email 1: Freelancer invoice (from freelancer context)
+    await sendFreelancerInvoiceEmail({
       creatorEmail: row.creator_email,
       creatorName: row.creator_name,
       freelancerName: row.freelancer_full_name,
@@ -200,6 +201,15 @@ async function generateAndSendInvoices(projectId) {
       projectId,
       freelancerPdfBuffer,
       freelancerInvoiceNumber,
+    });
+
+    // Email 2: Platform invoice (from Meetrub)
+    await sendPlatformInvoiceEmail({
+      creatorEmail: row.creator_email,
+      creatorName: row.creator_name,
+      freelancerName: row.freelancer_full_name,
+      serviceTitle,
+      projectId,
       platformPdfBuffer,
       platformInvoiceNumber,
     });
@@ -220,44 +230,26 @@ async function generateAndSendInvoices(projectId) {
 }
 
 /**
- * Send the invoice email to the creator with both PDFs attached
+ * Send the freelancer service invoice email to the creator
  */
-async function sendInvoiceEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, projectId, freelancerPdfBuffer, freelancerInvoiceNumber, platformPdfBuffer, platformInvoiceNumber }) {
-  let html;
-  try {
-    html = fs.readFileSync(path.join(TEMPLATES_DIR, 'creator/invoiceEmail.html'), 'utf8');
-  } catch (e) {
-    // Fallback if template file doesn't exist
-    html = getInvoiceEmailFallback(creatorName, freelancerName, serviceTitle, projectId);
-  }
-
-  // Replace placeholders
-  html = html
-    .replace(/{{creator_name}}/g, creatorName)
-    .replace(/{{freelancer_name}}/g, freelancerName)
-    .replace(/{{service_title}}/g, serviceTitle)
-    .replace(/{{project_id}}/g, String(projectId))
-    .replace(/{{freelancer_invoice_number}}/g, freelancerInvoiceNumber)
-    .replace(/{{platform_invoice_number}}/g, platformInvoiceNumber);
-
-  const mailOptions = {
-    from: process.env.EMAIL_SERVER_USER,
-    to: creatorEmail,
-    subject: `Invoices for Order #${projectId} — ${serviceTitle}`,
-    html,
-    attachments: [
-      {
-        filename: `${freelancerInvoiceNumber}.pdf`,
-        content: freelancerPdfBuffer,
-        contentType: 'application/pdf',
-      },
-      {
-        filename: `${platformInvoiceNumber}.pdf`,
-        content: platformPdfBuffer,
-        contentType: 'application/pdf',
-      },
-    ],
-  };
+async function sendFreelancerInvoiceEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, projectId, freelancerPdfBuffer, freelancerInvoiceNumber }) {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+      <h2>Service Invoice — From ${freelancerName}</h2>
+      <p>Hi ${creatorName},</p>
+      <p>Please find attached the service invoice from <strong>${freelancerName}</strong> for the work completed on order <strong>#${projectId}</strong> (${serviceTitle}).</p>
+      <p>This invoice covers the freelancer's service fee (80% of order value).</p>
+      <p>This invoice is for your records. No further action is required.</p>
+      <br>
+      <p>Thank you for using Meetrub!</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <p style="font-size: 12px; color: #999;">This is an automated email sent on behalf of ${freelancerName} via Meetrub. Please do not reply.</p>
+    </body>
+    </html>
+  `;
 
   const nodemailer = require('nodemailer');
   const transporter = nodemailer.createTransport({
@@ -269,31 +261,40 @@ async function sendInvoiceEmail({ creatorEmail, creatorName, freelancerName, ser
     },
   });
 
-  await transporter.sendMail(mailOptions);
+  await transporter.sendMail({
+    from: `"${freelancerName} via Meetrub" <${process.env.EMAIL_SERVER_USER}>`,
+    to: creatorEmail,
+    subject: `Service Invoice from ${freelancerName} — Order #${projectId}`,
+    html,
+    attachments: [
+      {
+        filename: `${freelancerInvoiceNumber}.pdf`,
+        content: freelancerPdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
 
-  // Log to email_logs
   db.query(
-    `INSERT INTO email_logs (email_type, recipient_email, project_id, status)
-     VALUES ($1, $2, $3, 'sent')`,
-    ['invoice_delivery', creatorEmail, projectId]
-  ).catch(err => logger.error(`Failed to log invoice email: ${err.message}`));
+    `INSERT INTO email_logs (email_type, recipient_email, project_id, status) VALUES ($1, $2, $3, 'sent')`,
+    ['freelancer_invoice', creatorEmail, projectId]
+  ).catch(err => logger.error(`Failed to log freelancer invoice email: ${err.message}`));
 }
 
-function getInvoiceEmailFallback(creatorName, freelancerName, serviceTitle, projectId) {
-  return `
+/**
+ * Send the platform commission invoice email to the creator (from Meetrub)
+ */
+async function sendPlatformInvoiceEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, projectId, platformPdfBuffer, platformInvoiceNumber }) {
+  const html = `
     <!DOCTYPE html>
     <html>
     <head><meta charset="UTF-8"></head>
     <body style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-      <h2 style="color: #7C3AED;">Order Completed — Invoices Attached</h2>
+      <h2>Platform Invoice — From Meetrub</h2>
       <p>Hi ${creatorName},</p>
-      <p>Your order <strong>#${projectId}</strong> for <strong>${serviceTitle}</strong> has been completed successfully.</p>
-      <p>Please find attached:</p>
-      <ol>
-        <li><strong>Service Invoice</strong> — From ${freelancerName} for the service rendered (80% of order value)</li>
-        <li><strong>Platform Invoice</strong> — From Meetrub for platform facilitation fee + GST (20% commission + 18% GST)</li>
-      </ol>
-      <p>These invoices are for your records. No further action is required.</p>
+      <p>Please find attached the platform facilitation fee invoice from <strong>Meetrub (Bizkro)</strong> for order <strong>#${projectId}</strong> (${serviceTitle}).</p>
+      <p>This invoice covers the 20% platform commission + GST (CGST 9% + SGST 9%).</p>
+      <p>This invoice is for your records. No further action is required.</p>
       <br>
       <p>Thank you for using Meetrub!</p>
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
@@ -301,6 +302,35 @@ function getInvoiceEmailFallback(creatorName, freelancerName, serviceTitle, proj
     </body>
     </html>
   `;
+
+  const nodemailer = require('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_SERVER_HOST,
+    port: process.env.EMAIL_SERVER_PORT,
+    auth: {
+      user: process.env.EMAIL_SERVER_USER,
+      pass: process.env.SERVER_PASSWORD,
+    },
+  });
+
+  await transporter.sendMail({
+    from: `"Meetrub Billing" <${process.env.MEETRUB_BILLING_EMAIL || process.env.EMAIL_SERVER_USER}>`,
+    to: creatorEmail,
+    subject: `Platform Invoice from Meetrub — Order #${projectId}`,
+    html,
+    attachments: [
+      {
+        filename: `${platformInvoiceNumber}.pdf`,
+        content: platformPdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
+
+  db.query(
+    `INSERT INTO email_logs (email_type, recipient_email, project_id, status) VALUES ($1, $2, $3, 'sent')`,
+    ['platform_invoice', creatorEmail, projectId]
+  ).catch(err => logger.error(`Failed to log platform invoice email: ${err.message}`));
 }
 
 module.exports = { generateAndSendInvoices };
