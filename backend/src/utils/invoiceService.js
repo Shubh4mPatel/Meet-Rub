@@ -23,7 +23,7 @@ const PLATFORM_CONFIG = {
   website: process.env.MEETRUB_WEBSITE || 'www.meetrub.com',
 };
 
-const LOGO_PATH = process.env.MEETRUB_LOGO_PATH || null;
+const LOGO_PATH = process.env.MEETRUB_LOGO_PATH || path.join(__dirname, '../../../assets/logo-large.png');
 
 /**
  * Ensures the invoice MinIO bucket exists
