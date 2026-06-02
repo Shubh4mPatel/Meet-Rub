@@ -9,7 +9,7 @@ const path = require('path');
 
 const logger = getLogger('invoice-service');
 
-const INVOICE_BUCKET = process.env.INVOICE_MINIO_BUCKET || 'invoices';
+const INVOICE_BUCKET = process.env.INVOICE_MINIO_BUCKET
 const TEMPLATES_DIR = path.join(__dirname, '../../../Email-Templates');
 
 // Platform details from env
