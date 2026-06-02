@@ -99,13 +99,14 @@ async function generateAndSendInvoices(projectId) {
               f.freelancer_id, f.freelancer_full_name, f.user_name AS freelancer_username,
               f.freelancer_email, f.street_address, f.city, f.state AS freelancer_state,
               f.postal_code, f.pan_card_number,
-              c.creator_id, c.full_name AS creator_name, c.email AS creator_email,
+              c.creator_id, c.full_name AS creator_name, u.user_email AS creator_email,
               c.user_name AS creator_username,
               s.service_name
        FROM projects p
        JOIN transactions t ON t.project_id = p.id AND t.status = 'HELD'
        JOIN freelancer f ON p.freelancer_id = f.freelancer_id
        JOIN creators c ON p.creator_id = c.creator_id
+       JOIN users u ON c.user_id = u.id
        LEFT JOIN services s ON p.service_id = s.id
        WHERE p.id = $1`,
       [projectId]
@@ -314,7 +315,7 @@ async function sendPlatformInvoiceEmail({ creatorEmail, creatorName, freelancerN
   });
 
   await transporter.sendMail({
-    from: `"Meetrub Billing" <${process.env.MEETRUB_BILLING_EMAIL || process.env.EMAIL_SERVER_USER}>`,
+    from: `"Meetrub Billing" <${process.env.EMAIL_SERVER_USER}>`,
     to: creatorEmail,
     subject: `Platform Invoice from Meetrub — Order #${projectId}`,
     html,
