@@ -172,20 +172,24 @@ const getUserProfile = async (req, res, next) => {
           [user.user_id]
         );
 
-        if (!rows[0]?.gov_id_url) {
+        // Aadhaar is optional, so require at least one document (Aadhaar OR PAN)
+        if (!rows[0] || (!rows[0].gov_id_url && !rows[0].pan_card_image_url)) {
           logger.warn("Gov ID not uploaded");
           return next(new AppError("No govt ID found", 404));
         }
 
-        const parts = rows[0].gov_id_url.split("/");
-        const bucketName = parts[0];
-        const objectName = parts.slice(1).join("/");
+        let signedUrl = null;
+        if (rows[0].gov_id_url) {
+          const parts = rows[0].gov_id_url.split("/");
+          const bucketName = parts[0];
+          const objectName = parts.slice(1).join("/");
 
-        const signedUrl = await createPresignedUrl(
-          bucketName,
-          objectName,
-          expirySeconds
-        );
+          signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+        }
 
         let panCardSignedUrl = null;
         if (rows[0]?.pan_card_image_url) {
@@ -2201,9 +2205,7 @@ const getUserProfileProgress = async (req, res, next) => {
       if (
         freelancer.date_of_birth &&
         freelancer.phone_number &&
-        freelancer.profile_title &&
-        freelancer.profile_image_url &&
-        freelancer.freelancer_thumbnail_image
+        freelancer.profile_image_url
       ) {
         freelancerProgressWeights.ProfileInfo += 20;
       }
@@ -3092,6 +3094,7 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         razorpay_onboarding_error_at,
         razorpay_product_id,
         pan_card_number,
+        pan_card_image_url,
         CASE
           WHEN bank_account_no IS NOT NULL AND bank_ifsc_code IS NOT NULL THEN true
           ELSE false
@@ -3173,6 +3176,32 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
       } catch (error) {
         logger.error(`Error generating signed URL for govt ID: ${error}`);
         freelancer.gov_id_url = null;
+      }
+    }
+
+    // Generate presigned URL for PAN card image if it exists
+    if (freelancer.pan_card_image_url) {
+      try {
+        const panImagePath = freelancer.pan_card_image_url;
+        const firstSlashIndex = panImagePath.indexOf("/");
+
+        if (firstSlashIndex !== -1) {
+          const bucketName = panImagePath.substring(0, firstSlashIndex);
+          const objectName = panImagePath.substring(firstSlashIndex + 1);
+
+          const signedUrl = await createPresignedUrl(
+            bucketName,
+            objectName,
+            expirySeconds
+          );
+          freelancer.pan_card_image_url = signedUrl;
+        } else {
+          logger.warn(`Invalid PAN card image URL format: ${panImagePath}`);
+          freelancer.pan_card_image_url = null;
+        }
+      } catch (error) {
+        logger.error(`Error generating signed URL for PAN card image: ${error}`);
+        freelancer.pan_card_image_url = null;
       }
     }
 
@@ -3271,6 +3300,11 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
           requirements: requirements,
           ...(requirements_fetch_failed && { requirements_fetch_failed: true }),
         },
+        // PAN details
+        pan_details: freelancer.has_pan ? {
+          pan_card_number: freelancer.pan_card_number,
+          pan_card_image_url: freelancer.pan_card_image_url
+        } : null,
         // Bank details (masked)
         bank_details: freelancer.has_bank_details ? {
           account_holder_name: freelancer.bank_account_holder_name,

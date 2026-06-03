@@ -47,6 +47,7 @@ class LinkedAccountService {
             };
 
             logger.info(`[createLinkedAccount] Creating linked account for freelancer_id=${freelancer.freelancer_id}`);
+            logger.info(`[createLinkedAccount] Registered address: ${JSON.stringify(accountData.profile.addresses.registered)}`);
 
             const response = await razorpayRoutes.post('/v2/accounts', accountData);
             logger.info(`[createLinkedAccount] Linked account created: account_id=${response.data.id}`);

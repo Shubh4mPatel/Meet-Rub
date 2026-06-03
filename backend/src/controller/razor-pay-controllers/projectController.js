@@ -6,6 +6,7 @@ const { sendNotification } = require('../notification/notificationServicer');
 const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail, sendCreatorRatingRequestEmail, sendFreelancerRatingRequestEmail, sendOrderApprovedEmail, sendCreatorDisputeEmail, sendFreelancerDisputeEmail } = require('../../../utils/deliveryEmails');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
 const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail } = require('../../../utils/offerEmails');
+const { generateAndSendInvoices } = require('../../utils/invoiceService');
 
 // Create a new project
 const createProject = async (req, res, next) => {
@@ -1353,6 +1354,14 @@ const approveProject = async (req, res, next) => {
         logger.error(`approveProject: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
       }
     });
+
+    // Generate and send invoices (synchronous but failure should not block response)
+    try {
+      await generateAndSendInvoices(projectId);
+      logger.info(`approveProject: Invoices generated and sent for project ${projectId}`);
+    } catch (invoiceError) {
+      logger.error(`approveProject: Invoice generation failed for project ${projectId}: ${invoiceError.message}`, invoiceError.stack);
+    }
 
     return res.status(200).json({
       status: 'success',
