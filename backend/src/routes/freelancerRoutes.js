@@ -17,7 +17,7 @@ const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/port
 const { getFreelancerOverview } = require("../controller/users/freelancerOverviewController");
 const { getNiches } = require('../controller/services/serviceController');
 const { raiseDispute, getDisputes } = require('../controller/dispute/disputeController');
-const { rateFreelancer } = require('../controller/razor-pay-controllers/projectController');
+const { rateFreelancer, rateCreator } = require('../controller/razor-pay-controllers/projectController');
 const { getMyReviews } = require('../controller/users/freelancerReviewsController');
 
 
@@ -112,7 +112,7 @@ router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(
 
 router.get('/get-creator-by-creator-id/:creator_id', authenticateUser, requireRole(['freelancer']), getCreatorByCreatorId);
 
-router.post('/rate-creator/:projectId', authenticateUser, requireRole(['freelancer']), rateFreelancer);
+router.post('/rate-creator/:projectId', authenticateUser, requireRole(['freelancer']), rateCreator);
 
 router.get('/my-reviews', authenticateUser, requireRole(['freelancer']), getMyReviews);
 
