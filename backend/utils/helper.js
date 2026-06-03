@@ -98,6 +98,66 @@ async function createPresignedUrl(bucketName, objectName, expirySeconds) {
   }
 }
 
+// Generate presigned URL with inline disposition, no filename — browser renders but cannot save-as
+async function createViewOnlyPresignedUrl(bucketName, objectName, expirySeconds) {
+  try {
+    const presignedUrl = await new Promise((resolve, reject) => {
+      minioClient.presignedGetObject(
+        bucketName,
+        objectName,
+        expirySeconds,
+        { 'response-content-disposition': 'inline' },
+        (err, url) => {
+          if (err) return reject(err);
+          resolve(url);
+        }
+      );
+    });
+    const parsedUrl = new URL(presignedUrl);
+    const pathAndQuery = parsedUrl.pathname + parsedUrl.search;
+    return `https://staging.meetrub.com${pathAndQuery}`;
+  } catch (err) {
+    throw err;
+  }
+}
+
+// Convert a Google Drive URL to a preview (view-only embed) URL
+function toGoogleDrivePreviewUrl(url) {
+  const fileMatch = url.match(/drive\.google\.com\/file\/d\/([^/?]+)/);
+  if (fileMatch) {
+    return `https://drive.google.com/file/d/${fileMatch[1]}/preview`;
+  }
+  const openMatch = url.match(/[?&]id=([^&]+)/);
+  if (openMatch) {
+    return `https://drive.google.com/file/d/${openMatch[1]}/preview`;
+  }
+  return url;
+}
+
+// Generate presigned URL with attachment disposition — forces browser download dialog
+async function createAttachmentPresignedUrl(bucketName, objectName, expirySeconds) {
+  const filename = objectName.split('/').pop();
+  try {
+    const presignedUrl = await new Promise((resolve, reject) => {
+      minioClient.presignedGetObject(
+        bucketName,
+        objectName,
+        expirySeconds,
+        { 'response-content-disposition': `attachment; filename="${encodeURIComponent(filename)}"` },
+        (err, url) => {
+          if (err) return reject(err);
+          resolve(url);
+        }
+      );
+    });
+    const parsedUrl = new URL(presignedUrl);
+    const pathAndQuery = parsedUrl.pathname + parsedUrl.search;
+    return `https://staging.meetrub.com${pathAndQuery}`;
+  } catch (err) {
+    throw err;
+  }
+}
+
 // Generate presigned URL with inline disposition (viewable in browser, can also download)
 async function createDownloadablePresignedUrl(bucketName, objectName, expirySeconds, filename) {
   try {
@@ -144,4 +204,4 @@ function generateTokens(user, roleWiseId, permissions = null) {
     return { accessToken, refreshToken };
 }
 
-module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile, createPresignedUrl, createDownloadablePresignedUrl, generateTokens, loadUsernamesIntoRedis, USERNAMES_SET_KEY };
+module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile, createPresignedUrl, createViewOnlyPresignedUrl, createAttachmentPresignedUrl, createDownloadablePresignedUrl, toGoogleDrivePreviewUrl, generateTokens, loadUsernamesIntoRedis, USERNAMES_SET_KEY };

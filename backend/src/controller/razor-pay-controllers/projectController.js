@@ -1,7 +1,7 @@
 const { pool: db } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const { logger } = require('../../../utils/logger');
-const { createPresignedUrl } = require('../../../utils/helper');
+const { createPresignedUrl, createViewOnlyPresignedUrl, createAttachmentPresignedUrl, toGoogleDrivePreviewUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
 const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail, sendCreatorRatingRequestEmail, sendFreelancerRatingRequestEmail, sendOrderApprovedEmail, sendCreatorDisputeEmail, sendFreelancerDisputeEmail } = require('../../../utils/deliveryEmails');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
@@ -109,6 +109,11 @@ const getProject = async (req, res, next) => {
       [projectId]
     );
 
+    // Determine URL mode for deliverable files when the requester is the creator
+    const isCreator = role === 'creator';
+    const viewOnlyForCreator = isCreator && project.status === 'SUBMITTED';
+    const downloadableForCreator = isCreator && project.status === 'COMPLETED';
+
     // Resolve deliverable files — s3 gets a presigned URL, google_drive is returned as-is
     const deliverablesWithUrls = await Promise.all(
       deliverables.map(async (d) => {
@@ -116,13 +121,23 @@ const getProject = async (req, res, next) => {
         const resolvedFiles = await Promise.all(
           files.filter(Boolean).map(async (file) => {
             if (file.type === 'google_drive') {
-              return { type: 'google_drive', urls: file.urls };
+              const urls = viewOnlyForCreator
+                ? file.urls.map(toGoogleDrivePreviewUrl)
+                : file.urls;
+              return { type: 'google_drive', urls, view_only: viewOnlyForCreator };
             }
             // default: s3
             const bucket = process.env.MINIO_BUCKET_NAME;
             const objectName = file.key;
-            const signedUrl = await createPresignedUrl(bucket, objectName, 4 * 60 * 60).catch(() => null);
-            return { type: 's3', key: file.key, url: signedUrl };
+            let signedUrl;
+            if (viewOnlyForCreator) {
+              signedUrl = await createViewOnlyPresignedUrl(bucket, objectName, 4 * 60 * 60).catch(() => null);
+            } else if (downloadableForCreator) {
+              signedUrl = await createAttachmentPresignedUrl(bucket, objectName, 4 * 60 * 60).catch(() => null);
+            } else {
+              signedUrl = await createPresignedUrl(bucket, objectName, 4 * 60 * 60).catch(() => null);
+            }
+            return { type: 's3', key: file.key, url: signedUrl, view_only: viewOnlyForCreator };
           })
         );
         return {
