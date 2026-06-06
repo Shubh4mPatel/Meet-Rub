@@ -20,10 +20,12 @@ const getPortfolioByFreelancerId = async (req, res, next) => {
          FROM portfolio p
          INNER JOIN services s ON s.freelancer_id = p.freelancer_id AND s.service_name = $2
          WHERE p.freelancer_id = $1 AND p.portfolio_item_service_type = $2
-         GROUP BY p.portfolio_item_id`
+         GROUP BY p.portfolio_item_id
+         ORDER BY p.portfolio_item_created_at ASC, p.portfolio_item_id ASC`
       : `SELECT p.*
          FROM portfolio p
-         WHERE p.freelancer_id = $1`;
+         WHERE p.freelancer_id = $1
+         ORDER BY p.portfolio_item_created_at ASC, p.portfolio_item_id ASC`;
 
     const queryParams = serviceType ? [user.roleWiseId, serviceType] : [user.roleWiseId];
 
