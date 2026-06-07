@@ -339,9 +339,6 @@ function generatePlatformInvoicePDF(data) {
       doc.text('1', QX, y, { lineBreak: false });
       doc.text(formatCurrency(data.cgstAmount), UX, y, { lineBreak: false });
       doc.text(formatCurrency(data.cgstAmount), AX, y, { lineBreak: false });
-      y += 11;
-      doc.fontSize(7).fillColor(COLORS.gray);
-      doc.text(`Central GST on platform commission of ${formatCurrency(data.platformCommission)}`, ML, y, { lineBreak: false });
       y += 13;
 
       // SGST
@@ -353,9 +350,6 @@ function generatePlatformInvoicePDF(data) {
       doc.text('1', QX, y, { lineBreak: false });
       doc.text(formatCurrency(data.sgstAmount), UX, y, { lineBreak: false });
       doc.text(formatCurrency(data.sgstAmount), AX, y, { lineBreak: false });
-      y += 11;
-      doc.fontSize(7).fillColor(COLORS.gray);
-      doc.text(`State GST on platform commission of ${formatCurrency(data.platformCommission)}`, ML, y, { lineBreak: false });
       y += 14;
 
       drawLine(doc, y, ML, MR);

@@ -118,12 +118,15 @@ async function generateAndSendInvoices(projectId) {
 
     const row = dataRows[0];
     const issuedAt = new Date();
+    // total_amount is what the creator paid (GST-inclusive). Back-calculate the base.
+    // base = total / (1 + 20% * 18%) = total / 1.036
     const totalAmount = Number(row.total_amount);
-    const platformCommission = totalAmount * 0.20;
-    const freelancerAmount = totalAmount - platformCommission;
+    const baseServicePrice = Number((totalAmount / 1.036).toFixed(2));
+    const platformCommission = Number((baseServicePrice * 0.20).toFixed(2));
+    const freelancerAmount = Number((baseServicePrice * 0.80).toFixed(2));
     const cgstAmount = Number((platformCommission * 0.09).toFixed(2));
     const sgstAmount = Number((platformCommission * 0.09).toFixed(2));
-    const totalGst = cgstAmount + sgstAmount;
+    const totalGst = Number((cgstAmount + sgstAmount).toFixed(2));
     const grandTotal = Number((platformCommission + totalGst).toFixed(2));
 
     // ── Generate invoice numbers ──
@@ -162,7 +165,7 @@ async function generateAndSendInvoices(projectId) {
       freelancerName: row.freelancer_full_name,
       freelancerUsername: row.freelancer_username,
       serviceTitle,
-      totalServicePrice: totalAmount,
+      totalServicePrice: baseServicePrice,
       platformCommission,
       cgstAmount,
       sgstAmount,
