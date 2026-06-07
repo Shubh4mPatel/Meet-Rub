@@ -115,7 +115,7 @@ const getUserProfile = async (req, res, next) => {
       if (type === "basicInfo") {
         logger.info("Fetching: Freelancer Basic Info");
         const { rows } = await query(
-          "SELECT freelancer_full_name, user_name,first_name, last_name, date_of_birth, phone_number, freelancer_email,about_me,created_at, street_address, city, state, postal_code FROM freelancer WHERE user_id = $1",
+          "SELECT freelancer_full_name, user_name, first_name, last_name, date_of_birth, phone_number, freelancer_email, about_me, created_at, street_address, city, state, postal_code, views_generated, channels_scaled, viral_videos, average_retention FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
@@ -128,7 +128,7 @@ const getUserProfile = async (req, res, next) => {
         return res.status(200).json({
           status: "success",
           message: "Freelancer basic info fetched successfully",
-          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name, user_name: rows[0].user_name, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, email: rows[0].freelancer_email, about_me: rows[0].about_me, joined_at: rows[0].created_at, street_address: rows[0].street_address, city: rows[0].city, state: rows[0].state, postal_code: rows[0].postal_code },
+          data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].freelancer_full_name, user_name: rows[0].user_name, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, email: rows[0].freelancer_email, about_me: rows[0].about_me, joined_at: rows[0].created_at, street_address: rows[0].street_address, city: rows[0].city, state: rows[0].state, postal_code: rows[0].postal_code, views_generated: rows[0].views_generated, channels_scaled: rows[0].channels_scaled, viral_videos: rows[0].viral_videos, average_retention: rows[0].average_retention },
         });
       }
 
@@ -1118,6 +1118,75 @@ const editProfile = async (req, res, next) => {
         }
       }
 
+      if (type === "performanceStats") {
+        logger.info("Updating Freelancer Performance Stats");
+
+        const { views_generated, channels_scaled, viral_videos, average_retention } = req.body;
+
+        if (
+          views_generated === undefined &&
+          channels_scaled === undefined &&
+          viral_videos === undefined &&
+          average_retention === undefined
+        ) {
+          return next(new AppError('At least one performance stat field is required', 400));
+        }
+
+        if (channels_scaled !== undefined && (!Number.isInteger(Number(channels_scaled)) || Number(channels_scaled) < 0)) {
+          return next(new AppError('channels_scaled must be a non-negative integer', 400));
+        }
+
+        if (viral_videos !== undefined && (!Number.isInteger(Number(viral_videos)) || Number(viral_videos) < 0)) {
+          return next(new AppError('viral_videos must be a non-negative integer', 400));
+        }
+
+        if (average_retention !== undefined && (isNaN(Number(average_retention)) || Number(average_retention) < 0 || Number(average_retention) > 100)) {
+          return next(new AppError('average_retention must be a number between 0 and 100', 400));
+        }
+
+        await query("BEGIN");
+        try {
+          const { rows, rowCount } = await query(
+            `UPDATE freelancer
+             SET views_generated = COALESCE($1, views_generated),
+                 channels_scaled = COALESCE($2::integer, channels_scaled),
+                 viral_videos = COALESCE($3::integer, viral_videos),
+                 average_retention = COALESCE($4::numeric, average_retention),
+                 updated_at = NOW()
+             WHERE user_id = $5
+             RETURNING views_generated, channels_scaled, viral_videos, average_retention`,
+            [
+              views_generated ?? null,
+              channels_scaled !== undefined ? Number(channels_scaled) : null,
+              viral_videos !== undefined ? Number(viral_videos) : null,
+              average_retention !== undefined ? Number(average_retention) : null,
+              user.user_id
+            ]
+          );
+
+          if (rowCount === 0) {
+            await query("ROLLBACK");
+            return next(new AppError('Freelancer not found', 404));
+          }
+
+          await query("COMMIT");
+          logger.info("Freelancer performance stats updated successfully");
+          return res.status(200).json({
+            status: 'success',
+            message: 'Performance stats updated successfully',
+            data: {
+              views_generated: rows[0].views_generated,
+              channels_scaled: rows[0].channels_scaled,
+              viral_videos: rows[0].viral_videos,
+              average_retention: rows[0].average_retention,
+            }
+          });
+        } catch (error) {
+          await query("ROLLBACK");
+          throw error;
+        }
+      }
+
       logger.warn("Invalid type parameter for freelancer:", type);
       return next(new AppError("Invalid type parameter for freelancer", 400));
     }
@@ -1197,6 +1266,10 @@ const getAllFreelancers = async (req, res, next) => {
         f.freelancer_thumbnail_image,
         f.rating,
         f.worked_with,
+        f.views_generated,
+        f.channels_scaled,
+        f.viral_videos,
+        f.average_retention,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         (SELECT s2.thumbnail_file FROM services s2 WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE ${serviceSubquery} ${deliverySubqueryFilter} ORDER BY s2.created_at DESC LIMIT 1) as service_banner,
@@ -1245,7 +1318,7 @@ const getAllFreelancers = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, f.views_generated, f.channels_scaled, f.viral_videos, f.average_retention`;
 
     // Add sorting — featured freelancers (priority 1-5) always come first, then rest
     const featuredOrderBy = serviceTypes.length > 0 ? `MIN(ff.priority) ASC NULLS LAST, ` : ``;
@@ -1417,7 +1490,7 @@ const getFreelancerById = async (req, res, next) => {
     }
 
     const { rows: freelancerData } = await query(
-      "SELECT user_id, freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, about_me, rating, worked_with, user_name FROM freelancer WHERE freelancer_id = $1",
+      "SELECT user_id, freelancer_full_name, profile_title, freelancer_thumbnail_image, profile_image_url, about_me, rating, worked_with, user_name, views_generated, channels_scaled, viral_videos, average_retention FROM freelancer WHERE freelancer_id = $1",
       [freelancerId]
     );
     logger.debug("Freelancer data query executed for ID:", freelancerData[0]);
@@ -3719,6 +3792,10 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
         f.rating,
         f.worked_with,
         f.user_name,
+        f.views_generated,
+        f.channels_scaled,
+        f.viral_videos,
+        f.average_retention,
         CASE WHEN w.freelancer_id IS NOT NULL THEN true ELSE false END as in_wishlist
       FROM freelancer f
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $2
@@ -4015,6 +4092,10 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         f.freelancer_thumbnail_image,
         f.rating,
         f.worked_with,
+        f.views_generated,
+        f.channels_scaled,
+        f.viral_videos,
+        f.average_retention,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) AS service_names,
         MIN(s.service_price) AS lowest_price,
         (w.freelancer_id IS NOT NULL) AS in_wishlist,
