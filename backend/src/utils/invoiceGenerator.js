@@ -104,10 +104,6 @@ function generateFreelancerInvoicePDF(data) {
       if (data.freelancerGst) {
         doc.text(`IN GST ${data.freelancerGst} (Freelancer GST)`, ML, y, { lineBreak: false });
       }
-      const creatorGstText = data.creatorGst
-        ? `IN GST ${data.creatorGst} (Creator GST)`
-        : 'IN GST Unregistered (Creator GST)';
-      doc.text(creatorGstText, ML + HW, y, { lineBreak: false });
       y += 25;
 
       // ── TABLE ──
@@ -261,8 +257,6 @@ function generatePlatformInvoicePDF(data) {
       }
       doc.text('India', ML + HW, rY, { lineBreak: false });
       rY += 11;
-      const cGst = data.creatorGst ? `IN GST ${data.creatorGst} (Creator GST)` : 'IN GST Unregistered (Creator GST)';
-      doc.text(cGst, ML + HW, rY, { lineBreak: false });
 
       y = Math.max(leftY, rY) + 20;
 
