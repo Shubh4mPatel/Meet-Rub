@@ -96,15 +96,16 @@ async function generateAndSendInvoices(projectId) {
     const { rows: dataRows } = await client.query(
       `SELECT p.id AS project_id, p.amount, p.status, p.created_at AS project_created_at,
               t.id AS transaction_id, t.total_amount, t.platform_commission, t.freelancer_amount,
-              f.freelancer_id, f.freelancer_full_name, f.user_name AS freelancer_username,
+              f.freelancer_id, f.freelancer_full_name, uf.user_name AS freelancer_username,
               f.freelancer_email, f.street_address, f.city, f.state AS freelancer_state,
               f.postal_code, f.pan_card_number,
               c.creator_id, c.full_name AS creator_name, u.user_email AS creator_email,
-              c.user_name AS creator_username,
+              u.user_name AS creator_username,
               s.service_name
        FROM projects p
        JOIN transactions t ON t.project_id = p.id AND t.status = 'HELD'
        JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+       JOIN users uf ON f.user_id = uf.id
        JOIN creators c ON p.creator_id = c.creator_id
        JOIN users u ON c.user_id = u.id
        LEFT JOIN services s ON p.service_id = s.id
