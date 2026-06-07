@@ -1,7 +1,7 @@
 const { pool: db } = require('../../../config/dbConfig');
 const AppError = require("../../../utils/appError");
 const { logger } = require('../../../utils/logger');
-const { createPresignedUrl, createViewOnlyPresignedUrl, createAttachmentPresignedUrl, toGoogleDrivePreviewUrl } = require('../../../utils/helper');
+const { createPresignedUrl, createViewOnlyPresignedUrl, createAttachmentPresignedUrl, toGoogleDrivePreviewUrl, createDownloadablePresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
 const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail, sendCreatorRatingRequestEmail, sendFreelancerRatingRequestEmail, sendOrderApprovedEmail, sendCreatorDisputeEmail, sendFreelancerDisputeEmail } = require('../../../utils/deliveryEmails');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
@@ -293,6 +293,53 @@ LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
       })
     );
 
+    // For past tab, attach invoice download URLs to COMPLETED projects
+    let finalProjects = projectsWithImages;
+
+    if (tab === 'past') {
+      const completedIds = projectsWithImages
+        .filter(p => p.status === 'COMPLETED')
+        .map(p => p.id);
+
+      let invoiceMap = {};
+
+      if (completedIds.length > 0) {
+        const { rows: invoices } = await db.query(
+          `SELECT project_id, invoice_number, invoice_type, pdf_storage_path
+           FROM invoices
+           WHERE project_id = ANY($1)`,
+          [completedIds]
+        );
+
+        const INVOICE_BUCKET = process.env.INVOICE_MINIO_BUCKET;
+
+        await Promise.all(
+          invoices.map(async (inv) => {
+            if (!invoiceMap[inv.project_id]) invoiceMap[inv.project_id] = [];
+            let download_url = null;
+            if (inv.pdf_storage_path && INVOICE_BUCKET) {
+              download_url = await createDownloadablePresignedUrl(
+                INVOICE_BUCKET,
+                inv.pdf_storage_path,
+                4 * 60 * 60,
+                `${inv.invoice_number}.pdf`
+              ).catch(() => null);
+            }
+            invoiceMap[inv.project_id].push({
+              invoice_number: inv.invoice_number,
+              invoice_type: inv.invoice_type,
+              download_url,
+            });
+          })
+        );
+      }
+
+      finalProjects = projectsWithImages.map(p => ({
+        ...p,
+        invoices: invoiceMap[p.id] || [],
+      }));
+    }
+
     res.status(200).json({
       status: 'success',
       message: 'Projects fetched successfully',
@@ -302,7 +349,7 @@ LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
           total_active: parseInt(counts.total_active),
           total_on_hold: parseInt(counts.total_on_hold),
         },
-        projects: projectsWithImages,
+        projects: finalProjects,
         pagination: {
           currentPage: page,
           totalPages,

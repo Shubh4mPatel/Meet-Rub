@@ -421,6 +421,11 @@ CREATE TABLE IF NOT EXISTS public.freelancer
     razorpay_onboarding_error text COLLATE pg_catalog."default",
     razorpay_onboarding_error_step character varying(30) COLLATE pg_catalog."default",
     razorpay_onboarding_error_at timestamp with time zone,
+    views_generated character varying(20) COLLATE pg_catalog."default",
+    channels_scaled integer,
+    viral_videos integer,
+    average_retention numeric(5,2),
+    stats_confirmed boolean DEFAULT false,
     CONSTRAINT influencer_pkey PRIMARY KEY (freelancer_id),
     CONSTRAINT unique_freelancer_user_name UNIQUE (user_name),
     CONSTRAINT influencer_user_id_fkey FOREIGN KEY (user_id)
@@ -1265,3 +1270,58 @@ CREATE TABLE email_logs (
   error_message TEXT,
   sent_at TIMESTAMP DEFAULT NOW()
 );
+
+
+    -- Table: public.invoices
+
+-- DROP TABLE IF EXISTS public.invoices;
+
+CREATE TABLE IF NOT EXISTS public.invoices
+(
+    id integer NOT NULL DEFAULT nextval('invoices_id_seq'::regclass),
+    invoice_number character varying(50) COLLATE pg_catalog."default" NOT NULL,
+    invoice_type character varying(30) COLLATE pg_catalog."default" NOT NULL,
+    project_id integer NOT NULL,
+    transaction_id integer NOT NULL,
+    creator_id integer NOT NULL,
+    freelancer_id integer NOT NULL,
+    subtotal numeric(15,2) NOT NULL,
+    cgst_amount numeric(15,2) NOT NULL DEFAULT 0,
+    sgst_amount numeric(15,2) NOT NULL DEFAULT 0,
+    total_amount numeric(15,2) NOT NULL,
+    pdf_storage_path text COLLATE pg_catalog."default",
+    issued_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT invoices_pkey PRIMARY KEY (id),
+    CONSTRAINT invoices_invoice_number_key UNIQUE (invoice_number),
+    CONSTRAINT invoices_project_id_fkey FOREIGN KEY (project_id)
+        REFERENCES public.projects (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT invoices_transaction_id_fkey FOREIGN KEY (transaction_id)
+        REFERENCES public.transactions (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT invoices_creator_id_fkey FOREIGN KEY (creator_id)
+        REFERENCES public.creators (creator_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT invoices_freelancer_id_fkey FOREIGN KEY (freelancer_id)
+        REFERENCES public.freelancer (freelancer_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT invoices_invoice_type_check CHECK (invoice_type::text = ANY (ARRAY['FREELANCER_SERVICE'::text, 'PLATFORM_COMMISSION'::text]))
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.invoices
+    OWNER to postgres;
+
+-- MinIO storage path pattern: {year}/{invoiceNumber}.pdf
+-- e.g. 2026/MR-FS-2026-00001.pdf
+-- Bucket: INVOICE_MINIO_BUCKET env var
+-- NOTE: MinIO files are organized by year/invoice-number, NOT by project.
+--       Use project_id FK in this table to look up invoices for a given project.
+CREATE INDEX IF NOT EXISTS idx_invoices_project_id ON public.invoices(project_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_creator_id ON public.invoices(creator_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_freelancer_id ON public.invoices(freelancer_id);
