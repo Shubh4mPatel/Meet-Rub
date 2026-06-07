@@ -164,9 +164,9 @@ const getProject = async (req, res, next) => {
       project.freelancer_avatar = await createPresignedUrl(avatarBucket, avatarObject, 4 * 60 * 60).catch(() => project.freelancer_avatar);
     }
 
-    // Fetch invoice download URLs for completed projects
+    // Fetch invoice download URLs for completed projects (creator only)
     let invoices = [];
-    if (project.status === 'COMPLETED') {
+    if (isCreator && project.status === 'COMPLETED') {
       const INVOICE_BUCKET = process.env.INVOICE_MINIO_BUCKET;
       const { rows: invoiceRows } = await db.query(
         `SELECT invoice_number, invoice_type, pdf_storage_path FROM invoices WHERE project_id = $1`,
@@ -322,10 +322,10 @@ LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
       })
     );
 
-    // Attach invoice download URLs to all COMPLETED projects
-    const completedIds = projectsWithImages
-      .filter(p => p.status === 'COMPLETED')
-      .map(p => p.id);
+    // Attach invoice download URLs to COMPLETED projects for creators only
+    const completedIds = userType === 'creator'
+      ? projectsWithImages.filter(p => p.status === 'COMPLETED').map(p => p.id)
+      : [];
 
     let invoiceMap = {};
 

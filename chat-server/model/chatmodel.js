@@ -804,6 +804,7 @@ ORDER BY m.created_at DESC NULLS LAST; `;
       FROM services s
       JOIN freelancer f ON s.freelancer_id = f.freelancer_id
       WHERE f.user_id = $1
+        AND s.is_deleted = FALSE
       ORDER BY s.service_name ASC
     `;
 
