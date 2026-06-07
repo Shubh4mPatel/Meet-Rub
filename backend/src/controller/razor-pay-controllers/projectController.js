@@ -164,11 +164,40 @@ const getProject = async (req, res, next) => {
       project.freelancer_avatar = await createPresignedUrl(avatarBucket, avatarObject, 4 * 60 * 60).catch(() => project.freelancer_avatar);
     }
 
+    // Fetch invoice download URLs for completed projects
+    let invoices = [];
+    if (project.status === 'COMPLETED') {
+      const INVOICE_BUCKET = process.env.INVOICE_MINIO_BUCKET;
+      const { rows: invoiceRows } = await db.query(
+        `SELECT invoice_number, invoice_type, pdf_storage_path FROM invoices WHERE project_id = $1`,
+        [projectId]
+      );
+      invoices = await Promise.all(
+        invoiceRows.map(async (inv) => {
+          let download_url = null;
+          if (inv.pdf_storage_path && INVOICE_BUCKET) {
+            download_url = await createDownloadablePresignedUrl(
+              INVOICE_BUCKET,
+              inv.pdf_storage_path,
+              4 * 60 * 60,
+              `${inv.invoice_number}.pdf`
+            ).catch(() => null);
+          }
+          return {
+            invoice_number: inv.invoice_number,
+            invoice_type: inv.invoice_type,
+            download_url,
+          };
+        })
+      );
+    }
+
     res.status(200).json({
       status: 'success',
       message: 'Project fetched successfully',
       project,
       deliverables: deliverablesWithUrls,
+      invoices,
     });
   } catch (error) {
     console.error('Get project error:', error);
@@ -293,52 +322,48 @@ LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
       })
     );
 
-    // For past tab, attach invoice download URLs to COMPLETED projects
-    let finalProjects = projectsWithImages;
+    // Attach invoice download URLs to all COMPLETED projects
+    const completedIds = projectsWithImages
+      .filter(p => p.status === 'COMPLETED')
+      .map(p => p.id);
 
-    if (tab === 'past') {
-      const completedIds = projectsWithImages
-        .filter(p => p.status === 'COMPLETED')
-        .map(p => p.id);
+    let invoiceMap = {};
 
-      let invoiceMap = {};
+    if (completedIds.length > 0) {
+      const { rows: invoiceRows } = await db.query(
+        `SELECT project_id, invoice_number, invoice_type, pdf_storage_path
+         FROM invoices
+         WHERE project_id = ANY($1)`,
+        [completedIds]
+      );
 
-      if (completedIds.length > 0) {
-        const { rows: invoices } = await db.query(
-          `SELECT project_id, invoice_number, invoice_type, pdf_storage_path
-           FROM invoices
-           WHERE project_id = ANY($1)`,
-          [completedIds]
-        );
+      const INVOICE_BUCKET = process.env.INVOICE_MINIO_BUCKET;
 
-        const INVOICE_BUCKET = process.env.INVOICE_MINIO_BUCKET;
-
-        await Promise.all(
-          invoices.map(async (inv) => {
-            if (!invoiceMap[inv.project_id]) invoiceMap[inv.project_id] = [];
-            let download_url = null;
-            if (inv.pdf_storage_path && INVOICE_BUCKET) {
-              download_url = await createDownloadablePresignedUrl(
-                INVOICE_BUCKET,
-                inv.pdf_storage_path,
-                4 * 60 * 60,
-                `${inv.invoice_number}.pdf`
-              ).catch(() => null);
-            }
-            invoiceMap[inv.project_id].push({
-              invoice_number: inv.invoice_number,
-              invoice_type: inv.invoice_type,
-              download_url,
-            });
-          })
-        );
-      }
-
-      finalProjects = projectsWithImages.map(p => ({
-        ...p,
-        invoices: invoiceMap[p.id] || [],
-      }));
+      await Promise.all(
+        invoiceRows.map(async (inv) => {
+          if (!invoiceMap[inv.project_id]) invoiceMap[inv.project_id] = [];
+          let download_url = null;
+          if (inv.pdf_storage_path && INVOICE_BUCKET) {
+            download_url = await createDownloadablePresignedUrl(
+              INVOICE_BUCKET,
+              inv.pdf_storage_path,
+              4 * 60 * 60,
+              `${inv.invoice_number}.pdf`
+            ).catch(() => null);
+          }
+          invoiceMap[inv.project_id].push({
+            invoice_number: inv.invoice_number,
+            invoice_type: inv.invoice_type,
+            download_url,
+          });
+        })
+      );
     }
+
+    const finalProjects = projectsWithImages.map(p => ({
+      ...p,
+      invoices: invoiceMap[p.id] || [],
+    }));
 
     res.status(200).json({
       status: 'success',
