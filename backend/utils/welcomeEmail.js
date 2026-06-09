@@ -211,11 +211,43 @@ async function sendAccountRestoredEmail(role, { email, username }) {
   await sendMail(email, subject, filled, null, 'account_restored', null);
 }
 
+async function sendKYCStatusEmail({ email, username, status, reason }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/KYCApproved.html'),
+    'utf8'
+  );
+
+  const isApproved = status === 'approved';
+  const filled = fillTemplate(html, {
+    freelancer_username: username,
+    status: isApproved ? 'approved' : 'rejected',
+    header_subtitle: isApproved ? 'KYC verified — you\'re all set' : 'KYC verification — not approved',
+    body_message: isApproved
+      ? 'Great news! Your KYC documents have been verified and your account is now fully activated. You can now receive payouts directly to your bank account.'
+      : 'Unfortunately, your KYC documents could not be verified. Please review the reason below and resubmit the correct documents.',
+    highlight_content: isApproved
+      ? '<p><strong>Status:</strong> Verified ✅</p><p>Your account is now eligible to receive payments and withdrawals.</p>'
+      : `<p><strong>Reason for rejection:</strong></p><p>${reason || 'Documents could not be verified. Please ensure they are clear and valid.'}</p>`,
+    action_url: isApproved ? `${APP_URL}/freelancer/dashboard` : `${APP_URL}/freelancer/kyc`,
+    action_label: isApproved ? 'Go to Dashboard' : 'Resubmit KYC',
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  const subject = isApproved
+    ? 'Your KYC has been verified — Meetrub'
+    : 'KYC verification failed — action required';
+
+  await sendMail(email, subject, filled, null, `kyc_${status}`, null);
+}
+
 module.exports = {
   sendWelcomeEmail,
   sendAdminNewUserEmail,
   sendAdminDisputeEmail,
   sendContactInquiryEmail,
   sendAccountSuspendedEmail,
-  sendAccountRestoredEmail
+  sendAccountRestoredEmail,
+  sendKYCStatusEmail,
 };

@@ -6,7 +6,8 @@ const AppError = require("../../../utils/appError");
 const { createPresignedUrl } = require("../../../utils/helper");
 const razorpay = require('../../../config/razorpay');
 const { getLogger } = require('../../../utils/logger');
-const { sendAccountSuspendedEmail, sendAccountRestoredEmail } = require('../../../utils/welcomeEmail');
+const { sendAccountSuspendedEmail, sendAccountRestoredEmail, sendKYCStatusEmail } = require('../../../utils/welcomeEmail');
+const { sendNotification } = require('../notification/notificationServicer');
 const adminLogger = getLogger('admin-controller');
 const logger = getLogger('email');
 
@@ -505,7 +506,7 @@ const rejectKYCByAdmin = async (req, res, next) => {
 
     // Check if freelancer exists
     const queryResult = await query(
-      'SELECT freelancer_id, user_id, verification_status FROM freelancer WHERE freelancer_id = $1',
+      'SELECT freelancer_id, user_id, verification_status, freelancer_full_name, freelancer_email FROM freelancer WHERE freelancer_id = $1',
       [freelancer_id]
     );
 
@@ -526,6 +527,25 @@ const rejectKYCByAdmin = async (req, res, next) => {
       'UPDATE freelancer SET verification_status = $1, reason_for_rejection = $2 WHERE freelancer_id = $3',
       ['REJECTED', reason_for_rejection, freelancer_id]
     );
+
+    // Send KYC rejection email (non-blocking)
+    sendKYCStatusEmail({
+      email: freelancer.freelancer_email,
+      username: freelancer.freelancer_full_name,
+      status: 'rejected',
+      reason: reason_for_rejection,
+    }).catch((err) => logger.error('Failed to send KYC rejection email:', err));
+
+    // Send in-app notification (non-blocking)
+    sendNotification({
+      recipientId: freelancer.user_id,
+      senderId: null,
+      eventType: 'kyc_rejected',
+      title: 'KYC Verification Failed',
+      body: `Your KYC documents could not be verified. Reason: ${reason_for_rejection}`,
+      actionType: 'navigate',
+      actionRoute: '/freelancer/kyc',
+    }).catch((err) => logger.error('Failed to send KYC rejection notification:', err));
 
     res.json({
       message: 'KYC rejected successfully',
