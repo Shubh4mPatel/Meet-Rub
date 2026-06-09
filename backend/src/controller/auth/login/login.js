@@ -31,6 +31,10 @@ const loginUser = async (req, res, next) => {
 
         let user = null;
         for (const candidate of candidates) {
+            // Google-registered accounts have no password — skip to avoid bcrypt crash
+            if (!candidate.user_password) {
+                continue;
+            }
             const passwordValid = await bcrypt.compare(password.trim(), candidate.user_password);
             if (passwordValid) {
                 user = candidate;
@@ -39,6 +43,12 @@ const loginUser = async (req, res, next) => {
         }
 
         if (!user) {
+            // Check if all candidates are Google-only accounts (no password)
+            const allGoogleAccounts = candidates.every(c => !c.user_password);
+            if (allGoogleAccounts) {
+                logger.warn("Login failed: Account registered via Google, no password set");
+                return next(new AppError("This account was created with Google. Please sign in with Google.", 401));
+            }
             logger.warn("Login failed: Invalid password");
             return next(new AppError("Invalid email or password", 401));
         }

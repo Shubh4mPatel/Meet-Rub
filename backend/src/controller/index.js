@@ -1,4 +1,5 @@
 const { loginUser } = require('./auth/login/login');
+const { socialLoginUser } = require('./auth/login/socialLogin');
 const { otpSendApi } = require('./auth/send-otp/sendOtp');
 const { verifyOtpAndProcess } = require('./auth/verify-otp/verifyOtp');
 const { getUserProfile, editProfile,getAllFreelancers,getFreelancerById,getFreelancerPortfolio,getFreelancerImpact,addFreelancerToWishlist } = require('./users/userProfileController');
@@ -9,6 +10,7 @@ const { deleteFreelancerPortfolio, updateFreelancerPortfolio, addFreelancerPortf
 
 module.exports = {
     loginUser,
+    socialLoginUser,
     otpSendApi,
     verifyOtpAndProcess,
     getUserProfile,

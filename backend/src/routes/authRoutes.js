@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { loginUser, otpSendApi, verifyOtpAndProcess } = require('../controller');
+const { socialLoginUser } = require('../controller/auth/login/socialLogin');
 const { authenticateUser, refreshAccessToken, logout } = require('../middleware/authMiddleware');
 const { changePassword } = require('../controller/auth/change-password/changePassword');
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
@@ -40,6 +41,14 @@ router.get('/logout', authenticateUser, logout);
 
 
 router.put('/change-password', authenticateUser, changePassword);
+
+
+router.post('/social-login', socialLoginUser, setTokenCookies, (req, res) => {
+  res.status(200).json({
+    message: 'Login successful',
+    userInfo: res.locals.user,
+  });
+});
 
 
 module.exports = router;
