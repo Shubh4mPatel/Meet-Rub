@@ -475,6 +475,7 @@ const resolveDispute = async (req, res, next) => {
   logger.info(`resolveDispute: DB client acquired for dispute=${id}`);
   try {
     await client.query('BEGIN');
+    await client.query('SET LOCAL lock_timeout = \'20s\'');
     logger.info(`resolveDispute: Transaction BEGIN for dispute=${id}`);
 
     // Get dispute + linked transaction (LEFT JOIN so disputes without transactions are still found)
