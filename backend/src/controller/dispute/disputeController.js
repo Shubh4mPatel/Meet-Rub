@@ -627,22 +627,21 @@ const resolveDispute = async (req, res, next) => {
       const refundRowId = refundRow.id;
       logger.info(`Dispute ${id}: Refund tracking row created refund_row_id=${refundRowId}`);
 
-      // Single API call: POST /v1/payments/:id/refund with reverse_all=true
-      // Razorpay will automatically reverse all linked account transfers first,
-      // then refund the customer — no separate transfer reversal step needed.
-      // Uses razorpayRoutes (axios) which supports native timeout.
+      // Single API call: POST /v1/payments/:id/refund
+      // Funds were on hold and not settled to linked account, so plain refund
+      // directly returns the money to the creator. Uses razorpayRoutes (axios)
+      // with native timeout to prevent hanging.
       try {
-        logger.info(`Dispute ${id}: Calling POST /v1/payments/${dispute.razorpay_payment_id}/refund with reverse_all=true amount=${refundAmountPaise}`);
+        logger.info(`Dispute ${id}: Calling POST /v1/payments/${dispute.razorpay_payment_id}/refund amount=${refundAmountPaise}`);
         const { data: refund } = await razorpayRoutes.post(
           `/v1/payments/${dispute.razorpay_payment_id}/refund`,
           {
             amount: refundAmountPaise,
-            reverse_all: 1,
             notes: { dispute_id: String(id), reason: 'Dispute resolved in creator favour' },
           },
           { timeout: 30000 }
         );
-        logger.info(`Dispute ${id}: Refund+reversal succeeded refund_id=${refund.id} status=${refund.status} payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`);
+        logger.info(`Dispute ${id}: Refund succeeded refund_id=${refund.id} status=${refund.status} payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`);
         await db.query(
           `UPDATE dispute_refunds
              SET state = 'completed', razorpay_refund_id = $1,
@@ -662,7 +661,7 @@ const resolveDispute = async (req, res, next) => {
            WHERE id = $4`,
           [errCode, errDesc, JSON.stringify(errData), refundRowId]
         );
-        logger.error(`Dispute ${id}: Refund+reversal failed payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount} error_code=${errCode} error=${errDesc}`, refundErr?.response?.data || refundErr);
+        logger.error(`Dispute ${id}: Refund failed payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount} error_code=${errCode} error=${errDesc}`, refundErr?.response?.data || refundErr);
         throw refundErr;
       }
 
