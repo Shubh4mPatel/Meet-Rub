@@ -139,6 +139,11 @@ async function sendContactInquiryEmail({ name, email, contactNo, message }, reci
     'utf8'
   );
 
+  // Email clients (Gmail especially) strip data: URIs and don't render SVG,
+  // so the logo and social icons are referenced as hosted PNGs under
+  // {asset_base}/email/. Defaults to the public site.
+  const ASSET_BASE = process.env.EMAIL_ASSET_BASE_URL || APP_URL;
+
   const filled = fillTemplate(html, {
     sender_name: name,
     sender_email: email,
@@ -149,7 +154,7 @@ async function sendContactInquiryEmail({ name, email, contactNo, message }, reci
       timeStyle: 'short',
       timeZone: 'Asia/Kolkata',
     }).format(new Date()),
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
