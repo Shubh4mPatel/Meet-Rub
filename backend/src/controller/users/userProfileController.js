@@ -9,6 +9,7 @@ const Joi = require("joi");
 const { sendMail } = require("../../../config/email");
 const { VALID_STATE_NAMES, INDIAN_STATES } = require("../../utils/indianStates");
 const linkedAccountService = require("../../razor-pay-services/linkedAccountService");
+const { sendContactInquiryEmail } = require("../../../utils/welcomeEmail");
 
 const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -4259,51 +4260,18 @@ const sendContactEmailToAdmin = async (req, res, next) => {
       message: "Your message has been sent successfully. We'll get back to you soon.",
     });
 
-    // Notify the inquiry inbox(es) in the background — failures here must not
-    // affect the already-sent response, so they're only logged.
-    // Recipients are configurable via CONTACT_RECIPIENT_EMAILS (comma-separated);
-    // falls back to the default inboxes below.
+    // Notify the inquiry inbox(es) in the background using the branded email
+    // template — failures here must not affect the already-sent response, so
+    // they're only logged. Recipients are configurable via
+    // CONTACT_RECIPIENT_EMAILS (comma-separated); falls back to the defaults.
     const recipients = (process.env.CONTACT_RECIPIENT_EMAILS || "mail@meetrub.com,digibizkro@gmail.com,koshikojha@gmail.com")
       .split(",")
       .map((e) => e.trim())
       .filter(Boolean);
 
-    const emailSubject = `New Contact Form Submission from ${name}`;
-    const emailBody = `
-      <h2>New contact form submission</h2>
-      <p>You have received a new inquiry with the following details:</p>
-      <ul>
-        <li><strong>Name:</strong> ${name}</li>
-        <li><strong>Email:</strong> ${email}</li>
-        <li><strong>Contact Number:</strong> ${contactNo}</li>
-      </ul>
-      <p><strong>Message:</strong></p>
-      <p>${String(message).replace(/\n/g, "<br/>")}</p>
-    `;
-
-    (async () => {
-      try {
-        if (recipients.length === 0) return;
-
-        let successCount = 0;
-        let failureCount = 0;
-
-        await Promise.all(
-          recipients.map((to) =>
-            sendMail(to, emailSubject, emailBody)
-              .then(() => { successCount++; })
-              .catch((error) => {
-                failureCount++;
-                console.error(`Failed to send contact email to ${to}:`, error.message);
-              })
-          )
-        );
-
-        console.log(`Contact email sending complete: ${successCount} succeeded, ${failureCount} failed`);
-      } catch (err) {
-        logger.error("Error sending contact notification emails:", err);
-      }
-    })();
+    sendContactInquiryEmail({ name, email, contactNo, message }, recipients).catch((err) =>
+      logger.error("Error sending contact notification emails:", err)
+    );
   } catch (error) {
     logger.error("Error sending contact email to admin:", error);
     if (!res.headersSent) {

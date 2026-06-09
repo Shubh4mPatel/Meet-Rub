@@ -131,6 +131,36 @@ async function sendAdminDisputeEmail({
   );
 }
 
+async function sendContactInquiryEmail({ name, email, contactNo, message }, recipients) {
+  if (!Array.isArray(recipients) || recipients.length === 0) return;
+
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'admin/contactInquiry.html'),
+    'utf8'
+  );
+
+  const filled = fillTemplate(html, {
+    sender_name: name,
+    sender_email: email,
+    sender_contact: contactNo || '—',
+    message: message || '—',
+    submitted_time: new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date()),
+    logo_url: LOGO_URL,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  await Promise.all(
+    recipients.map((to) =>
+      sendMail(to, `New Contact Form Submission from ${name}`, filled, null, 'admin_contact_inquiry', null)
+    )
+  );
+}
+
 async function sendAccountSuspendedEmail(role, { email, username, reason }) {
   const templatePath = role === 'freelancer'
     ? path.join(TEMPLATES_DIR, 'freelancer/accountSuspended.html')
@@ -180,6 +210,7 @@ module.exports = {
   sendWelcomeEmail,
   sendAdminNewUserEmail,
   sendAdminDisputeEmail,
+  sendContactInquiryEmail,
   sendAccountSuspendedEmail,
   sendAccountRestoredEmail
 };
