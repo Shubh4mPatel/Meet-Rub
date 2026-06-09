@@ -142,6 +142,77 @@ const HOST = process.env.HOST;
 
 let server;
 
+function logEnvVars() {
+  const mask = (v) =>
+    v ? `${String(v).slice(0, 6)}${'*'.repeat(Math.max(0, String(v).length - 6))}` : '(not set)';
+
+  const envVars = {
+    // Environment
+    NODE_ENV:                            process.env.NODE_ENV,
+    // Server
+    PORT:                                process.env.PORT,
+    BACKEND_PORT:                        process.env.BACKEND_PORT,
+    CHAT_PORT:                           process.env.CHAT_PORT,
+    HOST:                                process.env.HOST,
+    // JWT
+    JWT_SECRET:                          mask(process.env.JWT_SECRET),
+    // Crypto
+    CRYPTOJS_SECRET:                     mask(process.env.CRYPTOJS_SECRET),
+    // Database
+    STAGING_DATABASE_URL:                mask(process.env.STAGING_DATABASE_URL),
+    // CORS
+    ALLOWED_ORIGINS:                     process.env.ALLOWED_ORIGINS,
+    // RabbitMQ
+    RABBITMQ_USER:                       process.env.RABBITMQ_USER,
+    RABBITMQ_PASSWORD:                   mask(process.env.RABBITMQ_PASSWORD),
+    RABBITMQ_URL:                        mask(process.env.RABBITMQ_URL),
+    // Redis
+    REDIS_HOST:                          process.env.REDIS_HOST,
+    REDIS_PORT:                          process.env.REDIS_PORT,
+    REDIS_PASSWORD:                      mask(process.env.REDIS_PASSWORD),
+    // MinIO
+    MINIO_ENDPOINT:                      process.env.MINIO_ENDPOINT,
+    MINIO_PORT:                          process.env.MINIO_PORT,
+    MINIO_USE_SSL:                       process.env.MINIO_USE_SSL,
+    MINIO_ACCESS_KEY:                    process.env.MINIO_ACCESS_KEY,
+    MINIO_SECRET_KEY:                    mask(process.env.MINIO_SECRET_KEY),
+    // Razorpay
+    RAZORPAY_KEY_ID:                     mask(process.env.RAZORPAY_KEY_ID),
+    RAZORPAY_KEY_SECRET:                 mask(process.env.RAZORPAY_KEY_SECRET),
+    RAZORPAY_WEBHOOK_SECRET:             mask(process.env.RAZORPAY_WEBHOOK_SECRET),
+    RAZORPAY_X_WEBHOOK_SECRET:           mask(process.env.RAZORPAY_X_WEBHOOK_SECRET),
+    RAZORPAY_ACCOUNT_NUMBER:             process.env.RAZORPAY_ACCOUNT_NUMBER,
+    PAYOUT_RECONCILIATION_INTERVAL_MINUTES: process.env.PAYOUT_RECONCILIATION_INTERVAL_MINUTES,
+    PAYOUT_RECONCILIATION_MIN_AGE_MINUTES:  process.env.PAYOUT_RECONCILIATION_MIN_AGE_MINUTES,
+    // Google OAuth
+    GOOGLE_CLIENT_ID:                    mask(process.env.GOOGLE_CLIENT_ID),
+    GOOGLE_CLIENT_SECRET:                mask(process.env.GOOGLE_CLIENT_SECRET),
+    // Email
+    EMAIL_SERVER_HOST:                   process.env.EMAIL_SERVER_HOST,
+    EMAIL_SERVER_PORT:                   process.env.EMAIL_SERVER_PORT,
+    EMAIL_SERVER_USER:                   process.env.EMAIL_SERVER_USER,
+    SERVER_PASSWORD:                     mask(process.env.SERVER_PASSWORD),
+    // Billing / Invoice
+    BIZKRO_COMPANY_NAME:                 process.env.BIZKRO_COMPANY_NAME,
+    BIZKRO_ADDRESS:                      process.env.BIZKRO_ADDRESS,
+    BIZKRO_GSTIN:                        process.env.BIZKRO_GSTIN,
+    BIZKRO_STATE:                        process.env.BIZKRO_STATE,
+    MEETRUB_SAC_CODE:                    process.env.MEETRUB_SAC_CODE,
+    MEETRUB_BILLING_EMAIL:               process.env.MEETRUB_BILLING_EMAIL,
+    MEETRUB_WEBSITE:                     process.env.MEETRUB_WEBSITE,
+    MEETRUB_LOGO_PATH:                   process.env.MEETRUB_LOGO_PATH,
+    INVOICE_MINIO_BUCKET:                process.env.INVOICE_MINIO_BUCKET,
+  };
+
+  logger.info('============================================================');
+  logger.info(`  Server started on PORT: ${process.env.PORT}  HOST: ${process.env.HOST}`);
+  logger.info('  Environment variables at startup:');
+  for (const [key, value] of Object.entries(envVars)) {
+    logger.info(`    ${key.padEnd(42)} = ${value ?? '(not set)'}`);
+  }
+  logger.info('============================================================');
+}
+
 if (process.env.NODE_ENV !== "development") {
   server = serverWithSocket.listen(PORT, async () => {
     manageLogFiles();
@@ -150,6 +221,7 @@ if (process.env.NODE_ENV !== "development") {
     logger.info(
       `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
     );
+    logEnvVars();
     logger.info('Payout reconciliation cron initialized');
     logger.info('Transfer reconciliation cron initialized');
   });
@@ -161,6 +233,7 @@ if (process.env.NODE_ENV !== "development") {
     logger.info(
       `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
     );
+    logEnvVars();
   });
 }
 
