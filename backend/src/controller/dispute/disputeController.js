@@ -619,7 +619,7 @@ const resolveDispute = async (req, res, next) => {
           dispute.project_id,
           dispute.razorpay_payment_id,
           dispute.razorpay_transfer_id || null,
-          dispute.razorpay_transfer_id ? parseFloat(dispute.freelancer_amount || 0) : null,
+          null, // reversal_amount: no transfer reversal — direct refund since funds are on hold
           parseFloat(dispute.total_amount),
           adminId,
         ]
@@ -641,13 +641,15 @@ const resolveDispute = async (req, res, next) => {
           },
           { timeout: 30000 }
         );
-        logger.info(`Dispute ${id}: Refund succeeded refund_id=${refund.id} status=${refund.status} payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`);
+        // Razorpay refund status: 'processed' = done, 'pending' = bank processing
+        const refundState = refund.status === 'processed' ? 'completed' : 'refund_pending';
+        logger.info(`Dispute ${id}: Refund API response refund_id=${refund.id} status=${refund.status} → db_state=${refundState} payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`);
         await db.query(
           `UPDATE dispute_refunds
-             SET state = 'completed', razorpay_refund_id = $1,
+             SET state = $1, razorpay_refund_id = $2,
                  refunded_at = NOW(), updated_at = NOW()
-           WHERE id = $2`,
-          [refund.id, refundRowId]
+           WHERE id = $3`,
+          [refundState, refund.id, refundRowId]
         );
       } catch (refundErr) {
         const errData = refundErr?.response?.data?.error || refundErr?.error || { message: refundErr?.message };
@@ -685,7 +687,7 @@ const resolveDispute = async (req, res, next) => {
        SET status = 'resolved', admin_note = $1::jsonb, admin_id = $2, updated_at = NOW()
        WHERE id = $3
        RETURNING id, status, admin_note, admin_id, updated_at`,
-      [JSON.stringify({ note: admin_note || '', action: resolution_action }), adminId, id]
+      [JSON.stringify({ note: admin_note ?? null, action: resolution_action }), adminId, id]
     );
 
     logger.info(`resolveDispute: Fetching user details for notifications/emails dispute=${id}`);
@@ -713,7 +715,7 @@ const resolveDispute = async (req, res, next) => {
     if (userDetails.length > 0) {
       logger.info(`resolveDispute: Sending notifications and emails for dispute=${id} action=${resolution_action}`);
       const details = userDetails[0];
-      const CURRENCY = process.env.CURRENCY || '₹';
+      const CURRENCY = process.env.CURRENCY || 'INR';
 
       if (resolution_action === 'resolve') {
         // No money involved - notify only the party who raised the dispute
