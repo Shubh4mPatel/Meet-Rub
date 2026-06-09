@@ -98,36 +98,13 @@ const socialLoginUser = async (req, res, next) => {
 
       logger.info(`Google login: returning user user_id=${user.id}`);
     } else {
-      // ── New user — create account ─────────────────────────────────────────
-      // Generate a unique username from the Google display name
-      const baseName = (name || normalizedEmail.split('@')[0])
-        .replace(/[^a-zA-Z0-9_]/g, '')
-        .toLowerCase() || 'user';
-
-      let username = baseName;
-      // Retry up to 5 times to find a unique username
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const { rows: taken } = await query(
-          'SELECT id FROM users WHERE user_name = $1',
-          [username]
-        );
-        if (taken.length === 0) break;
-        username = `${baseName}_${Date.now().toString().slice(-6)}${attempt}`;
-      }
-
-      const { rows: newUserRows } = await query(
-        `INSERT INTO users (user_email, user_role, user_password, user_name, auth_provider)
-         VALUES ($1, 'freelancer', NULL, $2, 'google')
-         RETURNING *`,
-        [normalizedEmail, username]
-      );
-      user = newUserRows[0];
-      logger.info(`Google registration: new user created user_id=${user.id}, username=${username}`);
-
-      // Create the corresponding freelancer record
-      await query(
-        'INSERT INTO freelancer (user_id, freelancer_email) VALUES ($1, $2)',
-        [user.id, normalizedEmail]
+      // ── No account found — reject with a specific error code ──────────────
+      return next(
+        new AppError(
+          'No account found with this Google email. Please sign up first.',
+          404,
+          'NOT_REGISTERED'
+        )
       );
     }
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { loginUser, otpSendApi, verifyOtpAndProcess } = require('../controller');
 const { socialLoginUser } = require('../controller/auth/login/socialLogin');
+const { googleRegisterUser } = require('../controller/auth/register/googleRegister');
 const { authenticateUser, refreshAccessToken, logout } = require('../middleware/authMiddleware');
 const { changePassword } = require('../controller/auth/change-password/changePassword');
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
@@ -49,6 +50,20 @@ router.post('/social-login', socialLoginUser, setTokenCookies, (req, res) => {
     userInfo: res.locals.user,
   });
 });
+
+
+router.post(
+  '/social-register',
+  upload.single('pan_card_document'),
+  googleRegisterUser,
+  setTokenCookies,
+  (req, res) => {
+    res.status(201).json({
+      message: 'Registration successful',
+      userInfo: res.locals.user,
+    });
+  }
+);
 
 
 module.exports = router;
