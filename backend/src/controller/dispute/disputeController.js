@@ -594,7 +594,7 @@ const resolveDispute = async (req, res, next) => {
 
       // Block retries — one attempt per dispute.
       logger.info(`resolveDispute: Checking for existing refund attempts for dispute=${id}`);
-      const { rows: existingAttempts } = await db.query(
+      const { rows: existingAttempts } = await client.query(
         `SELECT id, state FROM dispute_refunds WHERE dispute_id = $1 LIMIT 1`,
         [id]
       );
@@ -641,7 +641,7 @@ const resolveDispute = async (req, res, next) => {
       }
 
       // Insert audit row before any Razorpay call so the record always exists.
-      const { rows: [refundRow] } = await db.query(
+      const { rows: [refundRow] } = await client.query(
         `INSERT INTO dispute_refunds
            (dispute_id, transaction_id, project_id, razorpay_payment_id,
             razorpay_transfer_id, reversal_amount, refund_amount, state, initiated_by)
@@ -676,7 +676,7 @@ const resolveDispute = async (req, res, next) => {
           logger.info(`Dispute ${id}: Step 1 success — reversal_id=${reversalId} transfer=${dispute.razorpay_transfer_id}`);
 
           // Persist reversal_id in error_payload (general metadata) alongside the state advance.
-          await db.query(
+          await client.query(
             `UPDATE dispute_refunds
                SET state = 'reversal_completed',
                    error_payload = $1::jsonb,
@@ -688,7 +688,7 @@ const resolveDispute = async (req, res, next) => {
           const errData = reversalErr?.response?.data?.error || { message: reversalErr?.message };
           const errCode = errData?.code || reversalErr?.response?.status?.toString() || null;
           const errDesc = errData?.description || reversalErr?.message || null;
-          await db.query(
+          await client.query(
             `UPDATE dispute_refunds
                SET state = 'reversal_failed', error_step = 'transfer_reversal',
                    error_code = $1, error_description = $2, error_payload = $3::jsonb,
@@ -706,7 +706,7 @@ const resolveDispute = async (req, res, next) => {
       } else {
         // No linked transfer (e.g. transfer webhook never arrived) — skip reversal.
         logger.info(`Dispute ${id}: Step 1 — no transfer_id, skipping reversal (direct refund only)`);
-        await db.query(
+        await client.query(
           `UPDATE dispute_refunds SET state = 'reversal_skipped', updated_at = NOW() WHERE id = $1`,
           [refundRowId]
         );
@@ -728,7 +728,7 @@ const resolveDispute = async (req, res, next) => {
         // Razorpay refund status: 'processed' = instant, 'pending' = bank processing
         const refundState = refund.status === 'processed' ? 'completed' : 'refund_pending';
         logger.info(`Dispute ${id}: Step 2 success — refund_id=${refund.id} status=${refund.status} → db_state=${refundState}`);
-        await db.query(
+        await client.query(
           `UPDATE dispute_refunds
              SET state = $1, razorpay_refund_id = $2,
                  refunded_at = NOW(), updated_at = NOW()
@@ -746,7 +746,7 @@ const resolveDispute = async (req, res, next) => {
         const errorPayload = reversalId
           ? { razorpay_reversal_id: reversalId, error: errData }
           : { error: errData };
-        await db.query(
+        await client.query(
           `UPDATE dispute_refunds
              SET state = $1, error_step = 'payment_refund',
                  error_code = $2, error_description = $3, error_payload = $4::jsonb,
