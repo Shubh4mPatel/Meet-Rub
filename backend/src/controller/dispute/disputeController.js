@@ -619,13 +619,15 @@ const resolveDispute = async (req, res, next) => {
       logger.info(`Dispute ${id}: Step 0 — checking Razorpay balance (required ≥ ₹${(platformFeesPaise / 100).toFixed(2)} for platform fees)`);
       let currentBalance;
       try {
+        logger.info(`Dispute ${id}: Calling GET /v1/balance`);
         const { data: balanceData } = await razorpayRoutes.get('/v1/balance', { timeout: 15000 });
+        logger.info(`Dispute ${id}: GET /v1/balance response — ${JSON.stringify(balanceData)}`);
         currentBalance = balanceData.balance; // in paise
-        logger.info(`Dispute ${id}: Balance check — available=${currentBalance} paise required=${platformFeesPaise} paise`);
+        logger.info(`Dispute ${id}: Balance check — available=${currentBalance} paise (₹${(currentBalance / 100).toFixed(2)}) required=${platformFeesPaise} paise (₹${(platformFeesPaise / 100).toFixed(2)})`);
       } catch (balErr) {
         await client.query('ROLLBACK');
         const errMsg = balErr?.response?.data?.error?.description || balErr?.message;
-        logger.error(`Dispute ${id}: Balance check API failed: ${errMsg}`, balErr?.response?.data);
+        logger.error(`Dispute ${id}: GET /v1/balance failed — status=${balErr?.response?.status} message=${errMsg}`, balErr?.response?.data);
         return next(new AppError(`Failed to fetch Razorpay balance: ${errMsg}`, 502));
       }
 
@@ -663,14 +665,15 @@ const resolveDispute = async (req, res, next) => {
       let reversalId = null;
       if (dispute.razorpay_transfer_id) {
         try {
-          logger.info(`Dispute ${id}: Step 1 — reversing transfer=${dispute.razorpay_transfer_id}`);
+          logger.info(`Dispute ${id}: Step 1 — calling POST /v1/transfers/${dispute.razorpay_transfer_id}/reversals`);
           const { data: reversal } = await razorpayRoutes.post(
             `/v1/transfers/${dispute.razorpay_transfer_id}/reversals`,
             {},
             { timeout: 30000 }
           );
+          logger.info(`Dispute ${id}: Step 1 response — ${JSON.stringify(reversal)}`);
           reversalId = reversal.id;
-          logger.info(`Dispute ${id}: Transfer reversal success reversal_id=${reversalId} transfer=${dispute.razorpay_transfer_id}`);
+          logger.info(`Dispute ${id}: Step 1 success — reversal_id=${reversalId} transfer=${dispute.razorpay_transfer_id}`);
 
           // Persist reversal_id in error_payload (general metadata) alongside the state advance.
           await db.query(
@@ -693,7 +696,7 @@ const resolveDispute = async (req, res, next) => {
              WHERE id = $4`,
             [errCode, errDesc, JSON.stringify(errData), refundRowId]
           );
-          logger.error(`Dispute ${id}: Transfer reversal failed transfer=${dispute.razorpay_transfer_id} error=${errDesc}`, reversalErr?.response?.data);
+          logger.error(`Dispute ${id}: Step 1 failed — name=${reversalErr?.name} code=${reversalErr?.code} message=${reversalErr?.message} status=${reversalErr?.response?.status} data=${JSON.stringify(reversalErr?.response?.data)}`);
           await client.query('ROLLBACK');
           return next(new AppError(
             `Transfer reversal failed: ${errDesc || 'Razorpay API error'}. No funds moved — safe to retry after fixing the issue.`,
@@ -711,7 +714,7 @@ const resolveDispute = async (req, res, next) => {
 
       // ── Step 2: Payment refund ───────────────────────────────────────────────
       try {
-        logger.info(`Dispute ${id}: Step 2 — refunding payment=${dispute.razorpay_payment_id} amount=${refundAmountPaise} paise`);
+        logger.info(`Dispute ${id}: Step 2 — calling POST /v1/payments/${dispute.razorpay_payment_id}/refund amount=${refundAmountPaise} paise`);
         const { data: refund } = await razorpayRoutes.post(
           `/v1/payments/${dispute.razorpay_payment_id}/refund`,
           {
@@ -720,10 +723,11 @@ const resolveDispute = async (req, res, next) => {
           },
           { timeout: 30000 }
         );
+        logger.info(`Dispute ${id}: Step 2 response — ${JSON.stringify(refund)}`);
 
         // Razorpay refund status: 'processed' = instant, 'pending' = bank processing
         const refundState = refund.status === 'processed' ? 'completed' : 'refund_pending';
-        logger.info(`Dispute ${id}: Refund response refund_id=${refund.id} status=${refund.status} → db_state=${refundState}`);
+        logger.info(`Dispute ${id}: Step 2 success — refund_id=${refund.id} status=${refund.status} → db_state=${refundState}`);
         await db.query(
           `UPDATE dispute_refunds
              SET state = $1, razorpay_refund_id = $2,
