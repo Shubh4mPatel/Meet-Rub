@@ -4252,58 +4252,63 @@ const sendContactEmailToAdmin = async (req, res, next) => {
       [name, email, contactNo, message]
     );
 
-    const emailSubject = `Contact Form Submission from ${name}`;
+    // Respond as soon as the message is persisted so the user isn't kept
+    // waiting on the (potentially slow) admin email batches below.
+    res.status(200).json({
+      status: "success",
+      message: "Your message has been sent successfully. We'll get back to you soon.",
+    });
+
+    // Notify the inquiry inbox(es) in the background — failures here must not
+    // affect the already-sent response, so they're only logged.
+    // Recipients are configurable via CONTACT_RECIPIENT_EMAILS (comma-separated);
+    // falls back to the default inboxes below.
+    const recipients = (process.env.CONTACT_RECIPIENT_EMAILS || "mail@meetrub.com,digibizkro@gmail.com,koshikojha@gmail.com")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+
+    const emailSubject = `New Contact Form Submission from ${name}`;
     const emailBody = `
-      You have received a new contact form submission with the following details:
-      Name: ${name}
-      Email: ${email}
-      Contact Number: ${contactNo}
-      Message: ${message}
+      <h2>New contact form submission</h2>
+      <p>You have received a new inquiry with the following details:</p>
+      <ul>
+        <li><strong>Name:</strong> ${name}</li>
+        <li><strong>Email:</strong> ${email}</li>
+        <li><strong>Contact Number:</strong> ${contactNo}</li>
+      </ul>
+      <p><strong>Message:</strong></p>
+      <p>${String(message).replace(/\n/g, "<br/>")}</p>
     `;
-    const getAdminEmailQuery = `SELECT email FROM admin`;
-    const { rows: adminRows } = await query(getAdminEmailQuery);
 
-    if (adminRows.length > 0) {
-      const BATCH_SIZE = 10;
-      const DELAY_BETWEEN_BATCHES = 1000; // 1 second in milliseconds
+    (async () => {
+      try {
+        if (recipients.length === 0) return;
 
-      const validAdmins = adminRows.filter(admin => admin.email);
-      let successCount = 0;
-      let failureCount = 0;
+        let successCount = 0;
+        let failureCount = 0;
 
-      for (let i = 0; i < validAdmins.length; i += BATCH_SIZE) {
-        const batch = validAdmins.slice(i, i + BATCH_SIZE);
-        const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(validAdmins.length / BATCH_SIZE);
-
-        console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`);
-
-        const emailPromises = batch.map(admin =>
-          sendMail(admin.email, emailSubject, emailBody)
-            .then(() => {
-              successCount++;
-              return { success: true, email: admin.email };
-            })
-            .catch(error => {
-              failureCount++;
-              console.error(`Failed to send email to ${admin.email}:`, error.message);
-              return { success: false, email: admin.email, error: error.message };
-            })
+        await Promise.all(
+          recipients.map((to) =>
+            sendMail(to, emailSubject, emailBody)
+              .then(() => { successCount++; })
+              .catch((error) => {
+                failureCount++;
+                console.error(`Failed to send contact email to ${to}:`, error.message);
+              })
+          )
         );
 
-        await Promise.all(emailPromises);
-
-        // Delay between batches (except after the last batch)
-        if (i + BATCH_SIZE < validAdmins.length) {
-          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
-        }
+        console.log(`Contact email sending complete: ${successCount} succeeded, ${failureCount} failed`);
+      } catch (err) {
+        logger.error("Error sending contact notification emails:", err);
       }
-
-      console.log(`Email sending complete: ${successCount} succeeded, ${failureCount} failed`);
-    }
+    })();
   } catch (error) {
     logger.error("Error sending contact email to admin:", error);
-    return next(new AppError("Failed to send contact email", 500));
+    if (!res.headersSent) {
+      return next(new AppError("Failed to send contact email", 500));
+    }
   }
 };
 
