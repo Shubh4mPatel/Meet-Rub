@@ -4253,6 +4253,14 @@ const sendContactEmailToAdmin = async (req, res, next) => {
       [name, email, contactNo, message]
     );
 
+     const recipients = (process.env.CONTACT_RECIPIENT_EMAILS || "mail@meetrub.com,digibizkro@gmail.com,koshikojha@gmail.com")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+
+    sendContactInquiryEmail({ name, email, contactNo, message }, recipients).catch((err) =>
+      logger.error("Error sending contact notification emails:", err)
+    );
     // Respond as soon as the message is persisted so the user isn't kept
     // waiting on the (potentially slow) admin email batches below.
     res.status(200).json({
@@ -4264,14 +4272,7 @@ const sendContactEmailToAdmin = async (req, res, next) => {
     // template — failures here must not affect the already-sent response, so
     // they're only logged. Recipients are configurable via
     // CONTACT_RECIPIENT_EMAILS (comma-separated); falls back to the defaults.
-    const recipients = (process.env.CONTACT_RECIPIENT_EMAILS || "mail@meetrub.com,digibizkro@gmail.com,koshikojha@gmail.com")
-      .split(",")
-      .map((e) => e.trim())
-      .filter(Boolean);
-
-    sendContactInquiryEmail({ name, email, contactNo, message }, recipients).catch((err) =>
-      logger.error("Error sending contact notification emails:", err)
-    );
+   
   } catch (error) {
     logger.error("Error sending contact email to admin:", error);
     if (!res.headersSent) {
