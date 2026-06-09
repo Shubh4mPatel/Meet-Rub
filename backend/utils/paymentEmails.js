@@ -5,11 +5,12 @@ const { sendMail } = require('../config/email');
 const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
 const APP_URL = process.env.APP_URL || 'https://meetrub.com';
+const ASSET_BASE = process.env.EMAIL_ASSET_BASE_URL || APP_URL;
 const LOGO_SVG_PATH = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
 const LOGO_URL = process.env.LOGO_URL ||
     `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
-const HELP_URL = process.env.HELP_URL || `${APP_URL}/help`;
-const PRIVACY_URL = process.env.PRIVACY_URL || `${APP_URL}/privacy`;
+const HELP_URL = process.env.HELP_URL || 'https://meetrub.com/contact-us';
+const PRIVACY_URL = process.env.PRIVACY_URL || 'https://meetrub.com/privacy-policy';
 const CURRENCY = process.env.CURRENCY || '₹';
 
 function fillTemplate(html, vars) {
@@ -42,7 +43,7 @@ async function sendPaymentSuccessEmailToCreator({
         amount: amount != null ? Number(amount).toFixed(2) : '—',
         delivery_date: deliveryDate || '—',
         order_url: `${APP_URL}/creator/orders/${projectId}`,
-        logo_url: LOGO_URL,
+        asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
@@ -72,7 +73,7 @@ async function sendWorkStartEmailToFreelancer({
         amount: amount != null ? Number(amount).toFixed(2) : '—',
         delivery_date: deliveryDate || '—',
         order_url: `${APP_URL}/freelancer/orders/${projectId}`,
-        logo_url: LOGO_URL,
+        asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });

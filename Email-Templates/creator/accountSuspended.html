@@ -138,13 +138,11 @@
 </head>
 <body>
   <div class="email-container">
-    <!-- Logo -->
-    <div class="logo">
-      <img src="https://meetrub.s3.ap-south-1.amazonaws.com/logo.png" alt="MeetRub Logo">
-    </div>
-
     <!-- Header -->
     <div class="header">
+      <div style="text-align:center;margin-bottom:14px;">
+        <img src="{{asset_base}}/email/logo.png" alt="Meetrub" style="height:48px;width:auto;display:block;margin:0 auto;">
+      </div>
       <h1>⚠️ Account Suspended</h1>
     </div>
 
@@ -191,11 +189,10 @@
 
     <!-- Footer -->
     <div class="footer">
-      <div class="social-links">
-        <a href="https://facebook.com/meetrub">Facebook</a> |
-        <a href="https://twitter.com/meetrub">Twitter</a> |
-        <a href="https://instagram.com/meetrub">Instagram</a> |
-        <a href="https://linkedin.com/company/meetrub">LinkedIn</a>
+      <div class="social-links" style="display:flex;align-items:center;justify-content:center;gap:14px;margin:14px 0;">
+        <a href="https://www.facebook.com/people/Meetrub/61580564312674/?sk=reels_tab" title="Facebook" style="display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;"><img src="{{asset_base}}/email/facebook.png" alt="Facebook" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
+        <a href="https://www.instagram.com/meetrubofficial" title="Instagram" style="display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;"><img src="{{asset_base}}/email/instagram.png" alt="Instagram" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
+        <a href="https://www.youtube.com/@Meetrub" title="YouTube" style="display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;"><img src="{{asset_base}}/email/youtube.png" alt="YouTube" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
       </div>
       
       <p>© 2024 MeetRub. All rights reserved.</p>

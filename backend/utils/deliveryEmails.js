@@ -5,11 +5,12 @@ const { sendMail } = require('../config/email');
 const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
 const APP_URL = process.env.APP_URL || 'https://meetrub.com';
+const ASSET_BASE = process.env.EMAIL_ASSET_BASE_URL || APP_URL;
 const LOGO_SVG_PATH = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
 const LOGO_URL = process.env.LOGO_URL ||
   `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
-const HELP_URL = process.env.HELP_URL || `${APP_URL}/help`;
-const PRIVACY_URL = process.env.PRIVACY_URL || `${APP_URL}/privacy`;
+const HELP_URL = process.env.HELP_URL || 'https://meetrub.com/contact-us';
+const PRIVACY_URL = process.env.PRIVACY_URL || 'https://meetrub.com/privacy-policy';
 const CURRENCY = process.env.CURRENCY || '₹';
 const REVIEW_DAYS = process.env.REVIEW_DAYS || '7';
 
@@ -41,7 +42,7 @@ async function sendDeliverySubmittedEmail({ freelancerEmail, freelancerName, pro
     freelancer_earnings: amount != null ? Number(amount).toFixed(2) : '—',
     order_url: `${APP_URL}/freelancer/orders/${projectId}`,
     review_days: REVIEW_DAYS,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -67,7 +68,7 @@ async function sendDeliveryReceivedEmail({
     service_title: serviceTitle || 'Your order',
     delivery_time: formatDeliveryTime(new Date()),
     delivery_message: deliveryMessage || '',
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -85,7 +86,7 @@ async function sendCreatorRatingRequestEmail({ creatorEmail, creatorName, freela
     order_id: String(projectId),
     service_title: serviceTitle || 'Your order',
     review_url: `${APP_URL}/creator/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -103,7 +104,7 @@ async function sendFreelancerRatingRequestEmail({ freelancerEmail, freelancerNam
     order_id: String(projectId),
     service_title: serviceTitle || 'Your order',
     review_url: `${APP_URL}/freelancer/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -124,7 +125,7 @@ async function sendOrderApprovedEmail({ freelancerEmail, freelancerName, creator
     amount: amount != null ? Number(amount).toFixed(2) : '—',
     withdraw_url: `${APP_URL}/freelancer/wallet`,
     order_url: `${APP_URL}/freelancer/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -144,7 +145,7 @@ async function sendCreatorDisputeEmail({ creatorEmail, creatorName, freelancerNa
     dispute_reason: disputeReason,
     dispute_time: formatDeliveryTime(new Date()),
     dispute_url: `${APP_URL}/creator/disputes/${disputeId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -163,7 +164,7 @@ async function sendFreelancerDisputeEmail({ freelancerEmail, freelancerName, cre
     service_title: serviceTitle || 'your order',
     dispute_reason: disputeReason,
     dispute_url: `${APP_URL}/freelancer/disputes/${disputeId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -185,7 +186,7 @@ async function sendPaymentConfirmedEmail({ creatorEmail, creatorName, freelancer
     deadline: deadline || 'TBD',
     payment_method: paymentMethod || 'Razorpay',
     order_url: `${APP_URL}/creator/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -208,7 +209,7 @@ async function sendOrderActivatedEmail({ freelancerEmail, freelancerName, creato
     freelancer_earnings: freelancerEarnings,
     deadline: deadline || 'TBD',
     order_url: `${APP_URL}/freelancer/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -229,7 +230,7 @@ async function sendDeadlineExtensionRequestEmail({ creatorEmail, creatorName, fr
     current_deadline: currentDeadline,
     new_deadline: newDeadline,
     extension_url: `${APP_URL}/creator/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -249,7 +250,7 @@ async function sendDeadlineExtensionAcceptedEmail({ freelancerEmail, freelancerN
     extension_time: extensionTime,
     new_deadline: newDeadline,
     order_url: `${APP_URL}/freelancer/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -268,7 +269,7 @@ async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerN
     service_title: serviceTitle || 'Your order',
     current_deadline: currentDeadline,
     order_url: `${APP_URL}/freelancer/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -291,7 +292,7 @@ async function sendDisputeResolvedCreatorEmail({ creatorEmail, creatorName, free
     amount: amount != null ? Number(amount).toFixed(2) : '—',
     dispute_url: `${APP_URL}/creator/disputes/${disputeId}`,
     order_url: `${APP_URL}/creator/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -314,7 +315,7 @@ async function sendDisputeResolvedFreelancerEmail({ freelancerEmail, freelancerN
     amount: amount != null ? Number(amount).toFixed(2) : '—',
     dispute_url: `${APP_URL}/freelancer/disputes/${disputeId}`,
     order_url: `${APP_URL}/freelancer/orders/${projectId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });

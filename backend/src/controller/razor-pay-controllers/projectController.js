@@ -1410,8 +1410,7 @@ const approveProject = async (req, res, next) => {
         const { sendMail } = require('../../../config/email');
         const TEMPLATES_DIR = path.join(__dirname, '../../../../Email-Templates');
         const APP_URL = process.env.APP_URL || 'https://meetrub.com';
-        const LOGO_SVG_PATH = path.join(__dirname, '../../../../Email-Templates/assets/logo-large.svg');
-        const LOGO_URL = process.env.LOGO_URL || `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
+        const ASSET_BASE = process.env.EMAIL_ASSET_BASE_URL || APP_URL;
         const CURRENCY = process.env.CURRENCY || '\u20B9';
         const html = fs.readFileSync(path.join(TEMPLATES_DIR, 'creator/orderCompleted.html'), 'utf8');
         const filled = Object.entries({
@@ -1423,9 +1422,9 @@ const approveProject = async (req, res, next) => {
           amount: project.amount != null ? Number(project.amount).toFixed(2) : '\u2014',
           review_url: `${APP_URL}/creator/orders/${projectId}`,
           hire_again_url: `${APP_URL}/creator/freelancers`,
-          logo_url: LOGO_URL,
-          help_url: process.env.HELP_URL || `${APP_URL}/help`,
-          privacy_url: process.env.PRIVACY_URL || `${APP_URL}/privacy`,
+          asset_base: ASSET_BASE,
+          help_url: process.env.HELP_URL || 'https://meetrub.com/contact-us',
+          privacy_url: process.env.PRIVACY_URL || 'https://meetrub.com/privacy-policy',
         }).reduce((acc, [k, v]) => acc.replaceAll(`{{${k}}}`, v ?? ''), html);
         await sendMail(project.creator_email, `Order completed \u2014 Order #${projectId}`, filled);
       })(),

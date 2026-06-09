@@ -10,8 +10,8 @@ const APP_URL = process.env.APP_URL || 'https://meetrub.com';
 const LOGO_SVG_PATH = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
 const LOGO_URL = process.env.LOGO_URL ||
     `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
-const HELP_URL = process.env.HELP_URL || `${APP_URL}/help`;
-const PRIVACY_URL = process.env.PRIVACY_URL || `${APP_URL}/privacy`;
+const HELP_URL = process.env.HELP_URL || 'https://meetrub.com/contact-us';
+const PRIVACY_URL = process.env.PRIVACY_URL || 'https://meetrub.com/privacy-policy';
 const CURRENCY = process.env.CURRENCY || '₹';
 
 const transporter = nodemailer.createTransport({
@@ -60,7 +60,7 @@ async function sendDeadlineExtensionRequestEmail({ creatorEmail, creatorName, fr
         current_deadline: currentDeadline,
         new_deadline: newDeadline,
         extension_url: `${APP_URL}/creator/orders/${projectId}`,
-        logo_url: LOGO_URL,
+        asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
@@ -80,7 +80,7 @@ async function sendDeadlineExtensionAcceptedEmail({ freelancerEmail, freelancerN
         extension_time: extensionTime,
         new_deadline: newDeadline,
         order_url: `${APP_URL}/freelancer/orders/${projectId}`,
-        logo_url: LOGO_URL,
+        asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
@@ -99,15 +99,57 @@ async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerN
         service_title: serviceTitle || 'Your order',
         current_deadline: currentDeadline,
         order_url: `${APP_URL}/freelancer/orders/${projectId}`,
-        logo_url: LOGO_URL,
+        asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
     await sendMail(freelancerEmail, `Extension request declined — Order #${projectId}`, filled);
 }
 
+async function sendPackageRejectedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, chatRoomId }) {
+    const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'freelancer/offerRejected.html'),
+        'utf8'
+    );
+    const filled = fillTemplate(html, {
+        freelancer_username: freelancerName,
+        creator_username: creatorName,
+        service_title: serviceTitle || 'Custom Service',
+        currency: CURRENCY,
+        amount: String(amount),
+        delivery_days: String(deliveryDays),
+        chat_url: `${APP_URL}/messages/${chatRoomId}`,
+        asset_base: process.env.ASSET_BASE_URL || APP_URL,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+    });
+    await sendMail(freelancerEmail, `Your offer was declined`, filled);
+}
+
+async function sendPackageAcceptedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, chatRoomId }) {
+    const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'freelancer/offerAccepted.html'),
+        'utf8'
+    );
+    const filled = fillTemplate(html, {
+        freelancer_username: freelancerName,
+        creator_username: creatorName,
+        service_title: serviceTitle || 'Custom Service',
+        currency: CURRENCY,
+        amount: String(amount),
+        delivery_days: String(deliveryDays),
+        chat_url: `${APP_URL}/messages/${chatRoomId}`,
+        asset_base: process.env.ASSET_BASE_URL || APP_URL,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+    });
+    await sendMail(freelancerEmail, `Your offer was accepted — payment pending`, filled);
+}
+
 module.exports = {
     sendDeadlineExtensionRequestEmail,
     sendDeadlineExtensionAcceptedEmail,
     sendDeadlineExtensionRejectedEmail,
+    sendPackageRejectedEmail,
+    sendPackageAcceptedEmail,
 };

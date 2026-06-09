@@ -9,8 +9,8 @@ const APP_URL = process.env.APP_URL || 'https://meetrub.com';
 const LOGO_SVG_PATH = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
 const LOGO_URL = process.env.LOGO_URL ||
   `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
-const HELP_URL = process.env.HELP_URL || `${APP_URL}/help`;
-const PRIVACY_URL = process.env.PRIVACY_URL || `${APP_URL}/privacy`;
+const HELP_URL = process.env.HELP_URL || 'https://meetrub.com/contact-us';
+const PRIVACY_URL = process.env.PRIVACY_URL || 'https://meetrub.com/privacy-policy';
 
 function fillTemplate(html, vars) {
   return Object.entries(vars).reduce(
@@ -28,7 +28,7 @@ async function sendWelcomeEmail(role, email, username) {
     const filled = fillTemplate(html, {
       freelancer_username: username,
       setup_url: `${APP_URL}/freelancer/setup`,
-      logo_url: LOGO_URL,
+      asset_base: ASSET_BASE,
       help_url: HELP_URL,
       privacy_url: PRIVACY_URL,
     });
@@ -43,7 +43,7 @@ async function sendWelcomeEmail(role, email, username) {
       creator_username: username,
       dashboard_url: `${APP_URL}/creator/dashboard`,
       how_it_works_url: `${APP_URL}/how-it-works`,
-      logo_url: LOGO_URL,
+      asset_base: ASSET_BASE,
       help_url: HELP_URL,
       privacy_url: PRIVACY_URL,
     });
@@ -69,7 +69,7 @@ async function sendAdminNewUserEmail(role, username, userEmail, signupTime, ipAd
     signup_time: signupTime,
     ip_address: ipAddress || '—',
     admin_user_url: `${APP_ADMIN_URL}/users`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -119,7 +119,7 @@ async function sendAdminDisputeEmail({
     }).format(new Date()),
     admin_dispute_url: `${APP_ADMIN_URL}/disputes/${disputeId}`,
     admin_chat_url: `${APP_ADMIN_URL}/disputes/${disputeId}/chat`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -177,7 +177,7 @@ async function sendAccountSuspendedEmail(role, { email, username, reason }) {
     username,
     email,
     reason_for_suspension: reason,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -199,7 +199,7 @@ async function sendAccountRestoredEmail(role, { email, username }) {
   const filled = fillTemplate(html, {
     username,
     email,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });

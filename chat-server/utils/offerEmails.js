@@ -5,9 +5,10 @@ const nodemailer = require('nodemailer');
 const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
 const APP_URL = process.env.APP_URL || 'https://meetrub.com';
+const ASSET_BASE = process.env.EMAIL_ASSET_BASE_URL || APP_URL;
 const LOGO_URL = process.env.LOGO_URL || `${APP_URL}/logo.png`;
-const HELP_URL = process.env.HELP_URL || `${APP_URL}/help`;
-const PRIVACY_URL = process.env.PRIVACY_URL || `${APP_URL}/privacy`;
+const HELP_URL = process.env.HELP_URL || 'https://meetrub.com/contact-us';
+const PRIVACY_URL = process.env.PRIVACY_URL || 'https://meetrub.com/privacy-policy';
 const CURRENCY = process.env.CURRENCY || '₹';
 
 const transporter = nodemailer.createTransport({
@@ -48,7 +49,7 @@ async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName
     amount: amount != null ? Number(amount).toFixed(2) : '—',
     delivery_days: deliveryDays || '—',
     chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -69,7 +70,7 @@ async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerNam
     delivery_days: deliveryDays || '—',
     offer_url: `${APP_URL}/creator/chat/${chatRoomId}`,
     chat_url: `${APP_URL}/creator/chat/${chatRoomId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -89,7 +90,7 @@ async function sendHireRequestEmail({ creatorEmail, creatorName, freelancerName,
     amount: amount != null ? Number(amount).toFixed(2) : '—',
     deadline: deliveryDays ? `${deliveryDays} days` : '—',
     chat_url: `${APP_URL}/creator/chat/${chatRoomId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -109,7 +110,7 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
     amount: amount != null ? Number(amount).toFixed(2) : '—',
     deadline: deliveryDays ? `${deliveryDays} days` : '—',
     chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
-    logo_url: LOGO_URL,
+    asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });

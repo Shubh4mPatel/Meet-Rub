@@ -2,7 +2,7 @@ const chatModel = require("../model/chatmodel");
 const redis = require("../config/reddis");
 const { createPresignedUrl } = require("../utils/helper");
 const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail } = require("../utils/offerEmails");
-const { sendDeadlineExtensionRequestEmail, sendDeadlineExtensionAcceptedEmail, sendDeadlineExtensionRejectedEmail } = require("../utils/deliveryEmails");
+const { sendDeadlineExtensionRequestEmail, sendDeadlineExtensionAcceptedEmail, sendDeadlineExtensionRejectedEmail, sendPackageRejectedEmail, sendPackageAcceptedEmail } = require("../utils/deliveryEmails");
 
 // Save a web notification to DB and emit live to recipient if online.
 // For new_message: skips save and emit entirely if recipient is already in that chat room.
@@ -762,6 +762,22 @@ const chatController = (io) => {
           'link', chatRoomId
         );
 
+        // Send email to the offer sender (recipientId)
+        try {
+          const recipientInfo = await chatModel.getUserInfo(recipientId);
+          await sendPackageAcceptedEmail({
+            freelancerEmail: recipientInfo.email,
+            freelancerName: recipientInfo.name,
+            creatorName: username,
+            serviceTitle: updatedPackage.service_type,
+            amount: updatedPackage.price,
+            deliveryDays: updatedPackage.delivery_days,
+            chatRoomId,
+          });
+        } catch (emailError) {
+          console.error('Error sending package accepted email:', emailError);
+        }
+
         console.log(`Package ${packageId} accepted by ${username} (${userId})`);
       } catch (error) {
         console.error("Error accepting package:", error);
@@ -797,6 +813,22 @@ const chatController = (io) => {
           `${username} has rejected your package offer.`,
           'link', chatRoomId
         );
+
+        // Send email to the offer sender (recipientId)
+        try {
+          const recipientInfo = await chatModel.getUserInfo(recipientId);
+          await sendPackageRejectedEmail({
+            freelancerEmail: recipientInfo.email,
+            freelancerName: recipientInfo.name,
+            creatorName: username,
+            serviceTitle: updatedPackage.service_type,
+            amount: updatedPackage.price,
+            deliveryDays: updatedPackage.delivery_days,
+            chatRoomId,
+          });
+        } catch (emailError) {
+          console.error('Error sending package rejected email:', emailError);
+        }
 
         console.log(`Package ${packageId} rejected by ${username} (${userId})`);
       } catch (error) {
