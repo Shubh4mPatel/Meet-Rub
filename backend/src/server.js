@@ -1,7 +1,24 @@
 // const dotenv = require('dotenv');
 
 const dotenv = require("dotenv");
-dotenv.config();
+const dotenvResult = dotenv.config();
+
+// ── ENV DIAGNOSTICS (temporary) ───────────────────────────────────────────────
+// Shows exactly which .env file dotenv reads and whether GOOGLE_CLIENT_ID arrived.
+{
+  const envDefaultPath = require("path").resolve(process.cwd(), ".env");
+  const mask = (v) => (v ? `SET -> "${String(v).slice(0, 16)}…(${String(v).length} chars)"` : "❌ UNDEFINED");
+  console.log("======================= ENV DEBUG =======================");
+  console.log("[ENV] process.cwd()        :", process.cwd());
+  console.log("[ENV] server.js __dirname  :", __dirname);
+  console.log("[ENV] dotenv reads file at :", envDefaultPath);
+  console.log("[ENV] dotenv load result   :", dotenvResult.error ? `ERROR: ${dotenvResult.error.message}` : "loaded OK");
+  console.log("[ENV] keys in that .env    :", dotenvResult.parsed ? Object.keys(dotenvResult.parsed).join(", ") : "(none parsed)");
+  console.log("[ENV] GOOGLE_CLIENT_ID     :", mask(process.env.GOOGLE_CLIENT_ID));
+  console.log("[ENV] GOOGLE_CLIENT_SECRET :", mask(process.env.GOOGLE_CLIENT_SECRET));
+  console.log("=========================================================");
+}
+// ──────────────────────────────────────────────────────────────────────────────
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");

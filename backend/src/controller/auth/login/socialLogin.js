@@ -30,6 +30,16 @@ const socialLoginUser = async (req, res, next) => {
       return next(new AppError('Invalid or expired Google access token', 401));
     }
 
+    // ── LOGIN-TIME ENV DIAGNOSTIC (temporary) ──────────────────────────────
+    console.log("[SOCIAL-LOGIN] token aud (from Google):", tokenInfo.aud);
+    console.log(
+      "[SOCIAL-LOGIN] process.env.GOOGLE_CLIENT_ID:",
+      process.env.GOOGLE_CLIENT_ID
+        ? `SET -> "${process.env.GOOGLE_CLIENT_ID.slice(0, 16)}…"`
+        : "❌ UNDEFINED (this is the bug — env not loaded into process)"
+    );
+    // ────────────────────────────────────────────────────────────────────────
+
     // Verify the token was issued for OUR app (prevents token-substitution attacks)
     if (tokenInfo.aud !== process.env.GOOGLE_CLIENT_ID) {
       logger.warn(
