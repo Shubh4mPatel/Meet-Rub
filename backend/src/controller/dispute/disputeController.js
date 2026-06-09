@@ -607,7 +607,7 @@ const resolveDispute = async (req, res, next) => {
         ));
       }
 
-      const refundAmountPaise    = Math.round(parseFloat(dispute.total_amount) * 100);
+      const refundAmountPaise = Math.round(parseFloat(dispute.total_amount) * 100);
       const freelancerAmountPaise = Math.round(parseFloat(dispute.freelancer_amount) * 100);
       // Platform fees = total − freelancer; this is the portion that stays in our balance
       // and must be present before we start (the freelancer slice comes back via reversal).
