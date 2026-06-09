@@ -633,10 +633,7 @@ const resolveDispute = async (req, res, next) => {
         await client.query('ROLLBACK');
         logger.warn(`Dispute ${id}: Insufficient balance — available=${currentBalance} paise required=${platformFeesPaise} paise`);
         return next(new AppError(
-          `Insufficient Razorpay balance to process refund. ` +
-          `Available: ₹${(currentBalance / 100).toFixed(2)}, ` +
-          `Required for platform fees: ₹${(platformFeesPaise / 100).toFixed(2)}. ` +
-          `Please top up the Razorpay account before retrying.`,
+          `Please maintain sufficient balance to return platform fees to creator.`,
           402
         ));
       }
