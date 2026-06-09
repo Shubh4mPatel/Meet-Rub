@@ -48,10 +48,16 @@ const loginUser = async (req, res, next) => {
         logger.info(`Fetching role-wise ID for user role: ${user.user_role}`);
         if (user.user_role === 'freelancer') {
             const result = await query(
-                "SELECT freelancer_id FROM freelancer WHERE user_id = $1",
+                "SELECT freelancer_id, verification_status FROM freelancer WHERE user_id = $1",
                 [user.id]
             );
             roleWiseId = result.rows[0]?.freelancer_id || null;
+
+            // Check if freelancer is suspended
+            if (result.rows[0]?.verification_status === 'SUSPENDED') {
+                logger.warn(`Login blocked: Freelancer account suspended (freelancer_id=${roleWiseId})`);
+                return next(new AppError("Your account has been suspended. Please contact support for assistance.", 403));
+            }
         }
         if (user.user_role === 'creator') {
             const result = await query(
