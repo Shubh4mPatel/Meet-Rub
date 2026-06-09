@@ -575,38 +575,73 @@ const resolveDispute = async (req, res, next) => {
       logger.info(`Dispute ${id}: Auto-created payout request (status: REQUESTED) for transaction ${dispute.transaction_id}. Admin must approve to release funds.`);
 
     } else {
-      // Two-step refund: reverse transfer first, then refund customer.
-      // Each state transition is written to dispute_refunds on a side channel
-      // (db.query uses a separate pool connection) so the audit trail persists
-      // even if the main transaction rolls back after a Razorpay side effect.
+      // REFUND FLOW — atomic two-step process:
+      //   Step 0: Balance check — ensure platform fees (commission + GST) are in our primary balance.
+      //   Step 1: POST /v1/transfers/:transfer_id/reversals — pull freelancer amount back to primary.
+      //   Step 2: POST /v1/payments/:payment_id/refund    — return full amount to creator.
+      //
+      // state machine in dispute_refunds (side-channel table — survives a DB ROLLBACK):
+      //   initiated → reversal_completed → completed | refund_pending
+      //                                 ↳ reversal_done_refund_failed  (manual intervention needed)
+      //   initiated → reversal_skipped  → completed | refund_pending   (no transfer_id path)
+      //   initiated → reversal_failed                                   (step 1 blew up)
+      //   initiated → refund_failed                                     (no reversal, step 2 blew up)
+
       if (!dispute.razorpay_payment_id) {
         await client.query('ROLLBACK');
         return next(new AppError('No Razorpay payment ID found for this transaction', 400));
       }
 
-      // Block retries: one attempt per dispute. If a row already exists,
-      // resolution requires manual intervention (Razorpay dashboard + DB).
+      // Block retries — one attempt per dispute.
       logger.info(`resolveDispute: Checking for existing refund attempts for dispute=${id}`);
       const { rows: existingAttempts } = await db.query(
         `SELECT id, state FROM dispute_refunds WHERE dispute_id = $1 LIMIT 1`,
         [id]
       );
       if (existingAttempts.length > 0) {
-        logger.warn(`resolveDispute: Existing refund attempt found dispute=${id} refund_row_id=${existingAttempts[0].id} state=${existingAttempts[0].state} — blocking retry`);
+        logger.warn(`resolveDispute: Existing refund attempt dispute=${id} row=${existingAttempts[0].id} state=${existingAttempts[0].state} — blocking retry`);
         await client.query('ROLLBACK');
         return next(new AppError(
           `A refund attempt already exists for this dispute (state: ${existingAttempts[0].state}). Manual intervention required via Razorpay dashboard.`,
           409
         ));
       }
-      logger.info(`resolveDispute: No existing refund attempt found for dispute=${id} — proceeding`);
 
-      logger.info(`Dispute ${id}: Initiating refund payment_id=${dispute.razorpay_payment_id} total=${dispute.total_amount} transfer_id=${dispute.razorpay_transfer_id || 'none'}`);
+      const refundAmountPaise    = Math.round(parseFloat(dispute.total_amount) * 100);
+      const freelancerAmountPaise = Math.round(parseFloat(dispute.freelancer_amount) * 100);
+      // Platform fees = total − freelancer; this is the portion that stays in our balance
+      // and must be present before we start (the freelancer slice comes back via reversal).
+      const platformFeesPaise = refundAmountPaise - freelancerAmountPaise;
 
-      const refundAmountPaise = Math.round(parseFloat(dispute.total_amount) * 100);
+      logger.info(`Dispute ${id}: Starting refund total=${dispute.total_amount} freelancer=${dispute.freelancer_amount} platformFees=${platformFeesPaise / 100} payment_id=${dispute.razorpay_payment_id} transfer_id=${dispute.razorpay_transfer_id || 'none'}`);
 
-      // Insert tracking row up-front so we have a record even if Razorpay calls
-      // throw before we can update state below.
+      // ── Step 0: Balance check ────────────────────────────────────────────────
+      logger.info(`Dispute ${id}: Step 0 — checking Razorpay balance (required ≥ ₹${(platformFeesPaise / 100).toFixed(2)} for platform fees)`);
+      let currentBalance;
+      try {
+        const { data: balanceData } = await razorpayRoutes.get('/v1/balance', { timeout: 15000 });
+        currentBalance = balanceData.balance; // in paise
+        logger.info(`Dispute ${id}: Balance check — available=${currentBalance} paise required=${platformFeesPaise} paise`);
+      } catch (balErr) {
+        await client.query('ROLLBACK');
+        const errMsg = balErr?.response?.data?.error?.description || balErr?.message;
+        logger.error(`Dispute ${id}: Balance check API failed: ${errMsg}`, balErr?.response?.data);
+        return next(new AppError(`Failed to fetch Razorpay balance: ${errMsg}`, 502));
+      }
+
+      if (currentBalance < platformFeesPaise) {
+        await client.query('ROLLBACK');
+        logger.warn(`Dispute ${id}: Insufficient balance — available=${currentBalance} paise required=${platformFeesPaise} paise`);
+        return next(new AppError(
+          `Insufficient Razorpay balance to process refund. ` +
+          `Available: ₹${(currentBalance / 100).toFixed(2)}, ` +
+          `Required for platform fees: ₹${(platformFeesPaise / 100).toFixed(2)}. ` +
+          `Please top up the Razorpay account before retrying.`,
+          402
+        ));
+      }
+
+      // Insert audit row before any Razorpay call so the record always exists.
       const { rows: [refundRow] } = await db.query(
         `INSERT INTO dispute_refunds
            (dispute_id, transaction_id, project_id, razorpay_payment_id,
@@ -619,7 +654,7 @@ const resolveDispute = async (req, res, next) => {
           dispute.project_id,
           dispute.razorpay_payment_id,
           dispute.razorpay_transfer_id || null,
-          null, // reversal_amount: no transfer reversal — direct refund since funds are on hold
+          dispute.freelancer_amount,       // expected reversal amount
           parseFloat(dispute.total_amount),
           adminId,
         ]
@@ -627,14 +662,60 @@ const resolveDispute = async (req, res, next) => {
       const refundRowId = refundRow.id;
       logger.info(`Dispute ${id}: Refund tracking row created refund_row_id=${refundRowId}`);
 
-      // Single API call: POST /v1/payments/:id/refund
-      // Funds were on hold and not settled to linked account, so plain refund
-      // directly returns the money to the creator. Uses razorpayRoutes (axios)
-      // with native timeout to prevent hanging.
-      try {
-        logger.info(`Dispute ${id}: About to call razorpayRoutes.post — starting axios call payment_id=${dispute.razorpay_payment_id} amount=${refundAmountPaise}`);
+      // ── Step 1: Transfer reversal ────────────────────────────────────────────
+      let reversalId = null;
+      if (dispute.razorpay_transfer_id) {
+        try {
+          logger.info(`Dispute ${id}: Step 1 — reversing transfer=${dispute.razorpay_transfer_id}`);
+          const { data: reversal } = await razorpayRoutes.post(
+            `/v1/transfers/${dispute.razorpay_transfer_id}/reversals`,
+            {},
+            { timeout: 30000 }
+          );
+          reversalId = reversal.id;
+          logger.info(`Dispute ${id}: Transfer reversal success reversal_id=${reversalId} transfer=${dispute.razorpay_transfer_id}`);
 
-        const axiosPromise = razorpayRoutes.post(
+          // Persist reversal_id in error_payload (general metadata) alongside the state advance.
+          await db.query(
+            `UPDATE dispute_refunds
+               SET state = 'reversal_completed',
+                   error_payload = $1::jsonb,
+                   updated_at = NOW()
+             WHERE id = $2`,
+            [JSON.stringify({ razorpay_reversal_id: reversalId }), refundRowId]
+          );
+        } catch (reversalErr) {
+          const errData = reversalErr?.response?.data?.error || { message: reversalErr?.message };
+          const errCode = errData?.code || reversalErr?.response?.status?.toString() || null;
+          const errDesc = errData?.description || reversalErr?.message || null;
+          await db.query(
+            `UPDATE dispute_refunds
+               SET state = 'reversal_failed', error_step = 'transfer_reversal',
+                   error_code = $1, error_description = $2, error_payload = $3::jsonb,
+                   updated_at = NOW()
+             WHERE id = $4`,
+            [errCode, errDesc, JSON.stringify(errData), refundRowId]
+          );
+          logger.error(`Dispute ${id}: Transfer reversal failed transfer=${dispute.razorpay_transfer_id} error=${errDesc}`, reversalErr?.response?.data);
+          await client.query('ROLLBACK');
+          return next(new AppError(
+            `Transfer reversal failed: ${errDesc || 'Razorpay API error'}. No funds moved — safe to retry after fixing the issue.`,
+            502
+          ));
+        }
+      } else {
+        // No linked transfer (e.g. transfer webhook never arrived) — skip reversal.
+        logger.info(`Dispute ${id}: Step 1 — no transfer_id, skipping reversal (direct refund only)`);
+        await db.query(
+          `UPDATE dispute_refunds SET state = 'reversal_skipped', updated_at = NOW() WHERE id = $1`,
+          [refundRowId]
+        );
+      }
+
+      // ── Step 2: Payment refund ───────────────────────────────────────────────
+      try {
+        logger.info(`Dispute ${id}: Step 2 — refunding payment=${dispute.razorpay_payment_id} amount=${refundAmountPaise} paise`);
+        const { data: refund } = await razorpayRoutes.post(
           `/v1/payments/${dispute.razorpay_payment_id}/refund`,
           {
             amount: refundAmountPaise,
@@ -643,15 +724,9 @@ const resolveDispute = async (req, res, next) => {
           { timeout: 30000 }
         );
 
-        logger.info(`Dispute ${id}: axios promise created — awaiting response`);
-
-        const { data: refund } = await axiosPromise;
-
-        logger.info(`Dispute ${id}: axios response received — refund_id=${refund.id} status=${refund.status}`);
-
-        // Razorpay refund status: 'processed' = done, 'pending' = bank processing
+        // Razorpay refund status: 'processed' = instant, 'pending' = bank processing
         const refundState = refund.status === 'processed' ? 'completed' : 'refund_pending';
-        logger.info(`Dispute ${id}: Refund API response refund_id=${refund.id} status=${refund.status} → db_state=${refundState} payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`);
+        logger.info(`Dispute ${id}: Refund response refund_id=${refund.id} status=${refund.status} → db_state=${refundState}`);
         await db.query(
           `UPDATE dispute_refunds
              SET state = $1, razorpay_refund_id = $2,
@@ -660,34 +735,49 @@ const resolveDispute = async (req, res, next) => {
           [refundState, refund.id, refundRowId]
         );
       } catch (refundErr) {
-        logger.error(`Dispute ${id}: axios call threw error — name=${refundErr?.name} code=${refundErr?.code} message=${refundErr?.message}`);
-        logger.error(`Dispute ${id}: axios error response status=${refundErr?.response?.status} data=${JSON.stringify(refundErr?.response?.data)}`);
-        const errData = refundErr?.response?.data?.error || refundErr?.error || { message: refundErr?.message };
+        const errData = refundErr?.response?.data?.error || { message: refundErr?.message };
         const errCode = errData?.code || refundErr?.response?.status?.toString() || null;
         const errDesc = errData?.description || refundErr?.message || null;
+
+        // Partial-failure: reversal succeeded but refund failed.
+        // We MUST roll back DB state but keep the audit row so admin can act.
+        const failedState = reversalId ? 'reversal_done_refund_failed' : 'refund_failed';
+        const errorPayload = reversalId
+          ? { razorpay_reversal_id: reversalId, error: errData }
+          : { error: errData };
         await db.query(
           `UPDATE dispute_refunds
-             SET state = 'refund_failed', error_step = 'refund_with_reversal',
-                 error_code = $1, error_description = $2, error_payload = $3::jsonb,
+             SET state = $1, error_step = 'payment_refund',
+                 error_code = $2, error_description = $3, error_payload = $4::jsonb,
                  updated_at = NOW()
-           WHERE id = $4`,
-          [errCode, errDesc, JSON.stringify(errData), refundRowId]
+           WHERE id = $5`,
+          [failedState, errCode, errDesc, JSON.stringify(errorPayload), refundRowId]
         );
-        logger.error(`Dispute ${id}: Refund failed payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount} error_code=${errCode} error=${errDesc}`, refundErr?.response?.data || refundErr);
-        throw refundErr;
+        logger.error(`Dispute ${id}: Step 2 refund failed reversal_done=${!!reversalId} payment_id=${dispute.razorpay_payment_id} error=${errDesc}`, refundErr?.response?.data);
+        await client.query('ROLLBACK');
+
+        if (reversalId) {
+          return next(new AppError(
+            `CRITICAL: Transfer reversal succeeded (reversal_id=${reversalId}) but payment refund failed. ` +
+            `Freelancer's funds have been returned to primary balance. ` +
+            `Manual refund required via Razorpay dashboard. Contact support immediately.`,
+            502
+          ));
+        }
+        return next(new AppError(`Payment refund failed: ${errDesc || 'Razorpay API error'}`, 502));
       }
 
       await client.query(
         `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW() WHERE id = $1`,
         [dispute.transaction_id]
       );
-      logger.info(`Dispute ${id}: Transaction ${dispute.transaction_id} marked as REFUNDED`);
+      logger.info(`Dispute ${id}: Transaction ${dispute.transaction_id} marked REFUNDED`);
 
       await client.query(
         `UPDATE projects SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
         [dispute.project_id]
       );
-      logger.info(`Dispute ${id}: Project ${dispute.project_id} marked as CANCELLED`);
+      logger.info(`Dispute ${id}: Project ${dispute.project_id} marked CANCELLED`);
     }
 
     logger.info(`resolveDispute: Marking dispute=${id} as resolved in DB`);
