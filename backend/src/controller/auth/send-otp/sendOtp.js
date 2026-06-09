@@ -51,7 +51,7 @@ const otpSendApi = async (req, res, next) => {
 
     const otp = crypto.randomBytes(3).toString("hex");
     const otpHash = await bcrypt.hash(otp, 10);
-    const expiration = new Date(Date.now() + 20 * 60 * 1000);
+    const expiration = new Date(Date.now() + 30 * 60 * 1000);
 
     logger.info("OTP generated (not logged for security)", otp);
 
