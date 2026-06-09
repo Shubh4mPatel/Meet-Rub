@@ -632,8 +632,9 @@ const resolveDispute = async (req, res, next) => {
       // directly returns the money to the creator. Uses razorpayRoutes (axios)
       // with native timeout to prevent hanging.
       try {
-        logger.info(`Dispute ${id}: Calling POST /v1/payments/${dispute.razorpay_payment_id}/refund amount=${refundAmountPaise}`);
-        const { data: refund } = await razorpayRoutes.post(
+        logger.info(`Dispute ${id}: About to call razorpayRoutes.post — starting axios call payment_id=${dispute.razorpay_payment_id} amount=${refundAmountPaise}`);
+
+        const axiosPromise = razorpayRoutes.post(
           `/v1/payments/${dispute.razorpay_payment_id}/refund`,
           {
             amount: refundAmountPaise,
@@ -641,6 +642,13 @@ const resolveDispute = async (req, res, next) => {
           },
           { timeout: 30000 }
         );
+
+        logger.info(`Dispute ${id}: axios promise created — awaiting response`);
+
+        const { data: refund } = await axiosPromise;
+
+        logger.info(`Dispute ${id}: axios response received — refund_id=${refund.id} status=${refund.status}`);
+
         // Razorpay refund status: 'processed' = done, 'pending' = bank processing
         const refundState = refund.status === 'processed' ? 'completed' : 'refund_pending';
         logger.info(`Dispute ${id}: Refund API response refund_id=${refund.id} status=${refund.status} → db_state=${refundState} payment_id=${dispute.razorpay_payment_id} amount=${dispute.total_amount}`);
@@ -652,6 +660,8 @@ const resolveDispute = async (req, res, next) => {
           [refundState, refund.id, refundRowId]
         );
       } catch (refundErr) {
+        logger.error(`Dispute ${id}: axios call threw error — name=${refundErr?.name} code=${refundErr?.code} message=${refundErr?.message}`);
+        logger.error(`Dispute ${id}: axios error response status=${refundErr?.response?.status} data=${JSON.stringify(refundErr?.response?.data)}`);
         const errData = refundErr?.response?.data?.error || refundErr?.error || { message: refundErr?.message };
         const errCode = errData?.code || refundErr?.response?.status?.toString() || null;
         const errDesc = errData?.description || refundErr?.message || null;
