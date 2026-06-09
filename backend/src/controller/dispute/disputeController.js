@@ -465,15 +465,20 @@ const resolveDispute = async (req, res, next) => {
   const { id } = req.params;
   const { resolution_action, admin_note } = req.body;
 
+  logger.info(`resolveDispute: admin=${adminId} dispute=${id} action=${resolution_action}`);
+
   if (!resolution_action || !['resolve', 'release', 'refund'].includes(resolution_action)) {
     return next(new AppError('resolution_action is required and must be "resolve", "release" or "refund"', 400));
   }
 
   const client = await db.connect();
+  logger.info(`resolveDispute: DB client acquired for dispute=${id}`);
   try {
     await client.query('BEGIN');
+    logger.info(`resolveDispute: Transaction BEGIN for dispute=${id}`);
 
     // Get dispute + linked transaction (LEFT JOIN so disputes without transactions are still found)
+    logger.info(`resolveDispute: Fetching dispute + linked transaction for dispute=${id}`);
     const { rows: disputes } = await client.query(
       `SELECT d.*, t.id AS transaction_id, t.status AS transaction_status,
               t.razorpay_payment_id, t.total_amount, t.freelancer_amount,
@@ -491,13 +496,16 @@ const resolveDispute = async (req, res, next) => {
     );
 
     if (disputes.length === 0) {
+      logger.warn(`resolveDispute: Dispute not found dispute=${id}`);
       await client.query('ROLLBACK');
       return next(new AppError('Dispute not found', 404));
     }
 
     const dispute = disputes[0];
+    logger.info(`resolveDispute: Dispute fetched dispute=${id} status=${dispute.status} project_id=${dispute.project_id} transaction_id=${dispute.transaction_id} transaction_status=${dispute.transaction_status} payment_id=${dispute.razorpay_payment_id} transfer_id=${dispute.razorpay_transfer_id}`);
 
     if (dispute.status === 'resolved') {
+      logger.warn(`resolveDispute: Dispute already resolved dispute=${id}`);
       await client.query('ROLLBACK');
       return res.status(400).json({
         status: 'error',
@@ -507,6 +515,7 @@ const resolveDispute = async (req, res, next) => {
 
     // Disputes without project_id can only be resolved (no payment actions)
     if (!dispute.project_id && resolution_action !== 'resolve') {
+      logger.warn(`resolveDispute: No project linked to dispute=${id}, action=${resolution_action} rejected`);
       await client.query('ROLLBACK');
       return next(new AppError('This dispute has no linked project. Only "resolve" action is allowed (no payment operations).', 400));
     }
@@ -514,18 +523,21 @@ const resolveDispute = async (req, res, next) => {
     if (resolution_action !== 'resolve') {
       // Require a linked transaction for release/refund actions
       if (!dispute.transaction_id) {
+        logger.warn(`resolveDispute: No linked transaction for dispute=${id}, action=${resolution_action} requires one`);
         await client.query('ROLLBACK');
         return next(new AppError('No linked transaction found for this dispute. Use "resolve" to close it without a payment action.', 400));
       }
 
       // Check if transaction already COMPLETED (funds already released)
       if (dispute.transaction_status === 'COMPLETED') {
+        logger.warn(`resolveDispute: Transaction already COMPLETED for dispute=${id} transaction=${dispute.transaction_id}`);
         await client.query('ROLLBACK');
         return next(new AppError('Transaction already completed. Funds already released to freelancer.', 400));
       }
 
       // Check if transaction is not HELD (can't release/refund)
       if (dispute.transaction_status !== 'HELD') {
+        logger.warn(`resolveDispute: Transaction status=${dispute.transaction_status} is not HELD, cannot process payment action for dispute=${id}`);
         await client.query('ROLLBACK');
         return next(new AppError(`Cannot process payment action: transaction status is ${dispute.transaction_status}`, 400));
       }
@@ -533,14 +545,17 @@ const resolveDispute = async (req, res, next) => {
 
     if (resolution_action === 'resolve') {
       // Just mark as resolved — no money movement
+      logger.info(`resolveDispute: action=resolve for dispute=${id} — no money movement, marking as resolved`);
 
     } else if (resolution_action === 'release') {
+      logger.info(`resolveDispute: action=release for dispute=${id} — marking project COMPLETED and creating payout request`);
       // Mark project as COMPLETED and auto-create payout request
       // Admin must approve the payout to release funds (same flow as normal delivery approval)
       await client.query(
         `UPDATE projects SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [dispute.project_id]
       );
+      logger.info(`resolveDispute: Project ${dispute.project_id} marked COMPLETED for dispute=${id}`);
 
       // Auto-create payout request with REQUESTED status
       // Admin will approve it later, which will:
@@ -569,17 +584,22 @@ const resolveDispute = async (req, res, next) => {
 
       // Block retries: one attempt per dispute. If a row already exists,
       // resolution requires manual intervention (Razorpay dashboard + DB).
+      logger.info(`resolveDispute: Checking for existing refund attempts for dispute=${id}`);
       const { rows: existingAttempts } = await db.query(
         `SELECT id, state FROM dispute_refunds WHERE dispute_id = $1 LIMIT 1`,
         [id]
       );
       if (existingAttempts.length > 0) {
+        logger.warn(`resolveDispute: Existing refund attempt found dispute=${id} refund_row_id=${existingAttempts[0].id} state=${existingAttempts[0].state} — blocking retry`);
         await client.query('ROLLBACK');
         return next(new AppError(
           `A refund attempt already exists for this dispute (state: ${existingAttempts[0].state}). Manual intervention required via Razorpay dashboard.`,
           409
         ));
       }
+      logger.info(`resolveDispute: No existing refund attempt found for dispute=${id} — proceeding`);
+
+      logger.info(`Dispute ${id}: Initiating refund payment_id=${dispute.razorpay_payment_id} total=${dispute.total_amount} transfer_id=${dispute.razorpay_transfer_id || 'none'}`);
 
       const refundAmountPaise = Math.round(parseFloat(dispute.total_amount) * 100);
       const freelancerAmountPaise = Math.round(parseFloat(dispute.freelancer_amount || 0) * 100);
@@ -604,6 +624,7 @@ const resolveDispute = async (req, res, next) => {
         ]
       );
       const refundRowId = refundRow.id;
+      logger.info(`Dispute ${id}: Refund tracking row created refund_row_id=${refundRowId}`);
 
       // Step 1: Reverse transfer (linked account → platform). Skipped if no
       // transfer exists (payment captured but never routed).
@@ -622,6 +643,7 @@ const resolveDispute = async (req, res, next) => {
           );
           logger.info(`Dispute ${id}: Reversal succeeded reversal_id=${reversal.id} transfer_id=${dispute.razorpay_transfer_id} amount=${dispute.freelancer_amount}`);
         } catch (reversalErr) {
+
           await db.query(
             `UPDATE dispute_refunds
                SET state = 'reversal_failed', error_step = 'reversal',
@@ -638,6 +660,8 @@ const resolveDispute = async (req, res, next) => {
           logger.error(`Dispute ${id}: Reversal failed transfer_id=${dispute.razorpay_transfer_id}`, reversalErr);
           throw reversalErr;
         }
+      } else {
+        logger.info(`Dispute ${id}: No transfer found — skipping reversal step, proceeding directly to customer refund`);
       }
 
       // Step 2: Refund customer (platform → creator). If this throws after
@@ -683,13 +707,16 @@ const resolveDispute = async (req, res, next) => {
         `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW() WHERE id = $1`,
         [dispute.transaction_id]
       );
+      logger.info(`Dispute ${id}: Transaction ${dispute.transaction_id} marked as REFUNDED`);
 
       await client.query(
         `UPDATE projects SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
         [dispute.project_id]
       );
+      logger.info(`Dispute ${id}: Project ${dispute.project_id} marked as CANCELLED`);
     }
 
+    logger.info(`resolveDispute: Marking dispute=${id} as resolved in DB`);
     // Mark dispute resolved. Refund/reversal IDs live in dispute_refunds.
     const { rows: resolved } = await client.query(
       `UPDATE disputes
@@ -699,6 +726,7 @@ const resolveDispute = async (req, res, next) => {
       [JSON.stringify({ note: admin_note || '', action: resolution_action }), adminId, id]
     );
 
+    logger.info(`resolveDispute: Fetching user details for notifications/emails dispute=${id}`);
     // Fetch user details for notifications and emails
     const { rows: userDetails } = await client.query(
       `SELECT 
@@ -715,11 +743,13 @@ const resolveDispute = async (req, res, next) => {
     );
 
     await client.query('COMMIT');
+    logger.info(`resolveDispute: Transaction COMMIT successful dispute=${id}`);
 
     logger.info(`Dispute ${id} resolved by admin ${adminId} with action: ${resolution_action}`);
 
     // Send notifications and emails based on resolution_action
     if (userDetails.length > 0) {
+      logger.info(`resolveDispute: Sending notifications and emails for dispute=${id} action=${resolution_action}`);
       const details = userDetails[0];
       const CURRENCY = process.env.CURRENCY || '₹';
 
@@ -728,6 +758,7 @@ const resolveDispute = async (req, res, next) => {
         const raisedByUserId = details.raised_by === 'creator' ? details.creator_user_id : details.freelancer_user_id;
         const raisedByName = details.raised_by === 'creator' ? details.creator_name : details.freelancer_name;
 
+        logger.info(`resolveDispute: Sending resolve notification to raised_by=${details.raised_by} userId=${raisedByUserId} dispute=${id}`);
         Promise.allSettled([
           sendNotification({
             recipientId: raisedByUserId,
@@ -740,7 +771,9 @@ const resolveDispute = async (req, res, next) => {
           })
         ]).then(results => {
           if (results[0].status === 'rejected') {
-            logger.error(`resolveDispute: notification failed:`, results[0].reason?.message);
+            logger.error(`resolveDispute: notification failed for userId=${raisedByUserId} dispute=${id}:`, results[0].reason?.message);
+          } else {
+            logger.info(`resolveDispute: Notification sent successfully to userId=${raisedByUserId} dispute=${id}`);
           }
         });
 
@@ -750,6 +783,7 @@ const resolveDispute = async (req, res, next) => {
         const winnerText = isRefund ? 'creator' : 'freelancer';
         const loserText = isRefund ? 'freelancer' : 'creator';
 
+        logger.info(`resolveDispute: Sending notifications+emails to creator=${details.creator_user_id} and freelancer=${details.freelancer_user_id} for dispute=${id} isRefund=${isRefund}`);
         Promise.allSettled([
           // Notification to creator
           sendNotification({
@@ -800,21 +834,26 @@ const resolveDispute = async (req, res, next) => {
             amount: isRefund ? null : dispute.freelancer_amount,
           }),
         ]).then(results => {
+          const labels = [
+            'creator notification',
+            'freelancer notification',
+            'creator dispute email',
+            'freelancer dispute email'
+          ];
           results.forEach((result, i) => {
             if (result.status === 'rejected') {
-              const labels = [
-                'creator notification',
-                'freelancer notification',
-                'creator dispute email',
-                'freelancer dispute email'
-              ];
-              logger.error(`resolveDispute: ${labels[i]} failed:`, result.reason?.message);
+              logger.error(`resolveDispute: ${labels[i]} failed for dispute=${id}:`, result.reason?.message);
+            } else {
+              logger.info(`resolveDispute: ${labels[i]} sent successfully for dispute=${id}`);
             }
           });
         });
       }
+    } else {
+      logger.warn(`resolveDispute: No user details found for dispute=${id}, skipping notifications/emails`);
     }
 
+    logger.info(`resolveDispute: Sending success response for dispute=${id} action=${resolution_action}`);
     return res.status(200).json({
       status: 'success',
       message: resolution_action === 'release'
@@ -826,10 +865,11 @@ const resolveDispute = async (req, res, next) => {
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    logger.error('resolveDispute error:', error);
+    logger.error(`resolveDispute: ROLLBACK executed for dispute=${id} admin=${adminId} action=${resolution_action} — error: ${error?.message}`, error);
     return next(new AppError('Failed to resolve dispute', 500));
   } finally {
     client.release();
+    logger.info(`resolveDispute: DB client released for dispute=${id}`);
   }
 };
 
