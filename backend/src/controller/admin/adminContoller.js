@@ -170,51 +170,24 @@ LIMIT $1 OFFSET $2`,
 const getAllCreators = async (req, res, next) => {
     // Implementation for getting all creators
     try {
-        const { page = 1, limit = 10, search, startDate, endDate } = req.query;
+        const { page = 1, limit = 10 } = req.query;
         const offset = (page - 1) * limit;
 
-        // Build dynamic filters (search by name/email + join date range)
-        const conditions = ['u.is_active = true'];
-        const params = [];
-        let idx = 1;
-
-        if (search && search.trim()) {
-            conditions.push(`(c.full_name ILIKE $${idx} OR c.email ILIKE $${idx})`);
-            params.push(`%${search.trim()}%`);
-            idx++;
-        }
-        if (startDate) {
-            conditions.push(`c.created_at >= $${idx}::date`);
-            params.push(startDate);
-            idx++;
-        }
-        if (endDate) {
-            conditions.push(`c.created_at < ($${idx}::date + interval '1 day')`);
-            params.push(endDate);
-            idx++;
-        }
-
-        const whereClause = `WHERE ${conditions.join(' AND ')}`;
-
         const creatorsData = await query(
-            `SELECT
-    c.full_name AS creator_full_name,
-    c.email AS creator_email,
+            `SELECT 
+    c.full_name AS creator_full_name, 
+    c.email AS creator_email, 
     c.created_at
 FROM creators c
 INNER JOIN users u ON c.user_id = u.id
-${whereClause}
-ORDER BY c.created_at DESC
-LIMIT $${idx} OFFSET $${idx + 1}`,
-            [...params, limit, offset]
+WHERE u.is_active = true
+LIMIT $1 OFFSET $2`,
+            [limit, offset]
         );
 
         const creatorsCount = await query(
             `SELECT COUNT(*) AS total
-       FROM creators c
-       INNER JOIN users u ON c.user_id = u.id
-       ${whereClause}`,
-            params
+       FROM creators`
         );
         const totalCreators = parseInt(creatorsCount.rows[0].total, 10);
         const totalPages = Math.ceil(totalCreators / limit);
