@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -22,7 +22,7 @@
   .footer{background:#F8F7FF;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
   .footer p{font-size:12px;color:#9CA3AF;margin:4px 0;}
   .social-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 10px;}
-  .social-row a{display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;}
+  .social-row a{display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;margin-right:10px;}
   .social-row img{width:32px;height:32px;display:block;}
   .footer-links{margin-top:8px;}
   .footer-links a{font-size:12px;color:#7C3AED;text-decoration:none;margin:0 8px;}
@@ -37,7 +37,7 @@
     <div class="header-subtitle">Order activated — funds secured in escrow</div>
   </div>
   <div class="body">
-    
+
         <h2>Hi {{freelancer_username}},</h2>
         <p>The creator has paid and your Meetrub order is now active. Funds are held securely in escrow and will be released to your wallet once the creator approves your delivery.</p>
         <div class="highlight">
@@ -47,7 +47,7 @@
           <p><strong>Deadline:</strong> {{deadline}}</p>
           <p><strong>Creator:</strong> {{creator_username}}</p>
         </div>
-        <a href="{{order_url}}" class="btn btn-primary" style="background:#0F766E;">View Order &amp; Deliver</a>
+        <a href="{{order_url}}" class="btn btn-primary" >View Order &amp; Deliver</a>
   </div>
   <div class="footer">
     <div class="social-row">
@@ -58,8 +58,8 @@
     <p>Deliver on time to maintain your Meetrub rating.</p>
     <p>&copy; 2026 Meetrub. All rights reserved.</p>
     <div class="footer-links">
-      <a href="{{help_url}}">Help Center</a>
-      <a href="{{privacy_url}}">Privacy Policy</a>
+      <a href="https://meetrub.com/contact-us">Help Center</a>
+      <a href="https://meetrub.com/privacy-policy">Privacy Policy</a>
     </div>
   </div>
 </div>

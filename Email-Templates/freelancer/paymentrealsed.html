@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -22,7 +22,7 @@
   .footer{background:#F8F7FF;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
   .footer p{font-size:12px;color:#9CA3AF;margin:4px 0;}
   .social-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 10px;}
-  .social-row a{display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;}
+  .social-row a{display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;margin-right:10px;}
   .social-row img{width:32px;height:32px;display:block;}
   .footer-links{margin-top:8px;}
   .footer-links a{font-size:12px;color:#7C3AED;text-decoration:none;margin:0 8px;}
@@ -37,17 +37,17 @@
     <div class="header-subtitle">Payment released to your wallet</div>
   </div>
   <div class="body">
-    
+
         <h2>Hi {{freelancer_username}},</h2>
         <p>The creator has approved your delivery and your earnings have been released to your Meetrub wallet!</p>
         <div class="highlight">
           <p><strong>Order:</strong> {{service_title}}</p>
           <p><strong>Gross order value:</strong> {{currency}}{{total_amount}}</p>
           <p><strong>Platform fee (20%):</strong> &minus;{{currency}}{{platform_fee}}</p>
-          <p><strong>Your earnings (80%):</strong> <strong style="color:#0F766E;">{{currency}}{{freelancer_earnings}}</strong></p>
+          <p><strong>Your earnings (80%):</strong> <strong style="color:#000;">{{currency}}{{freelancer_earnings}}</strong></p>
           <p><strong>New wallet balance:</strong> {{currency}}{{wallet_balance}}</p>
         </div>
-        <a href="{{wallet_url}}" class="btn btn-primary" style="background:#0F766E;">View Wallet</a>
+        <a href="{{wallet_url}}" class="btn btn-primary">View Wallet</a>
         <a href="{{withdraw_url}}" class="btn btn-secondary">Request Withdrawal</a>
   </div>
   <div class="footer">
@@ -59,8 +59,8 @@
     <p>Meetrub withdrawals are processed within 2 business days.</p>
     <p>&copy; 2026 Meetrub. All rights reserved.</p>
     <div class="footer-links">
-      <a href="{{help_url}}">Help Center</a>
-      <a href="{{privacy_url}}">Privacy Policy</a>
+      <a href="https://meetrub.com/contact-us">Help Center</a>
+      <a href="https://meetrub.com/privacy-policy">Privacy Policy</a>
     </div>
   </div>
 </div>
