@@ -1351,7 +1351,7 @@ const approveProject = async (req, res, next) => {
 
     // Change project status from SUBMITTED to COMPLETED (creator accepted, but funds stay in escrow until admin releases)
     await client.query(
-      `UPDATE projects SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+      `UPDATE projects SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [projectId]
     );
 

@@ -92,7 +92,10 @@
       "Bash(awk 'NR>=3768 && NR<=3771' backend/src/controller/users/userProfileController.js)",
       "Bash(awk 'NR>=3995 && NR<=3998' backend/src/controller/users/userProfileController.js)",
       "Bash(grep -E \"\\\\.\\(js|jsx|tsx|ts\\)$\")",
-      "Bash(mkdir -p /home/shubh4m/projects/meetrub/src/app/google-popup-callback)"
+      "Bash(mkdir -p /home/shubh4m/projects/meetrub/src/app/google-popup-callback)",
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(curl -s http://localhost:4008/api/health)",
+      "Bash(pm2 list *)"
     ],
     "additionalDirectories": [
       "/tmp",
