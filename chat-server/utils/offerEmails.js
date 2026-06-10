@@ -6,7 +6,9 @@ const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
 const APP_URL = process.env.APP_URL || 'https://meetrub.com';
 const ASSET_BASE = process.env.EMAIL_ASSET_BASE_URL || APP_URL;
-const LOGO_URL = process.env.LOGO_URL || `${APP_URL}/logo.png`;
+const LOGO_SVG_PATH = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
+const LOGO_URL = process.env.LOGO_URL ||
+  `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
 const HELP_URL = process.env.HELP_URL || 'https://meetrub.com/contact-us';
 const PRIVACY_URL = process.env.PRIVACY_URL || 'https://meetrub.com/privacy-policy';
 const CURRENCY = process.env.CURRENCY || '₹';
@@ -50,6 +52,7 @@ async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName
     delivery_days: deliveryDays || '—',
     chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
     asset_base: ASSET_BASE,
+    logo_url: LOGO_URL,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -71,6 +74,7 @@ async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerNam
     offer_url: `${APP_URL}/creator/chat/${chatRoomId}`,
     chat_url: `${APP_URL}/creator/chat/${chatRoomId}`,
     asset_base: ASSET_BASE,
+    logo_url: LOGO_URL,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -91,6 +95,7 @@ async function sendHireRequestEmail({ creatorEmail, creatorName, freelancerName,
     deadline: deliveryDays ? `${deliveryDays} days` : '—',
     chat_url: `${APP_URL}/creator/chat/${chatRoomId}`,
     asset_base: ASSET_BASE,
+    logo_url: LOGO_URL,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -111,6 +116,7 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
     deadline: deliveryDays ? `${deliveryDays} days` : '—',
     chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
     asset_base: ASSET_BASE,
+    logo_url: LOGO_URL,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });

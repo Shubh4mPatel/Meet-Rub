@@ -7,6 +7,7 @@ const logger = getLogger('delivery-emails');
 const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
 const APP_URL = process.env.APP_URL || 'https://meetrub.com';
+const ASSET_BASE = process.env.EMAIL_ASSET_BASE_URL || APP_URL;
 const LOGO_SVG_PATH = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
 const LOGO_URL = process.env.LOGO_URL ||
     `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
@@ -119,7 +120,8 @@ async function sendPackageRejectedEmail({ freelancerEmail, freelancerName, creat
         amount: String(amount),
         delivery_days: String(deliveryDays),
         chat_url: `${APP_URL}/messages/${chatRoomId}`,
-        asset_base: process.env.ASSET_BASE_URL || APP_URL,
+        asset_base: ASSET_BASE,
+        logo_url: LOGO_URL,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
@@ -139,7 +141,8 @@ async function sendPackageAcceptedEmail({ freelancerEmail, freelancerName, creat
         amount: String(amount),
         delivery_days: String(deliveryDays),
         chat_url: `${APP_URL}/messages/${chatRoomId}`,
-        asset_base: process.env.ASSET_BASE_URL || APP_URL,
+        asset_base: ASSET_BASE,
+        logo_url: LOGO_URL,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
