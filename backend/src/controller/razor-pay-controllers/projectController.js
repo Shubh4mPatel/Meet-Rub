@@ -507,6 +507,15 @@ const getAllProjects = async (req, res, next) => {
     const startDate = req.query.startDate?.trim() || null;
     const endDate = req.query.endDate?.trim() || null;
     const service = req.query.service?.trim() || null;
+    const freelancerId = req.query.freelancer_id ? parseInt(req.query.freelancer_id) : null;
+    const creatorId = req.query.creator_id ? parseInt(req.query.creator_id) : null;
+
+    if (req.query.freelancer_id && (!freelancerId || isNaN(freelancerId))) {
+      return next(new AppError('Invalid freelancer_id', 400));
+    }
+    if (req.query.creator_id && (!creatorId || isNaN(creatorId))) {
+      return next(new AppError('Invalid creator_id', 400));
+    }
 
     // Maps frontend-friendly labels → DB values
     const STATUS_MAP = {
@@ -579,7 +588,25 @@ const getAllProjects = async (req, res, next) => {
       params.push(`%${service}%`);
     }
 
-    logger.info(`[getAllProjects] filters: status=${statusFilter} search=${search} startDate=${startDate} endDate=${endDate} service=${service} params=${JSON.stringify(params)}`);
+    // Freelancer ID filter
+    let projectFreelancerWhere = '', packageFreelancerWhere = '';
+    if (freelancerId) {
+      projectFreelancerWhere = `AND p.freelancer_id = $${p}`;
+      packageFreelancerWhere = `AND cp2.freelancer_id = $${p}`;
+      p++;
+      params.push(freelancerId);
+    }
+
+    // Creator ID filter
+    let projectCreatorWhere = '', packageCreatorWhere = '';
+    if (creatorId) {
+      projectCreatorWhere = `AND p.creator_id = $${p}`;
+      packageCreatorWhere = `AND cp2.creator_id = $${p}`;
+      p++;
+      params.push(creatorId);
+    }
+
+    logger.info(`[getAllProjects] filters: status=${statusFilter} search=${search} startDate=${startDate} endDate=${endDate} service=${service} freelancer_id=${freelancerId} creator_id=${creatorId} params=${JSON.stringify(params)}`);
 
     const unionQuery = `
       SELECT
@@ -635,6 +662,8 @@ const getAllProjects = async (req, res, next) => {
         ${projectStartWhere}
         ${projectEndWhere}
         ${projectServiceWhere}
+        ${projectFreelancerWhere}
+        ${projectCreatorWhere}
 
       UNION ALL
 
@@ -687,6 +716,8 @@ const getAllProjects = async (req, res, next) => {
         ${packageStartWhere}
         ${packageEndWhere}
         ${packageServiceWhere}
+        ${packageFreelancerWhere}
+        ${packageCreatorWhere}
     `;
 
     const dataQuery = `${unionQuery} ORDER BY created_at DESC LIMIT $${p++} OFFSET $${p++}`;
