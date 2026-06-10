@@ -143,7 +143,8 @@ const getAllPayouts = async (req, res, next) => {
     }
 
     if (search) {
-      conditions.push(`fl.freelancer_full_name ILIKE $${idx++}`);
+      conditions.push(`(fl.freelancer_full_name ILIKE $${idx} OR fl.freelancer_email ILIKE $${idx} OR u.user_name ILIKE $${idx})`);
+      idx++;
       params.push(`%${search}%`);
     }
 

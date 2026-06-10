@@ -547,8 +547,8 @@ const getAllProjects = async (req, res, next) => {
     // Search — applied to both sides using same param index
     let projectSearchWhere = '', packageSearchWhere = '';
     if (search) {
-      projectSearchWhere = `AND (c.full_name ILIKE $${p} OR f.freelancer_full_name ILIKE $${p})`;
-      packageSearchWhere = `AND (c2.full_name ILIKE $${p} OR f2.freelancer_full_name ILIKE $${p})`;
+      projectSearchWhere = `AND (c.full_name ILIKE $${p} OR f.freelancer_full_name ILIKE $${p} OR c.email ILIKE $${p} OR f.freelancer_email ILIKE $${p})`;
+      packageSearchWhere = `AND (c2.full_name ILIKE $${p} OR f2.freelancer_full_name ILIKE $${p} OR c2.email ILIKE $${p} OR f2.freelancer_email ILIKE $${p})`;
       p++;
       params.push(`%${search}%`);
     }
