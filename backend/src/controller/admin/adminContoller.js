@@ -179,7 +179,7 @@ const getAllCreators = async (req, res, next) => {
         let idx = 1;
 
         if (search && search.trim()) {
-            conditions.push(`(c.full_name ILIKE $${idx} OR c.email ILIKE $${idx} OR u.user_email ILIKE $${idx} OR u.user_name ILIKE $${idx})`);
+            conditions.push(`(c.full_name ILIKE $${idx} OR c.email ILIKE $${idx})`);
             params.push(`%${search.trim()}%`);
             idx++;
         }
@@ -198,13 +198,9 @@ const getAllCreators = async (req, res, next) => {
 
         const creatorsData = await query(
             `SELECT
-    c.creator_id,
-    c.user_id,
-    c.full_name             AS name,
-    COALESCE(c.email, u.user_email) AS email,
-    c.phone_number          AS phone_number,
-    c.profile_image_url,
-    c.created_at        AS date_of_joining
+    c.full_name AS creator_full_name,
+    c.email AS creator_email,
+    c.created_at
 FROM creators c
 INNER JOIN users u ON c.user_id = u.id
 ${whereClause}
