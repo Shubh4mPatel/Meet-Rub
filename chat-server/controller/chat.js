@@ -589,6 +589,30 @@ const chatController = (io) => {
       }
     });
 
+    // Get unread message count for a specific chat room
+    socket.on("get-room-unread-count", async ({ roomId }) => {
+      try {
+        if (!roomId) {
+          return socket.emit("error", { message: "roomId is required" });
+        }
+        const count = await chatModel.getUnreadCountByRoom(userId, roomId);
+        socket.emit("room-unread-count", { roomId, count });
+      } catch (error) {
+        console.error("Error getting room unread count:", error);
+        socket.emit("error", { message: "Failed to get room unread count" });
+      }
+    });
+
+    // Get total unread message count across all chat rooms
+    socket.on("get-total-unread-messages", async () => {
+      try {
+        const count = await chatModel.getTotalUnreadMessages(userId);
+        socket.emit("total-unread-messages", { count });
+      } catch (error) {
+        console.error("Error getting total unread messages:", error);
+        socket.emit("error", { message: "Failed to get total unread messages" });
+      }
+    });
 
     // Leave a chat room
     socket.on("leave-chat", async ({ recipientId }) => {

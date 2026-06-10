@@ -381,6 +381,41 @@ ORDER BY m.created_at DESC NULLS LAST; `;
     }
   },
 
+  // Get total unread message count across all chat rooms
+  async getTotalUnreadMessages(userId) {
+    const query = `
+      SELECT COUNT(*) AS unread_count
+      FROM messages
+      WHERE recipient_id = $1
+        AND is_read = FALSE
+    `;
+    try {
+      const result = await pool.query(query, [userId]);
+      return parseInt(result.rows[0].unread_count);
+    } catch (error) {
+      console.error("Error getting total unread messages:", error);
+      throw error;
+    }
+  },
+
+  // Get unread message count for a specific chat room
+  async getUnreadCountByRoom(userId, roomId) {
+    const query = `
+      SELECT COUNT(*) AS unread_count
+      FROM messages
+      WHERE room_id = $1
+        AND recipient_id = $2
+        AND is_read = FALSE
+    `;
+    try {
+      const result = await pool.query(query, [roomId, userId]);
+      return parseInt(result.rows[0].unread_count);
+    } catch (error) {
+      console.error("Error getting room unread count:", error);
+      throw error;
+    }
+  },
+
   // Delete a message
   async deleteMessage(messageId, userId) {
     const query = `
