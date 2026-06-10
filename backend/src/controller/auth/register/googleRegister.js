@@ -93,7 +93,7 @@ const googleRegisterUser = async (req, res, next) => {
 
         // ── Verify Google token ─────────────────────────────────────────────────
         const { email: verifiedEmail } = await verifyGoogleToken(accessToken, email);
-
+        logger.info('after verfication data',verifiedEmail)
         // ── Check if already registered ────────────────────────────────────────
         const { rows: existing } = await query(
             'SELECT id FROM users WHERE user_email = $1',
@@ -148,6 +148,7 @@ const googleRegisterUser = async (req, res, next) => {
 
             // ── Role-specific record ──────────────────────────────────────────────
             if (role === 'freelancer') {
+                logger.info('state information while registring with google',state)
                 // Upload PAN card to MinIO
                 const panCardFile = req.file;
                 const ext = panCardFile.originalname.split('.').pop();
