@@ -1,213 +1,82 @@
-<!DOCTYPE html>
-<html lang="en">
+﻿<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Account Suspended - MeetRub</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-    }
-    .email-container {
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #ffffff;
-    }
-    .header {
-      background-color: #DC2626;
-      padding: 30px 20px;
-      text-align: center;
-    }
-    .header h1 {
-      color: #ffffff;
-      margin: 0;
-      font-size: 24px;
-    }
-    .logo {
-      text-align: center;
-      padding: 20px;
-      background-color: #ffffff;
-    }
-    .logo img {
-      max-width: 150px;
-      height: auto;
-    }
-    .content {
-      padding: 30px 40px;
-      color: #333333;
-      line-height: 1.6;
-    }
-    .content h2 {
-      color: #7C3AED;
-      font-size: 20px;
-      margin-bottom: 15px;
-    }
-    .content p {
-      margin: 10px 0;
-      font-size: 15px;
-    }
-    .reason-box {
-      background-color: #F5F3FF;
-      border-left: 4px solid #7C3AED;
-      padding: 20px;
-      margin: 25px 0;
-      border-radius: 4px;
-    }
-    .reason-box h3 {
-      color: #7C3AED;
-      margin: 0 0 10px 0;
-      font-size: 16px;
-    }
-    .reason-box p {
-      margin: 0;
-      color: #4B5563;
-      font-size: 15px;
-    }
-    .restriction-box {
-      background-color: #FFF7ED;
-      border: 1px solid #FDBA74;
-      padding: 20px;
-      margin: 20px 0;
-      border-radius: 6px;
-    }
-    .restriction-box h3 {
-      color: #EA580C;
-      margin: 0 0 15px 0;
-      font-size: 16px;
-    }
-    .restriction-box ul {
-      margin: 0;
-      padding-left: 20px;
-    }
-    .restriction-box li {
-      margin: 8px 0;
-      color: #9A3412;
-    }
-    .next-steps {
-      background-color: #F3F4F6;
-      padding: 20px;
-      margin: 25px 0;
-      border-radius: 6px;
-    }
-    .next-steps h3 {
-      color: #374151;
-      margin: 0 0 10px 0;
-      font-size: 16px;
-    }
-    .next-steps ol {
-      margin: 10px 0 0 0;
-      padding-left: 20px;
-      color: #4B5563;
-    }
-    .next-steps li {
-      margin: 8px 0;
-    }
-    .footer {
-      background-color: #f9fafb;
-      padding: 30px 40px;
-      text-align: center;
-      color: #6b7280;
-      font-size: 13px;
-      border-top: 1px solid #e5e7eb;
-    }
-    .footer a {
-      color: #6b7280;
-      text-decoration: underline;
-    }
-    .social-links {
-      margin: 20px 0;
-    }
-    .social-links a {
-      display: inline-block;
-      margin: 0 10px;
-      text-decoration: none;
-      color: #6b7280;
-    }
-    @media only screen and (max-width: 600px) {
-      .content {
-        padding: 20px;
-      }
-      .footer {
-        padding: 20px;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;}
+  .wrapper{max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);}
+  .header{background:#1A1A2E;padding:28px 32px 24px;text-align:center;}
+  .logo-row{text-align:center;margin-bottom:12px;}
+  .header-subtitle{color:#C4B5FD;font-size:13px;margin-top:2px;}
+  .body{padding:32px;}
+  .body h2{font-size:19px;color:#1A1A2E;margin:0 0 10px;font-family:Arial,sans-serif;}
+  .body p{font-size:15px;color:#4B5563;line-height:1.65;margin:0 0 16px;}
+  .highlight{background:#F5F3FF;border-left:4px solid #7C3AED;border-radius:6px;padding:16px 20px;margin:20px 0;}
+  .highlight p{margin:5px 0;color:#1A1A2E;font-size:14px;}
+  .highlight strong{color:#7C3AED;}
+  .info-box{background:#FFF7ED;border:1px solid #FDBA74;border-radius:6px;padding:16px 20px;margin:20px 0;}
+  .info-box p{margin:5px 0;color:#9A3412;font-size:14px;}
+  .steps-box{background:#F3F4F6;border-radius:6px;padding:16px 20px;margin:20px 0;}
+  .steps-box p{margin:5px 0;color:#374151;font-size:14px;}
+  .btn{display:inline-block;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;text-decoration:none;margin:6px 4px;}
+  .btn-primary{background:#7C3AED;color:#ffffff;}
+  .footer{background:#F8F7FF;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
+  .footer p{font-size:12px;color:#9CA3AF;margin:4px 0;}
+  .social-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 10px;}
+  .social-row a{display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;margin-right:10px;}
+  .social-row img{width:32px;height:32px;display:block;}
+  .footer-links{margin-top:8px;}
+  .footer-links a{font-size:12px;color:#7C3AED;text-decoration:none;margin:0 8px;}
+</style>
 </head>
 <body>
-  <div class="email-container">
-    <!-- Header -->
-    <div class="header">
-      <div style="text-align:center;margin-bottom:14px;">
-        <img src="{{asset_base}}/email/logo.png" alt="Meetrub" style="height:48px;width:auto;display:block;margin:0 auto;">
-      </div>
-      <h1> Account Suspended</h1>
+<div class="wrapper">
+  <div class="header">
+    <div class="logo-row">
+      <img src="{{asset_base}}/email/logo.png" alt="Meetrub" style="height:48px;width:auto;display:block;margin:0 auto;">
     </div>
-
-    <!-- Content -->
-    <div class="content">
-      <h2>Important Notice, {{username}}</h2>
-      
-      <p>Your MeetRub creator account has been suspended by our administrative team. This action was taken to maintain the integrity and safety of our platform.</p>
-
-      <div class="reason-box">
-        <h3>Reason for Suspension:</h3>
-        <p>{{reason_for_suspension}}</p>
-      </div>
-
-      <div class="restriction-box">
-        <h3>What This Means:</h3>
-        <ul>
-          <li><strong>Dashboard Access:</strong> Limited access to your creator dashboard</li>
-          <li><strong>Order Placement:</strong> You cannot place new orders</li>
-          <li><strong>Profile Status:</strong> Your profile is hidden from freelancers</li>
-          <li><strong>Messaging:</strong> Limited messaging capabilities</li>
-          <li><strong>Active Orders:</strong> Existing orders may be affected</li>
-        </ul>
-      </div>
-
-      <div class="next-steps">
-        <h3>Next Steps:</h3>
-        <ol>
-          <li>Review our Community Guidelines and Terms of Service</li>
-          <li>Contact our support team to discuss this suspension</li>
-          <li>Provide any necessary information or clarification</li>
-          <li>Wait for our team to review your case</li>
-        </ol>
-      </div>
-
-      <p style="margin-top: 25px;">We take these actions seriously and only after careful consideration. If you believe this is a mistake or would like to appeal this decision, please contact our support team immediately.</p>
-
-      <p style="color: #6b7280; font-size: 14px; margin-top: 30px; padding: 15px; background-color: #F9FAFB; border-radius: 4px;">
-        <strong>Need to discuss this?</strong> Contact our support team at 
-        <a href="mailto:support@meetrub.com" style="color: #7C3AED;">support@meetrub.com</a><br>
-        Please reference your creator ID in all communications.
-      </p>
+    <div class="header-subtitle">Account suspended â€” action required</div>
+  </div>
+  <div class="body">
+    <h2>Hi {{username}},</h2>
+    <p>Your Meetrub creator account has been temporarily suspended by our administrative team. This action was taken to maintain the integrity and safety of our platform.</p>
+    <div class="highlight">
+      <p><strong>Reason for suspension:</strong></p>
+      <p>{{reason_for_suspension}}</p>
     </div>
-
-    <!-- Footer -->
-    <div class="footer">
-      <div class="social-links" style="display:flex;align-items:center;justify-content:center;gap:14px;margin:14px 0;">
-        <a href="https://www.facebook.com/people/Meetrub/61580564312674/?sk=reels_tab" title="Facebook" style="display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;"><img src="{{asset_base}}/email/facebook.png" alt="Facebook" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
-        <a href="https://www.instagram.com/meetrubofficial" title="Instagram" style="display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;"><img src="{{asset_base}}/email/instagram.png" alt="Instagram" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
-        <a href="https://www.youtube.com/@Meetrub" title="YouTube" style="display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;"><img src="{{asset_base}}/email/youtube.png" alt="YouTube" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
-      </div>
-      
-      <p>© 2024 MeetRub. All rights reserved.</p>
-      
-      <p>
-        <a href="https://meetrub.com/help">Help Center</a> |
-        <a href="https://meetrub.com/privacy">Privacy Policy</a> |
-        <a href="https://meetrub.com/terms">Terms of Service</a>
-      </p>
-
-      <p style="margin-top: 15px;">
-        MeetRub - Connecting Creators with Freelancers<br>
-        This email was sent to {{email}}
-      </p>
+    <div class="info-box">
+      <p><strong>What this means:</strong></p>
+      <p>&#8226; Dashboard access is limited</p>
+      <p>&#8226; You cannot place new orders</p>
+      <p>&#8226; Your profile is hidden from freelancers</p>
+      <p>&#8226; Messaging capabilities are restricted</p>
+      <p>&#8226; Existing orders may be affected</p>
+    </div>
+    <div class="steps-box">
+      <p><strong>Next steps:</strong></p>
+      <p>1. Review our Community Guidelines and Terms of Service</p>
+      <p>2. Contact our support team to discuss this suspension</p>
+      <p>3. Provide any necessary information or clarification</p>
+      <p>4. Wait for our team to review your case</p>
+    </div>
+    <p>If you believe this is a mistake or would like to appeal this decision, please contact our support team immediately.</p>
+    <a href="{{help_url}}" class="btn btn-primary">Contact Support</a>
+  </div>
+  <div class="footer">
+    <div class="social-row">
+      <a href="https://www.facebook.com/people/Meetrub/61580564312674/?sk=reels_tab" title="Facebook"><img src="{{asset_base}}/email/facebook.png" alt="Facebook" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
+      <a href="https://www.instagram.com/meetrubofficial" title="Instagram"><img src="{{asset_base}}/email/instagram.png" alt="Instagram" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
+      <a href="https://www.youtube.com/@Meetrub" title="YouTube"><img src="{{asset_base}}/email/youtube.png" alt="YouTube" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
+    </div>
+    <p>Meetrub â€” Account Management</p>
+    <p>&copy; 2026 Meetrub. All rights reserved.</p>
+    <div class="footer-links">
+      <a href="https://meetrub.com/contact-us">Help Center</a>
+      <a href="https://meetrub.com/privacy-policy">Privacy Policy</a>
     </div>
   </div>
+</div>
 </body>
 </html>
