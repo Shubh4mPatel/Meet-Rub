@@ -52,7 +52,6 @@ async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName
     delivery_days: deliveryDays || '—',
     chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
     asset_base: ASSET_BASE,
-    logo_url: LOGO_URL,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -74,7 +73,6 @@ async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerNam
     offer_url: `${APP_URL}/creator/chat/${chatRoomId}`,
     chat_url: `${APP_URL}/creator/chat/${chatRoomId}`,
     asset_base: ASSET_BASE,
-    logo_url: LOGO_URL,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -95,7 +93,6 @@ async function sendHireRequestEmail({ creatorEmail, creatorName, freelancerName,
     deadline: deliveryDays ? `${deliveryDays} days` : '—',
     chat_url: `${APP_URL}/creator/chat/${chatRoomId}`,
     asset_base: ASSET_BASE,
-    logo_url: LOGO_URL,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });
@@ -116,7 +113,6 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
     deadline: deliveryDays ? `${deliveryDays} days` : '—',
     chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
     asset_base: ASSET_BASE,
-    logo_url: LOGO_URL,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
   });

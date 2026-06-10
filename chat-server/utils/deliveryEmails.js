@@ -121,7 +121,6 @@ async function sendPackageRejectedEmail({ freelancerEmail, freelancerName, creat
         delivery_days: String(deliveryDays),
         chat_url: `${APP_URL}/messages/${chatRoomId}`,
         asset_base: ASSET_BASE,
-        logo_url: LOGO_URL,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
@@ -142,7 +141,6 @@ async function sendPackageAcceptedEmail({ freelancerEmail, freelancerName, creat
         delivery_days: String(deliveryDays),
         chat_url: `${APP_URL}/messages/${chatRoomId}`,
         asset_base: ASSET_BASE,
-        logo_url: LOGO_URL,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });

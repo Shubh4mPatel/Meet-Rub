@@ -6,6 +6,7 @@ const { query } = require('../config/dbConfig');
 const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
 const APP_URL = process.env.APP_URL || 'https://meetrub.com';
+const ASSET_BASE = process.env.EMAIL_ASSET_BASE_URL || APP_URL;
 const LOGO_SVG_PATH = path.join(__dirname, '../../Email-Templates/assets/logo-large.svg');
 const LOGO_URL = process.env.LOGO_URL ||
   `data:image/svg+xml;base64,${fs.readFileSync(LOGO_SVG_PATH).toString('base64')}`;
@@ -138,11 +139,6 @@ async function sendContactInquiryEmail({ name, email, contactNo, message }, reci
     path.join(TEMPLATES_DIR, 'admin/contactInquiry.html'),
     'utf8'
   );
-
-  // Email clients (Gmail especially) strip data: URIs and don't render SVG,
-  // so the logo and social icons are referenced as hosted PNGs under
-  // {asset_base}/email/. Defaults to the public site.
-  const ASSET_BASE = process.env.EMAIL_ASSET_BASE_URL || APP_URL;
 
   const filled = fillTemplate(html, {
     sender_name: name,
