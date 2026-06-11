@@ -3,6 +3,7 @@ const { pool: db } = require('../../../config/dbConfig');
 const razorpay = require('../../../config/razorpay');
 const AppError = require("../../../utils/appError");
 const { getLogger } = require('../../../utils/logger');
+const { sendMail } = require('../../../config/email');
 const logger = getLogger('webhook-controller');
 
 const verifyWebhookSignature = (rawBody, signature) => {
@@ -428,65 +429,6 @@ const handleTransferFailed = async (payload) => {
 };
 
 // Handle transfer reversed event (Routes)
-const handleTransferReversed = async (payload) => {
-  const transfer = payload.transfer.entity;
-  const transferId = transfer.id;
-
-  logger.warn(`[handleTransferReversed] Transfer reversed: ${transferId}`);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Get the transaction before updating — need to check if balance was credited
-    const { rows: txRows } = await client.query(
-      `SELECT t.id, t.status, t.freelancer_amount, t.freelancer_id, t.settled_at
-       FROM transactions t
-       WHERE t.razorpay_transfer_id = $1 AND t.status IN ('HELD', 'COMPLETED')
-       FOR UPDATE`,
-      [transferId]
-    );
-
-    if (txRows.length === 0) {
-      logger.info(`[handleTransferReversed] No HELD/COMPLETED transaction found for transfer ${transferId}`);
-      await client.query('COMMIT');
-      return;
-    }
-
-    const tx = txRows[0];
-
-    await client.query(
-      `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW() WHERE id = $1`,
-      [tx.id]
-    );
-
-    // Revert project status
-    await client.query(
-      `UPDATE projects SET status = 'CANCELLED', updated_at = NOW()
-       WHERE id = (SELECT project_id FROM transactions WHERE id = $1)`,
-      [tx.id]
-    );
-
-    // Mark the linked payout as REVERSED so freelancer history reflects reality
-    await client.query(
-      `UPDATE payouts SET status = 'REVERSED', updated_at = NOW()
-       WHERE transaction_id = $1 AND status = 'PROCESSED'`,
-      [tx.id]
-    );
-    logger.info(`[handleTransferReversed] Marked payout REVERSED for transaction ${tx.id}`);
-
-    logger.info(`[handleTransferReversed] Transaction ${tx.id} marked REFUNDED for transfer ${transferId}`);
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    logger.error(`[handleTransferReversed] Error: ${error.message}`);
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
 // Handle transfer settled event (Routes) — funds settled to linked account's bank
 const handleSettlementProcessed = async (payload, accountId) => {
   const settlement = payload.settlement.entity;
@@ -644,30 +586,52 @@ const handleProductRouteRejected = async (payload) => {
   await updateAccountStatus(account.id, 'rejected', 'handleProductRouteRejected');
 };
 
-// refund.processed — refund confirmed by Razorpay, money is on its way to creator
+// refund.processed — final state, customer has received the money
 const handleRefundProcessed = async (payload) => {
   const refund = payload.refund?.entity;
   if (!refund?.id) { logger.warn('[handleRefundProcessed] Missing refund entity'); return; }
 
-  const { rowCount } = await db.query(
-    `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW()
-     WHERE razorpay_payment_id = $1 AND status != 'REFUNDED'`,
-    [refund.payment_id]
+  await db.query(
+    `UPDATE dispute_refunds
+     SET state = 'completed', razorpay_refund_id = $1, refunded_at = NOW(), updated_at = NOW()
+     WHERE razorpay_payment_id = $2 AND state != 'completed'`,
+    [refund.id, refund.payment_id]
   );
-  logger.info(`[handleRefundProcessed] refund_id=${refund.id} payment_id=${refund.payment_id} updated=${rowCount}`);
+  logger.info(`[handleRefundProcessed] refund_id=${refund.id} payment_id=${refund.payment_id} → state=completed`);
 };
 
-// refund.failed — refund attempt failed, revert transaction to HELD so admin can retry
+// refund.failed — refund failed (e.g. payment > 6 months old), notify all admins by email
 const handleRefundFailed = async (payload) => {
   const refund = payload.refund?.entity;
   if (!refund?.id) { logger.warn('[handleRefundFailed] Missing refund entity'); return; }
 
-  const { rowCount } = await db.query(
-    `UPDATE transactions SET status = 'HELD', updated_at = NOW()
-     WHERE razorpay_payment_id = $1 AND status = 'REFUNDED'`,
-    [refund.payment_id]
+  await db.query(
+    `UPDATE dispute_refunds
+     SET state = 'refund_failed', error_description = $1, updated_at = NOW()
+     WHERE razorpay_payment_id = $2 AND state != 'refund_failed'`,
+    [refund.description || 'Razorpay refund failed', refund.payment_id]
   );
-  logger.warn(`[handleRefundFailed] refund_id=${refund.id} payment_id=${refund.payment_id} reverted=${rowCount} — admin must retry refund`);
+  logger.warn(`[handleRefundFailed] refund_id=${refund.id} payment_id=${refund.payment_id} → state=refund_failed`);
+
+  // Notify all admins by email
+  try {
+    const { rows: admins } = await db.query(`SELECT email FROM admin WHERE is_active = true`);
+    const subject = `Refund Failed — Payment ${refund.payment_id}`;
+    const html = `
+      <p>A Razorpay refund has failed and requires manual action.</p>
+      <ul>
+        <li><strong>Refund ID:</strong> ${refund.id}</li>
+        <li><strong>Payment ID:</strong> ${refund.payment_id}</li>
+        <li><strong>Amount:</strong> ₹${((refund.amount || 0) / 100).toFixed(2)}</li>
+        <li><strong>Reason:</strong> ${refund.description || 'Unknown'}</li>
+      </ul>
+      <p>Please process this refund manually via the Razorpay dashboard.</p>
+    `;
+    await Promise.allSettled(admins.map((a) => sendMail(a.email, subject, html)));
+    logger.info(`[handleRefundFailed] Admin alert sent to ${admins.length} admin(s)`);
+  } catch (emailErr) {
+    logger.error(`[handleRefundFailed] Failed to send admin email: ${emailErr.message}`);
+  }
 };
 
 // Handle Razorpay webhooks
@@ -733,11 +697,6 @@ const handleWebhook = async (req, res, next) => {
       case 'transfer.failed':
         await handleTransferFailed(payload);
         logger.info(`[handleWebhook] Successfully processed transfer.failed event`);
-        break;
-
-      case 'transfer.reversed':
-        await handleTransferReversed(payload);
-        logger.info(`[handleWebhook] Successfully processed transfer.reversed event`);
         break;
 
       case 'settlement.processed':
