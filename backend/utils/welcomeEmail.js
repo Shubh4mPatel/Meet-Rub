@@ -28,7 +28,7 @@ async function sendWelcomeEmail(role, email, username) {
     );
     const filled = fillTemplate(html, {
       freelancer_username: username,
-      setup_url: `${APP_URL}/freelancer/setup`,
+      setup_url: `${APP_URL}/freelancer/govt-id`,
       asset_base: ASSET_BASE,
       help_url: HELP_URL,
       privacy_url: PRIVACY_URL,
@@ -42,8 +42,8 @@ async function sendWelcomeEmail(role, email, username) {
     );
     const filled = fillTemplate(html, {
       creator_username: username,
-      dashboard_url: `${APP_URL}/creator/dashboard`,
-      how_it_works_url: `${APP_URL}/how-it-works`,
+      dashboard_url: `${APP_URL}/creator/your-projects`,
+      how_it_works_url: `${APP_URL}/services`,
       asset_base: ASSET_BASE,
       help_url: HELP_URL,
       privacy_url: PRIVACY_URL,
@@ -69,7 +69,7 @@ async function sendAdminNewUserEmail(role, username, userEmail, signupTime, ipAd
     user_type: role,
     signup_time: signupTime,
     ip_address: ipAddress || '—',
-    admin_user_url: `${APP_ADMIN_URL}/users`,
+    admin_user_url: `${APP_ADMIN_URL}/user-panel`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -119,7 +119,7 @@ async function sendAdminDisputeEmail({
       timeZone: 'Asia/Kolkata',
     }).format(new Date()),
     admin_dispute_url: `${APP_ADMIN_URL}/disputes/${disputeId}`,
-    admin_chat_url: `${APP_ADMIN_URL}/disputes/${disputeId}/chat`,
+    admin_chat_url: `${APP_ADMIN_URL}/chat-view`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -195,6 +195,7 @@ async function sendAccountRestoredEmail(role, { email, username }) {
   const filled = fillTemplate(html, {
     username,
     email,
+    dashboard_url: role === 'freelancer' ? `${APP_URL}/freelancer/projects` : `${APP_URL}/creator/your-projects`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -224,7 +225,7 @@ async function sendKYCStatusEmail({ email, username, status, reason }) {
     highlight_content: isApproved
       ? '<p><strong>Status:</strong> Verified ✅</p><p>Your account is now eligible to receive payments and withdrawals.</p>'
       : `<p><strong>Reason for rejection:</strong></p><p>${reason || 'Documents could not be verified. Please ensure they are clear and valid.'}</p>`,
-    action_url: isApproved ? `${APP_URL}/freelancer/dashboard` : `${APP_URL}/freelancer/kyc`,
+    action_url: isApproved ? `${APP_URL}/freelancer/projects` : `${APP_URL}/freelancer/govt-id`,
     action_label: isApproved ? 'Go to Dashboard' : 'Resubmit KYC',
     asset_base: ASSET_BASE,
     help_url: HELP_URL,

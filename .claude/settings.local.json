@@ -95,7 +95,9 @@
       "Bash(mkdir -p /home/shubh4m/projects/meetrub/src/app/google-popup-callback)",
       "Bash(curl -s http://localhost:3000/api/health)",
       "Bash(curl -s http://localhost:4008/api/health)",
-      "Bash(pm2 list *)"
+      "Bash(pm2 list *)",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; grep -oP \"href=\\\\\"[^\\\\\"]*\\\\\"\" {}')",
+      "Bash(grep \"\\\\.js$\")"
     ],
     "additionalDirectories": [
       "/tmp",
