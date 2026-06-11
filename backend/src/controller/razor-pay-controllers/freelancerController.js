@@ -141,9 +141,9 @@ const getWalletDashboard = async (req, res, next) => {
          FROM transactions WHERE freelancer_id = $1 AND status = 'HELD'`,
         [freelancerId]
       ),
-      // Pending Earnings — money from in-progress projects not yet accepted by creator
+      // Pending Earnings — money + count from in-progress projects not yet accepted by creator
       db.query(
-        `SELECT COALESCE(SUM(t.freelancer_amount), 0) as total
+        `SELECT COALESCE(SUM(t.freelancer_amount), 0) as total, COUNT(*) as count
          FROM transactions t
          JOIN projects p ON t.project_id = p.id
          WHERE t.freelancer_id = $1
@@ -211,6 +211,7 @@ const getWalletDashboard = async (req, res, next) => {
         wallet_summary: {
           available_balance: parseFloat(availableRows.rows[0].total),
           pending_earnings: parseFloat(pendingRows.rows[0].total),
+          inprogress_projects_count: parseInt(pendingRows.rows[0].count),
           total_earnings: parseFloat(freelancerData?.earnings_balance || 0),
           currency: process.env.CURRENCY || 'INR',
           bank_account: maskedBankInfo,
