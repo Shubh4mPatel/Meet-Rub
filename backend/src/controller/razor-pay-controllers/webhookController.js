@@ -455,20 +455,6 @@ const handleTransferReversed = async (payload) => {
 
     const tx = txRows[0];
 
-    // Only debit earnings_balance if transfer.settled already fired (settled_at is set).
-    // earnings_balance is credited in handleTransferSettled (T+2 days after release),
-    // not at approvePayout time — so COMPLETED alone is not a safe signal.
-    if (tx.settled_at && tx.freelancer_amount && tx.freelancer_id) {
-      await client.query(
-        `UPDATE freelancer
-         SET earnings_balance = earnings_balance - $1,
-             updated_at = NOW()
-         WHERE freelancer_id = $2`,
-        [tx.freelancer_amount, tx.freelancer_id]
-      );
-      logger.info(`[handleTransferReversed] Reverted earnings_balance ${tx.freelancer_amount} for freelancer ${tx.freelancer_id}`);
-    }
-
     await client.query(
       `UPDATE transactions SET status = 'REFUNDED', updated_at = NOW() WHERE id = $1`,
       [tx.id]
@@ -502,46 +488,65 @@ const handleTransferReversed = async (payload) => {
 };
 
 // Handle transfer settled event (Routes) — funds settled to linked account's bank
-const handleTransferSettled = async (payload) => {
-  const transfer = payload.transfer.entity;
-  const transferId = transfer.id;
+const handleSettlementProcessed = async (payload, accountId) => {
+  const settlement = payload.settlement.entity;
+  const settlementId = settlement.id;
 
-  logger.info(`[handleTransferSettled] Transfer settled: ${transferId}, amount=${transfer.amount}`);
+  logger.info(`[handleSettlementProcessed] Settlement processed: ${settlementId}, amount=${settlement.amount}, accountId=${accountId}`);
 
   const client = await db.connect();
   try {
     await client.query('BEGIN');
 
-    const { rows } = await client.query(
-      `SELECT t.id, t.freelancer_id, t.freelancer_amount
-       FROM transactions t
-       WHERE t.razorpay_transfer_id = $1 AND t.status = 'COMPLETED'`,
-      [transferId]
+    // Find freelancer by their Razorpay linked account ID
+    const { rows: freelancerRows } = await client.query(
+      `SELECT freelancer_id FROM freelancer WHERE razorpay_linked_account_id = $1`,
+      [accountId]
     );
 
-    if (rows.length > 0) {
+    if (freelancerRows.length === 0) {
+      logger.warn(`[handleSettlementProcessed] No freelancer found for linked account ${accountId}`);
+      await client.query('COMMIT');
+      return;
+    }
+
+    const freelancerId = freelancerRows[0].freelancer_id;
+
+    // Find all COMPLETED transactions not yet settled for this freelancer
+    const { rows: txRows } = await client.query(
+      `SELECT id, freelancer_amount FROM transactions
+       WHERE freelancer_id = $1 AND status = 'COMPLETED' AND settled_at IS NULL`,
+      [freelancerId]
+    );
+
+    if (txRows.length === 0) {
+      logger.info(`[handleSettlementProcessed] No unsettled COMPLETED transactions for freelancer ${freelancerId}`);
+      await client.query('COMMIT');
+      return;
+    }
+
+    for (const tx of txRows) {
       await client.query(
         `UPDATE freelancer SET earnings_balance = earnings_balance + $1, updated_at = NOW() WHERE freelancer_id = $2`,
-        [rows[0].freelancer_amount, rows[0].freelancer_id]
+        [tx.freelancer_amount, freelancerId]
       );
       await client.query(
         `UPDATE transactions SET settled_at = NOW(), updated_at = NOW() WHERE id = $1`,
-        [rows[0].id]
+        [tx.id]
       );
       await client.query(
         `UPDATE payouts SET status = 'CREDITED', updated_at = NOW()
          WHERE transaction_id = $1 AND status = 'PROCESSED'`,
-        [rows[0].id]
+        [tx.id]
       );
-      logger.info(`[handleTransferSettled] Credited earnings_balance ${rows[0].freelancer_amount} for freelancer ${rows[0].freelancer_id}, payout marked CREDITED`);
-    } else {
-      logger.info(`[handleTransferSettled] No COMPLETED transaction for transfer ${transferId}`);
     }
+
+    logger.info(`[handleSettlementProcessed] Credited earnings_balance for freelancer ${freelancerId}, ${txRows.length} transaction(s) settled`);
 
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
-    logger.error(`[handleTransferSettled] Error: ${error.message}`);
+    logger.error(`[handleSettlementProcessed] Error: ${error.message}`);
     throw error;
   } finally {
     client.release();
@@ -735,9 +740,9 @@ const handleWebhook = async (req, res, next) => {
         logger.info(`[handleWebhook] Successfully processed transfer.reversed event`);
         break;
 
-      case 'transfer.settled':
-        await handleTransferSettled(payload);
-        logger.info(`[handleWebhook] Successfully processed transfer.settled event`);
+      case 'settlement.processed':
+        await handleSettlementProcessed(payload, body.account_id);
+        logger.info(`[handleWebhook] Successfully processed settlement.processed event`);
         break;
 
       case 'account.activated':

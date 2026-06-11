@@ -1294,7 +1294,7 @@ const rateCreator = async (req, res, next) => {
   }
 };
 
-// Approve project (creator) — credits freelancer earnings_balance
+// Approve project (creator) — 
 const approveProject = async (req, res, next) => {
   const creatorId = req.user.roleWiseId;
   const projectId = req.params.id;
