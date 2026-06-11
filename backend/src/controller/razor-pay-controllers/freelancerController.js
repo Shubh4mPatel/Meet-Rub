@@ -134,23 +134,26 @@ const getWalletDashboard = async (req, res, next) => {
     const userId = req.user.user_id;
 
     // All summary queries in parallel
-    const [pendingRows, balanceRows, completedRows] = await Promise.all([
-      // HELD transactions — pending release
+    const [availableRows, pendingRows, balanceRows] = await Promise.all([
+      // Available Balance — HELD transactions (creator accepted the project)
       db.query(
-        `SELECT COUNT(*) as count, COALESCE(SUM(freelancer_amount), 0) as total
+        `SELECT COALESCE(SUM(freelancer_amount), 0) as total
          FROM transactions WHERE freelancer_id = $1 AND status = 'HELD'`,
         [freelancerId]
       ),
-      // earnings_balance + bank details directly from freelancer table
+      // Pending Earnings — money from in-progress projects not yet accepted by creator
+      db.query(
+        `SELECT COALESCE(SUM(t.freelancer_amount), 0) as total
+         FROM transactions t
+         JOIN projects p ON t.project_id = p.id
+         WHERE t.freelancer_id = $1
+           AND p.status IN ('CREATED', 'IN_PROGRESS', 'SUBMITTED')`,
+        [freelancerId]
+      ),
+      // earnings_balance + bank details — total_earnings deposited after admin approves withdrawal
       db.query(
         `SELECT earnings_balance, bank_name, bank_account_no
          FROM freelancer WHERE freelancer_id = $1`,
-        [freelancerId]
-      ),
-      // Total lifetime earnings from COMPLETED transactions
-      db.query(
-        `SELECT COALESCE(SUM(freelancer_amount), 0) as total
-         FROM transactions WHERE freelancer_id = $1 AND status = 'COMPLETED'`,
         [freelancerId]
       ),
     ]);
@@ -206,10 +209,9 @@ const getWalletDashboard = async (req, res, next) => {
       status: 'success',
       data: {
         wallet_summary: {
-          pending_release: parseFloat(pendingRows.rows[0].total),
-          pending_orders_count: parseInt(pendingRows.rows[0].count),
-          earnings_balance: parseFloat(freelancerData?.earnings_balance || 0),
-          total_lifetime_earnings: parseFloat(completedRows.rows[0].total),
+          available_balance: parseFloat(availableRows.rows[0].total),
+          pending_earnings: parseFloat(pendingRows.rows[0].total),
+          total_earnings: parseFloat(freelancerData?.earnings_balance || 0),
           currency: process.env.CURRENCY || 'INR',
           bank_account: maskedBankInfo,
         },
