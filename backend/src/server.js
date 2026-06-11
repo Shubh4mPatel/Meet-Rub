@@ -222,8 +222,6 @@ if (process.env.NODE_ENV !== "development") {
       `Server running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`
     );
     logEnvVars();
-    logger.info('Payout reconciliation cron initialized');
-    logger.info('Transfer reconciliation cron initialized');
   });
 } else {
   server = serverWithSocket.listen(PORT, async () => {
