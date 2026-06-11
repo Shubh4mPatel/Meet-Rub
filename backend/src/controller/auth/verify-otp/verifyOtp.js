@@ -8,6 +8,7 @@ const Joi = require("joi");
 const crypto = require("crypto");
 const { generateTokens } = require("../../../../utils/helper");
 const { sendWelcomeEmail, sendAdminNewUserEmail } = require("../../../../utils/welcomeEmail");
+const { notifyAllAdmins } = require('../../notification/notificationServicer');
 const redisClient = require("../../../../config/reddis");
 const { INDIAN_STATES } = require("../../../utils/indianStates");
 
@@ -344,6 +345,14 @@ const verifyOtpAndProcess = async (req, res, next) => {
           sendAdminNewUserEmail('freelancer', userName, email, currentTimestamp, req.ip).catch((err) =>
             logger.error('Failed to send admin new-user email:', err)
           );
+          notifyAllAdmins({
+            senderId: user.id,
+            eventType: 'new_user_registered',
+            title: 'New freelancer registered',
+            body: `${userName} (${email}) has just signed up as a freelancer.`,
+            actionType: 'navigate',
+            actionRoute: '/admin/freelancer-panel/kyc-requests',
+          }).catch((err) => logger.error('Failed to send admin in-app notification:', err));
         } catch (error) {
           await client.query("ROLLBACK");
           // Clean up Redis username if it was already added before the commit failed
@@ -434,6 +443,14 @@ const verifyOtpAndProcess = async (req, res, next) => {
           sendAdminNewUserEmail('creator', userName, email, currentTimestamp, req.ip).catch((err) =>
             logger.error('Failed to send admin new-user email:', err)
           );
+          notifyAllAdmins({
+            senderId: user.id,
+            eventType: 'new_user_registered',
+            title: 'New creator registered',
+            body: `${userName} (${email}) has just signed up as a creator.`,
+            actionType: 'navigate',
+            actionRoute: '/admin/creator-panel/all-creators',
+          }).catch((err) => logger.error('Failed to send admin in-app notification:', err));
         } catch (error) {
           await client.query("ROLLBACK");
           // Clean up Redis username if it was already added before the commit failed

@@ -5,6 +5,7 @@ const { generateTokens } = require('../../../../utils/helper');
 const { minioClient } = require('../../../../config/minio');
 const redisClient = require('../../../../config/reddis');
 const { sendWelcomeEmail, sendAdminNewUserEmail } = require('../../../../utils/welcomeEmail');
+const { notifyAllAdmins } = require('../../notification/notificationServicer');
 const { INDIAN_STATES } = require('../../../utils/indianStates');
 
 const USERNAMES_SET_KEY = 'usernames:set';
@@ -240,6 +241,16 @@ const googleRegisterUser = async (req, res, next) => {
             .catch((err) => logger.error('Failed to send Google registration welcome email:', err));
         sendAdminNewUserEmail(role, normalizedUsername, verifiedEmail, now, req.ip)
             .catch((err) => logger.error('Failed to send admin new-user email:', err));
+        notifyAllAdmins({
+            senderId: user.id,
+            eventType: 'new_user_registered',
+            title: `New ${role} registered`,
+            body: `${normalizedUsername} (${verifiedEmail}) has just signed up as a ${role}.`,
+            actionType: 'navigate',
+            actionRoute: role === 'freelancer'
+                ? '/admin/freelancer-panel/kyc-requests'
+                : '/admin/creator-panel/all-creators',
+        }).catch((err) => logger.error('Failed to send admin in-app notification:', err));
 
         // ── Generate tokens ─────────────────────────────────────────────────────
         const { accessToken: jwtAccessToken, refreshToken } = generateTokens(user, roleWiseId);

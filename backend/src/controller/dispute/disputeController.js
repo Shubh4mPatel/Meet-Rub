@@ -5,7 +5,7 @@ const razorpay = require('../../../config/razorpay');
 const razorpayRoutes = require('../../../config/razorpayRoutes');
 const paymentService = require('../../razor-pay-services/paymentService');
 const { createPresignedUrl } = require('../../../utils/helper');
-const { sendNotification } = require('../notification/notificationServicer');
+const { sendNotification, notifyAllAdmins } = require('../notification/notificationServicer');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
 const { sendCreatorDisputeEmail, sendFreelancerDisputeEmail, sendDisputeResolvedCreatorEmail, sendDisputeResolvedFreelancerEmail } = require('../../../utils/deliveryEmails');
 
@@ -150,6 +150,15 @@ const raiseDispute = async (req, res, next) => {
           serviceTitle: serviceName,
           amount: projectAmount,
           disputeReason: disputeReasonDisplay,
+        }),
+        // In-app notification to admin
+        notifyAllAdmins({
+          senderId: req.user.user_id,
+          eventType: 'dispute_raised',
+          title: `Dispute raised — #${disputeResult.rows[0].id}`,
+          body: `${creator_name} vs ${freelancer_name}${serviceName ? ` on "${serviceName}"` : ''}. Reason: ${disputeReasonDisplay}.`,
+          actionType: 'navigate',
+          actionRoute: `/admin/disputes/${disputeResult.rows[0].id}`,
         }),
         // Email to creator (either raising it or being disputed)
         role === 'creator'

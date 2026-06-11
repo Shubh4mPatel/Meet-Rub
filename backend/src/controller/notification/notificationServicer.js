@@ -77,4 +77,25 @@ async function sendNotification({ recipientId, senderId, eventType, title, body,
   return notificationWithImage;
 }
 
-module.exports = { sendNotification };
+async function notifyAllAdmins({ senderId, eventType, title, body, actionType, actionRoute }) {
+  const adminRes = await pool.query("SELECT id FROM users WHERE user_role = 'admin'");
+  if (adminRes.rows.length === 0) return;
+
+  await Promise.allSettled(
+    adminRes.rows.map((admin) =>
+      sendNotification({
+        recipientId: admin.id,
+        senderId: senderId || null,
+        eventType,
+        title,
+        body,
+        actionType: actionType || 'none',
+        actionRoute: actionRoute || null,
+      })
+    )
+  );
+
+  logger.info(`[ADMIN-NOTIF] eventType=${eventType} sent to ${adminRes.rows.length} admin(s)`);
+}
+
+module.exports = { sendNotification, notifyAllAdmins };
