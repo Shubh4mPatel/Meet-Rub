@@ -29,6 +29,10 @@ const changePassword = async (req, res, next) => {
       return next(new AppError("User not found", 404));
     }
 
+    if (!rows[0].user_password) {
+      return next(new AppError("Your account uses Google sign-in and has no password. Use the forgot password flow to set one.", 400));
+    }
+
     const isMatch = await bcrypt.compare(currentPassword, rows[0].user_password);
     if (!isMatch) {
       return next(new AppError("Current password is incorrect", 401));

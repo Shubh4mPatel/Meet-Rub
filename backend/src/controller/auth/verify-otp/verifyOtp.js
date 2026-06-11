@@ -486,10 +486,12 @@ const verifyOtpAndProcess = async (req, res, next) => {
         return next(new AppError("Email not found", 404));
       }
 
-      await query("UPDATE users SET user_password = $1 WHERE user_email = $2", [
-        hashedPassword,
-        email.toLowerCase(),
-      ]);
+      // Also clear auth_provider so a Google user becomes a password-based user
+      // after resetting their password — they can then login with email + password.
+      await query(
+        "UPDATE users SET user_password = $1, auth_provider = NULL WHERE user_email = $2",
+        [hashedPassword, email.toLowerCase()]
+      );
       await query("DELETE FROM otp_tokens WHERE email = $1 AND type = $2", [
         email,
         type,
