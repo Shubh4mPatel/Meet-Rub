@@ -1576,6 +1576,7 @@ const chatController = (io) => {
             action_route: notif.action_route,
             is_read: notif.is_read,
             created_at: notif.created_at,
+            sender_name: notif.sender_name || null,
             sender_image: notif.sender_image ? await createPresignedUrl(notif.sender_image) : null,
           }))
         );

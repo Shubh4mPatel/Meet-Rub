@@ -1116,7 +1116,8 @@ ORDER BY m.created_at DESC NULLS LAST; `;
   async getRecentNotifications(userId, limit = 5) {
     const query = `
       SELECT wn.*,
-        COALESCE(c.profile_image_url, f.profile_image_url) AS sender_image
+        COALESCE(c.profile_image_url, f.profile_image_url) AS sender_image,
+        COALESCE(c.full_name, f.freelancer_full_name, u.user_name) AS sender_name
       FROM web_notifications wn
       LEFT JOIN users u ON wn.sender_id = u.id
       LEFT JOIN creators c ON u.id = c.user_id
