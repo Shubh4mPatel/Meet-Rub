@@ -5,7 +5,8 @@ const AppError = require("../../../utils/appError");
 // Get freelancer's withdrawal history with filters and pagination
 const getMyPayouts = async (req, res, next) => {
   try {
-    const freelancerId = req.user.user_id;
+    const userId = req.user.user_id;           // used for payouts table (freelancer_id = user_id)
+    const freelancerId = req.user.roleWiseId;  // used for transactions table (freelancer_id = PK)
     const { status, from_date, to_date, page = 1, limit = 10 } = req.query;
 
     const parsedPage = parseInt(page);
@@ -17,7 +18,7 @@ const getMyPayouts = async (req, res, next) => {
       return next(new AppError('Invalid limit. Must be between 1 and 100', 400));
     }
 
-    const result = await payoutService.getFreelancerPayouts(freelancerId, {
+    const result = await payoutService.getFreelancerPayouts(userId, freelancerId, {
       status,
       from_date,
       to_date,
@@ -138,7 +139,10 @@ const getWalletDashboard = async (req, res, next) => {
       // Available Balance — HELD transactions (creator accepted the project)
       db.query(
         `SELECT COALESCE(SUM(freelancer_amount), 0) as total
-         FROM transactions WHERE freelancer_id = $1 AND status = 'HELD'`,
+          FROM transactions t
+         JOIN projects p ON t.project_id = p.id
+         WHERE t.freelancer_id = $1
+           AND p.status = 'COMPLETED'`,
         [freelancerId]
       ),
       // Pending Earnings — money + count from in-progress projects not yet accepted by creator
@@ -147,7 +151,7 @@ const getWalletDashboard = async (req, res, next) => {
          FROM transactions t
          JOIN projects p ON t.project_id = p.id
          WHERE t.freelancer_id = $1
-           AND p.status IN ('CREATED', 'IN_PROGRESS', 'SUBMITTED')`,
+           AND p.status = 'IN_PROGRESS'`,
         [freelancerId]
       ),
       // earnings_balance + bank details — total_earnings deposited after admin approves withdrawal
