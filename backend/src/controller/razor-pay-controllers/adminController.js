@@ -130,7 +130,7 @@ const approvePayout = async (req, res, next) => {
 // Get all payouts
 const getAllPayouts = async (req, res, next) => {
   try {
-    const { status, search, from_date, to_date, page = 1, limit = 10 } = req.query;
+    const { type, search, from_date, to_date, min_balance, max_balance, page = 1, limit = 10 } = req.query;
 
     const parsedPage = parseInt(page);
     const parsedLimit = parseInt(limit);
@@ -146,15 +146,13 @@ const getAllPayouts = async (req, res, next) => {
     const params = [];
     let idx = 1;
 
-    if (status) {
-      // "past" is a meta-value: everything except freshly raised REQUESTED rows,
-      // so the admin UI can show all non-pending payouts in one tab.
-      if (String(status).toLowerCase() === 'past') {
+    if (type) {
+      if (String(type).toLowerCase() === 'current') {
+        conditions.push(`p.status = $${idx++}`);
+        params.push('REQUESTED');
+      } else if (String(type).toLowerCase() === 'past') {
         conditions.push(`p.status != $${idx++}`);
         params.push('REQUESTED');
-      } else {
-        conditions.push(`p.status = $${idx++}`);
-        params.push(status);
       }
     }
 
@@ -174,6 +172,20 @@ const getAllPayouts = async (req, res, next) => {
       params.push(to_date);
     }
 
+    if (min_balance !== undefined && min_balance !== '') {
+      const parsed = parseFloat(min_balance);
+      if (isNaN(parsed)) return next(new AppError('Invalid min_balance', 400));
+      conditions.push(`fl.earnings_balance >= $${idx++}`);
+      params.push(parsed);
+    }
+
+    if (max_balance !== undefined && max_balance !== '') {
+      const parsed = parseFloat(max_balance);
+      if (isNaN(parsed)) return next(new AppError('Invalid max_balance', 400));
+      conditions.push(`fl.earnings_balance <= $${idx++}`);
+      params.push(parsed);
+    }
+
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
     // Get total count
@@ -182,6 +194,7 @@ const getAllPayouts = async (req, res, next) => {
        FROM payouts p
        JOIN users u ON p.freelancer_id = u.id
        JOIN freelancer fl ON fl.user_id = u.id
+       LEFT JOIN transactions t ON t.id = p.transaction_id
        ${whereClause}`,
       params
     );
@@ -201,10 +214,12 @@ const getAllPayouts = async (req, res, next) => {
           fl.freelancer_email,
           u.user_name as freelancer_username,
           fl.earnings_balance,
-          fl.profile_image_url as freelancer_profile_image
+          fl.profile_image_url as freelancer_profile_image,
+          t.project_id
        FROM payouts p
        JOIN users u ON p.freelancer_id = u.id
        JOIN freelancer fl ON fl.user_id = u.id
+       LEFT JOIN transactions t ON t.id = p.transaction_id
        ${whereClause}
        ORDER BY p.requested_at DESC
        LIMIT $${idx++} OFFSET $${idx++}`,

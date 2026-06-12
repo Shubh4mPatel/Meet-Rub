@@ -469,7 +469,7 @@
 | `{{order_url}}` | `https://meetrub.com/freelancer/projects` | CTA — view order |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
-
+![1781293593840](image/email-templates-url-audit/1781293593840.png)![1781293596524](image/email-templates-url-audit/1781293596524.png)![1781293615748](image/email-templates-url-audit/1781293615748.png)![1781293618528](image/email-templates-url-audit/1781293618528.png)![1781293630848](image/email-templates-url-audit/1781293630848.png)
 ---
 
 ### 28. `freelancer/deliverySubmitted.html`
