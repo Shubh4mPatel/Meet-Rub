@@ -1068,7 +1068,7 @@ const getUserServiceRequestsToAdmin = async (req, res, next) => {
 
     if (searchTerm) {
       filterParams.push(`%${searchTerm}%`);
-      conditions.push(`c.full_name ILIKE $${filterParams.length}`);
+      conditions.push(`(c.full_name ILIKE $${filterParams.length} OR c.email ILIKE $${filterParams.length})`);
     }
     if (startDate) {
       filterParams.push(startDate);

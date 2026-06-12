@@ -2375,12 +2375,13 @@ const getAllCreatorProfiles = async (req, res, next) => {
     const queryParams = [];
     let paramCount = 1;
 
-    // Add search condition (search by first_name, last_name, or full_name)
+    // Add search condition (search by first_name, last_name, full_name, or email)
     if (search) {
       queryText += ` AND (
         first_name ILIKE $${paramCount} OR
         last_name ILIKE $${paramCount} OR
-        full_name ILIKE $${paramCount}
+        full_name ILIKE $${paramCount} OR
+        email ILIKE $${paramCount}
       )`;
       queryParams.push(`%${search}%`);
       paramCount++;
@@ -2420,7 +2421,8 @@ const getAllCreatorProfiles = async (req, res, next) => {
       countQuery += ` AND (
         first_name ILIKE $${countParamIndex} OR
         last_name ILIKE $${countParamIndex} OR
-        full_name ILIKE $${countParamIndex}
+        full_name ILIKE $${countParamIndex} OR
+        email ILIKE $${countParamIndex}
       )`;
       countParams.push(`%${search}%`);
       countParamIndex++;
@@ -2852,7 +2854,7 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
     let paramIndex = 1;
 
     if (search) {
-      conditions.push(`f.freelancer_full_name ILIKE $${paramIndex}`);
+      conditions.push(`(f.freelancer_full_name ILIKE $${paramIndex} OR f.freelancer_email ILIKE $${paramIndex})`);
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
@@ -3006,7 +3008,7 @@ const getFreelancerForAdmin = async (req, res, next) => {
     const conditions = [`f.verification_status IN ('VERIFIED', 'SUSPENDED')`];
 
     if (search) {
-      conditions.push(`f.freelancer_full_name ILIKE $${paramIndex}`);
+      conditions.push(`(f.freelancer_full_name ILIKE $${paramIndex} OR f.freelancer_email ILIKE $${paramIndex})`);
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
