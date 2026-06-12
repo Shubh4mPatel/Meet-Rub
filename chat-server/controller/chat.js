@@ -3,6 +3,7 @@ const redis = require("../config/reddis");
 const { createPresignedUrl } = require("../utils/helper");
 const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail } = require("../utils/offerEmails");
 const { sendDeadlineExtensionRequestEmail, sendDeadlineExtensionAcceptedEmail, sendDeadlineExtensionRejectedEmail, sendPackageRejectedEmail, sendPackageAcceptedEmail } = require("../utils/deliveryEmails");
+const { sendHireAcceptedEmail, sendHireDeclinedEmail } = require("../utils/offerEmails");
 
 // Save a web notification to DB and emit live to recipient if online.
 // For new_message: skips save and emit entirely if recipient is already in that chat room.
@@ -786,7 +787,7 @@ const chatController = (io) => {
           'link', chatRoomId
         );
 
-        // Send email to the offer sender (recipientId)
+        // Send email to the offer sender (recipientId = freelancer)
         try {
           const recipientInfo = await chatModel.getUserInfo(recipientId);
           await sendPackageAcceptedEmail({
@@ -800,6 +801,22 @@ const chatController = (io) => {
           });
         } catch (emailError) {
           console.error('Error sending package accepted email:', emailError);
+        }
+
+        // Send hire-accepted confirmation to creator with payment link
+        try {
+          const creatorInfo = await chatModel.getUserInfo(userId);
+          await sendHireAcceptedEmail({
+            creatorEmail: creatorInfo.email,
+            creatorName: creatorInfo.name,
+            freelancerName: recipientInfo?.name || username,
+            serviceTitle: updatedPackage.service_type,
+            amount: updatedPackage.price,
+            deadline: updatedPackage.delivery_days,
+            chatRoomId,
+          });
+        } catch (emailError) {
+          console.error('Error sending hire accepted email to creator:', emailError);
         }
 
         console.log(`Package ${packageId} accepted by ${username} (${userId})`);
@@ -838,7 +855,7 @@ const chatController = (io) => {
           'link', chatRoomId
         );
 
-        // Send email to the offer sender (recipientId)
+        // Send email to the offer sender (recipientId = freelancer)
         try {
           const recipientInfo = await chatModel.getUserInfo(recipientId);
           await sendPackageRejectedEmail({
@@ -852,6 +869,19 @@ const chatController = (io) => {
           });
         } catch (emailError) {
           console.error('Error sending package rejected email:', emailError);
+        }
+
+        // Notify creator their hire request was declined
+        try {
+          const creatorInfo = await chatModel.getUserInfo(userId);
+          const freelancerInfo = await chatModel.getUserInfo(recipientId);
+          await sendHireDeclinedEmail({
+            creatorEmail: creatorInfo.email,
+            creatorName: creatorInfo.name,
+            freelancerName: freelancerInfo?.name || '',
+          });
+        } catch (emailError) {
+          console.error('Error sending hire declined email to creator:', emailError);
         }
 
         console.log(`Package ${packageId} rejected by ${username} (${userId})`);

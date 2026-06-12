@@ -243,6 +243,7 @@ const handlePaymentCaptured = async (payload) => {
         const proj = projectDetails[0];
         const { sendNotification } = require('../../controller/notification/notificationServicer');
         const { sendPaymentConfirmedEmail, sendOrderActivatedEmail } = require('../../../utils/deliveryEmails');
+        const { sendAdminOrderCreatedEmail } = require('../../../utils/welcomeEmail');
 
         const deadlineStr = proj.end_date
           ? new Date(proj.end_date).toLocaleDateString('en-IN', { dateStyle: 'medium' })
@@ -291,10 +292,19 @@ const handlePaymentCaptured = async (payload) => {
             amount: proj.amount,
             deadline: deadlineStr,
           }),
+          // Email: new order notification to admin
+          sendAdminOrderCreatedEmail({
+            creatorUsername: proj.creator_name,
+            freelancerUsername: proj.freelancer_full_name,
+            projectId: proj.id,
+            serviceTitle: proj.service_name,
+            amount: proj.amount,
+            deadline: deadlineStr,
+          }),
         ]).then((results) => {
           results.forEach((result, i) => {
             if (result.status === 'rejected') {
-              const labels = ['payment_confirmed notification', 'order_activated notification', 'payment confirmed email', 'order activated email'];
+              const labels = ['payment_confirmed notification', 'order_activated notification', 'payment confirmed email', 'order activated email', 'admin order created email'];
               logger.error(`[handlePaymentCaptured] ${labels[i]} failed: ${result.reason?.message}`);
             }
           });

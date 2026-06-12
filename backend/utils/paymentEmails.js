@@ -80,7 +80,75 @@ async function sendWorkStartEmailToFreelancer({
     await sendMail(freelancerEmail, `New order — start work — Order #${projectId}`, filled, null, 'work_start', projectId);
 }
 
+async function sendPaymentReleasedEmail({ freelancerEmail, freelancerName, serviceTitle, totalAmount, freelancerEarnings, platformFee, walletBalance }) {
+    const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'freelancer/paymentrealsed.html'),
+        'utf8'
+    );
+    const filled = fillTemplate(html, {
+        freelancer_username: freelancerName,
+        service_title: serviceTitle || 'Your order',
+        currency: CURRENCY,
+        total_amount: totalAmount != null ? Number(totalAmount).toFixed(2) : '—',
+        freelancer_earnings: freelancerEarnings != null ? Number(freelancerEarnings).toFixed(2) : '—',
+        platform_fee: platformFee != null ? Number(platformFee).toFixed(2) : '—',
+        wallet_balance: walletBalance != null ? Number(walletBalance).toFixed(2) : '—',
+        wallet_url: `${APP_URL}/freelancer/wallet`,
+        withdraw_url: `${APP_URL}/freelancer/wallet`,
+        asset_base: ASSET_BASE,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+    });
+    await sendMail(freelancerEmail, 'Payment released to your wallet', filled, null, 'payment_released', null);
+}
+
+async function sendWithdrawalRequestEmail({ freelancerEmail, freelancerName, amount, bankLast4, requestTime }) {
+    const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'freelancer/withdrawalResquest.html'),
+        'utf8'
+    );
+    const filled = fillTemplate(html, {
+        freelancer_username: freelancerName,
+        currency: CURRENCY,
+        amount: amount != null ? Number(amount).toFixed(2) : '—',
+        bank_last4: bankLast4 || '****',
+        request_time: requestTime || new Intl.DateTimeFormat('en-IN', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+            timeZone: 'Asia/Kolkata',
+        }).format(new Date()),
+        wallet_url: `${APP_URL}/freelancer/wallet`,
+        asset_base: ASSET_BASE,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+    });
+    await sendMail(freelancerEmail, 'Withdrawal request received', filled, null, 'withdrawal_request', null);
+}
+
+async function sendWithdrawalApprovedEmail({ freelancerEmail, freelancerName, amount, bankLast4, txnId, arrivalDate }) {
+    const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'freelancer/withdrawalApproved.html'),
+        'utf8'
+    );
+    const filled = fillTemplate(html, {
+        freelancer_username: freelancerName,
+        currency: CURRENCY,
+        amount: amount != null ? Number(amount).toFixed(2) : '—',
+        bank_last4: bankLast4 || '****',
+        txn_id: txnId || '—',
+        arrival_date: arrivalDate || '3–5 business days',
+        wallet_url: `${APP_URL}/freelancer/wallet`,
+        asset_base: ASSET_BASE,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+    });
+    await sendMail(freelancerEmail, 'Withdrawal approved — funds on the way', filled, null, 'withdrawal_approved', null);
+}
+
 module.exports = {
     sendPaymentSuccessEmailToCreator,
-    sendWorkStartEmailToFreelancer
+    sendWorkStartEmailToFreelancer,
+    sendPaymentReleasedEmail,
+    sendWithdrawalRequestEmail,
+    sendWithdrawalApprovedEmail,
 };

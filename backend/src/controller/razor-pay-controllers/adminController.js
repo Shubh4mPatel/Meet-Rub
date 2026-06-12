@@ -7,6 +7,7 @@ const { createPresignedUrl } = require("../../../utils/helper");
 const razorpay = require('../../../config/razorpay');
 const { getLogger } = require('../../../utils/logger');
 const { sendAccountSuspendedEmail, sendAccountRestoredEmail, sendKYCStatusEmail } = require('../../../utils/welcomeEmail');
+const { sendWithdrawalApprovedEmail, sendPaymentReleasedEmail } = require('../../../utils/paymentEmails');
 const { sendNotification } = require('../notification/notificationServicer');
 const adminLogger = getLogger('admin-controller');
 const logger = getLogger('email');
@@ -24,6 +25,7 @@ const approvePayout = async (req, res, next) => {
     const { rows: payouts } = await client.query(
       `SELECT po.id, po.status, po.amount, po.freelancer_id,
               f.freelancer_id AS f_id, f.verification_status,
+              f.freelancer_full_name, f.freelancer_email,
               t.id AS transaction_id, t.razorpay_transfer_id,
               t.project_id
        FROM payouts po
@@ -87,6 +89,20 @@ const approvePayout = async (req, res, next) => {
     );
 
     await client.query('COMMIT');
+
+    // Fire-and-forget emails to freelancer after successful release
+    sendWithdrawalApprovedEmail({
+      freelancerEmail: payout.freelancer_email,
+      freelancerName: payout.freelancer_full_name,
+      amount: payout.amount,
+      txnId: payout.razorpay_transfer_id,
+    }).catch(() => {});
+    sendPaymentReleasedEmail({
+      freelancerEmail: payout.freelancer_email,
+      freelancerName: payout.freelancer_full_name,
+      totalAmount: payout.amount,
+      freelancerEarnings: payout.amount,
+    }).catch(() => {});
 
     return res.status(200).json({
       status: 'success',

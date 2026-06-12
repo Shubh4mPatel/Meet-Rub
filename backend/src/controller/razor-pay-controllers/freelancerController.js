@@ -1,6 +1,8 @@
 const { pool: db } = require('../../../config/dbConfig');
 const payoutService = require('../../razor-pay-services/payoutService');
 const AppError = require("../../../utils/appError");
+const { sendWithdrawalRequestEmail } = require('../../../utils/paymentEmails');
+const { sendAdminWithdrawalRequestEmail } = require('../../../utils/welcomeEmail');
 
 // Get freelancer's withdrawal history with filters and pagination
 const getMyPayouts = async (req, res, next) => {
@@ -53,7 +55,7 @@ const requestPayout = async (req, res, next) => {
 
     // Verify freelancer exists and is verified
     const { rows: freelancers } = await client.query(
-      `SELECT freelancer_id, verification_status FROM freelancer WHERE user_id = $1 FOR UPDATE`,
+      `SELECT freelancer_id, verification_status, freelancer_full_name, freelancer_email FROM freelancer WHERE user_id = $1 FOR UPDATE`,
       [freelancerUserId]
     );
 
@@ -108,6 +110,20 @@ const requestPayout = async (req, res, next) => {
     );
 
     await client.query('COMMIT');
+
+    // Fire-and-forget emails after successful commit
+    const { freelancer_full_name, freelancer_email } = freelancer;
+    sendWithdrawalRequestEmail({
+      freelancerEmail: freelancer_email,
+      freelancerName: freelancer_full_name,
+      amount: transaction.freelancer_amount,
+    }).catch(() => {});
+    sendAdminWithdrawalRequestEmail({
+      freelancerUsername: freelancer_full_name,
+      freelancerEmail: freelancer_email,
+      amount: transaction.freelancer_amount,
+      kycStatus: freelancer.verification_status,
+    }).catch(() => {});
 
     return res.status(201).json({
       status: 'success',

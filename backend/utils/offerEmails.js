@@ -101,4 +101,40 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
     await sendMail(freelancerEmail, `New hire request from ${creatorName}`, filled, null, 'hire_request_received', null);
 }
 
-module.exports = { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail };
+async function sendHireAcceptedEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, amount, deadline, chatRoomId }) {
+    const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'creator/hierAccepted.html'),
+        'utf8'
+    );
+    const filled = fillTemplate(html, {
+        creator_username: creatorName,
+        freelancer_username: freelancerName,
+        service_title: serviceTitle || 'Custom Package',
+        currency: CURRENCY,
+        amount: amount != null ? Number(amount).toFixed(2) : '—',
+        deadline: deadline ? `${deadline} days` : '—',
+        payment_url: `${APP_URL}/creator/chat/${chatRoomId}`,
+        asset_base: ASSET_BASE,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+    });
+    await sendMail(creatorEmail, `${freelancerName} accepted your hire request`, filled, null, 'hire_accepted', null);
+}
+
+async function sendHireDeclinedEmail({ creatorEmail, creatorName, freelancerName }) {
+    const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'creator/hireDeclined.html'),
+        'utf8'
+    );
+    const filled = fillTemplate(html, {
+        creator_username: creatorName,
+        freelancer_username: freelancerName,
+        browse_url: `${APP_URL}/creator/hire-freelancer`,
+        asset_base: ASSET_BASE,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+    });
+    await sendMail(creatorEmail, `${freelancerName} declined your hire request`, filled, null, 'hire_declined', null);
+}
+
+module.exports = { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail, sendHireAcceptedEmail, sendHireDeclinedEmail };

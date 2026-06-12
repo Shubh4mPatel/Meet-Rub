@@ -9,7 +9,7 @@ const Joi = require("joi");
 const { sendMail } = require("../../../config/email");
 const { VALID_STATE_NAMES, INDIAN_STATES } = require("../../utils/indianStates");
 const linkedAccountService = require("../../razor-pay-services/linkedAccountService");
-const { sendContactInquiryEmail } = require("../../../utils/welcomeEmail");
+const { sendContactInquiryEmail, sendAdminKYCSubmissionEmail } = require("../../../utils/welcomeEmail");
 
 const BUCKET_NAME = "meet-rub-assets";
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -807,6 +807,11 @@ const editProfile = async (req, res, next) => {
           // Commit transaction
           await query("COMMIT");
           logger.info("Govt ID updated successfully");
+          sendAdminKYCSubmissionEmail({
+            freelancerUsername: user.name || user.user_email,
+            freelancerEmail: user.user_email,
+            documentType: gov_id_type || 'Government ID',
+          }).catch((err) => logger.error('sendAdminKYCSubmissionEmail failed:', err.message));
           return res.status(200).json({
             status: "success",
             message: "Government ID updated successfully",
@@ -872,6 +877,11 @@ const editProfile = async (req, res, next) => {
 
           await query("COMMIT");
           logger.info("PAN card updated successfully");
+          sendAdminKYCSubmissionEmail({
+            freelancerUsername: user.name || user.user_email,
+            freelancerEmail: user.user_email,
+            documentType: 'PAN Card',
+          }).catch((err) => logger.error('sendAdminKYCSubmissionEmail (PAN) failed:', err.message));
           return res.status(200).json({
             status: "success",
             message: "PAN card updated successfully",

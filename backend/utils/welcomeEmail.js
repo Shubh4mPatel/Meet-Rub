@@ -69,7 +69,9 @@ async function sendAdminNewUserEmail(role, username, userEmail, signupTime, ipAd
     user_type: role,
     signup_time: signupTime,
     ip_address: ipAddress || '—',
-    admin_user_url: `${APP_ADMIN_URL}/user-panel`,
+    admin_user_url: role === 'creator'
+      ? `${APP_ADMIN_URL}/creator-panel/all-creators`
+      : `${APP_ADMIN_URL}/freelancer-panel/all-freelancers`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -118,8 +120,7 @@ async function sendAdminDisputeEmail({
       timeStyle: 'short',
       timeZone: 'Asia/Kolkata',
     }).format(new Date()),
-    admin_dispute_url: `${APP_ADMIN_URL}/disputes/${disputeId}`,
-    admin_chat_url: `${APP_ADMIN_URL}/chat-view`,
+    admin_dispute_url: `${APP_ADMIN_URL}/disputes`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -195,7 +196,7 @@ async function sendAccountRestoredEmail(role, { email, username }) {
   const filled = fillTemplate(html, {
     username,
     email,
-    dashboard_url: role === 'freelancer' ? `${APP_URL}/freelancer/projects` : `${APP_URL}/creator/your-projects`,
+    dashboard_url: role === 'freelancer' ? `${APP_URL}/freelancer` : `${APP_URL}/creator/your-projects`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -239,10 +240,116 @@ async function sendKYCStatusEmail({ email, username, status, reason }) {
   await sendMail(email, subject, filled, null, `kyc_${status}`, null);
 }
 
+async function sendAdminKYCSubmissionEmail({ freelancerUsername, freelancerEmail, documentType }) {
+  const adminRes = await query("SELECT user_email FROM users WHERE user_role = 'admin'");
+  if (adminRes.rows.length === 0) return;
+
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'admin/KYCSubmission.html'),
+    'utf8'
+  );
+
+  const APP_ADMIN_URL = process.env.APP_ADMIN_URL || `${APP_URL}/admin`;
+
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerUsername,
+    freelancer_email: freelancerEmail,
+    document_type: documentType || 'Government ID',
+    submission_time: new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date()),
+    admin_kyc_url: `${APP_ADMIN_URL}/freelancer-panel/kyc-requests`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  await Promise.all(
+    adminRes.rows.map((admin) =>
+      sendMail(admin.user_email, `KYC submitted — ${freelancerUsername}`, filled, null, 'admin_kyc_submission', null)
+    )
+  );
+}
+
+async function sendAdminOrderCreatedEmail({ creatorUsername, freelancerUsername, projectId, serviceTitle, amount, platformFee, deadline }) {
+  const adminRes = await query("SELECT user_email FROM users WHERE user_role = 'admin'");
+  if (adminRes.rows.length === 0) return;
+
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'admin/orderCreated.html'),
+    'utf8'
+  );
+
+  const APP_ADMIN_URL = process.env.APP_ADMIN_URL || `${APP_URL}/admin`;
+
+  const filled = fillTemplate(html, {
+    creator_username: creatorUsername,
+    freelancer_username: freelancerUsername,
+    order_id: String(projectId),
+    service_title: serviceTitle || '—',
+    currency: process.env.CURRENCY || '₹',
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    platform_fee: platformFee != null ? Number(platformFee).toFixed(2) : '—',
+    deadline: deadline || '—',
+    admin_order_url: `${APP_ADMIN_URL}/working-projects`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  await Promise.all(
+    adminRes.rows.map((admin) =>
+      sendMail(admin.user_email, `New order — #${projectId}`, filled, null, 'admin_order_created', projectId)
+    )
+  );
+}
+
+async function sendAdminWithdrawalRequestEmail({ freelancerUsername, freelancerEmail, amount, walletBalance, bankLast4, kycStatus }) {
+  const adminRes = await query("SELECT user_email FROM users WHERE user_role = 'admin'");
+  if (adminRes.rows.length === 0) return;
+
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'admin/WithdrawalRequest.html'),
+    'utf8'
+  );
+
+  const APP_ADMIN_URL = process.env.APP_ADMIN_URL || `${APP_URL}/admin`;
+
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerUsername,
+    freelancer_email: freelancerEmail,
+    currency: process.env.CURRENCY || '₹',
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    wallet_balance: walletBalance != null ? Number(walletBalance).toFixed(2) : '—',
+    bank_last4: bankLast4 || '****',
+    kyc_status: kycStatus || 'verified',
+    request_time: new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date()),
+    admin_withdrawal_url: `${APP_ADMIN_URL}/payment-request`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  await Promise.all(
+    adminRes.rows.map((admin) =>
+      sendMail(admin.user_email, `Withdrawal request — ${freelancerUsername}`, filled, null, 'admin_withdrawal_request', null)
+    )
+  );
+}
+
 module.exports = {
   sendWelcomeEmail,
   sendAdminNewUserEmail,
   sendAdminDisputeEmail,
+  sendAdminKYCSubmissionEmail,
+  sendAdminOrderCreatedEmail,
+  sendAdminWithdrawalRequestEmail,
   sendContactInquiryEmail,
   sendAccountSuspendedEmail,
   sendAccountRestoredEmail,
