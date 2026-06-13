@@ -81,7 +81,7 @@ async function sendHireRequestEmail({ creatorEmail, creatorName, freelancerName,
     await sendMail(creatorEmail, `Your hire request was sent to ${freelancerName}`, filled, null, 'hire_request_sent', null);
 }
 
-async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, chatRoomId }) {
+async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, creatorUserId }) {
     const html = fs.readFileSync(
         path.join(TEMPLATES_DIR, 'freelancer/hireRequestRecevied.html'),
         'utf8'
@@ -93,7 +93,7 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
         currency: CURRENCY,
         amount: amount != null ? Number(amount).toFixed(2) : '—',
         deadline: deliveryDays ? `${deliveryDays} days` : '—',
-        chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
+        chat_url: `${APP_URL}/freelancer/chatbot?userId=${creatorUserId}`,
         asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
