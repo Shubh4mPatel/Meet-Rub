@@ -919,21 +919,33 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
     // Add GROUP BY clause
     queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_title, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, w.freelancer_id`;
 
-    // Count total before pagination + price range across all suggested freelancers
+    // Count total before pagination + price/delivery range across all suggested freelancers
     const countQuery = `SELECT COUNT(*) as count FROM (${queryText}) as sub`;
+    const serviceNameFilter = desiredService ? `AND s.service_name = '${desiredService}'` : '';
     const priceRangeQuery = `
       SELECT MIN(s.service_price) AS min_price, MAX(s.service_price) AS max_price
       FROM freelancer f
       JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       WHERE f.freelancer_id = ANY($1::int[])
         AND s.is_active = true
+        ${serviceNameFilter}
     `;
-    const [countResult, priceRangeResult] = await Promise.all([
+    const deliveryRangeQuery = `
+      SELECT MIN(s.min_delivery_days) AS min_days, MAX(s.max_delivery_days) AS max_days
+      FROM freelancer f
+      JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
+      WHERE f.freelancer_id = ANY($1::int[])
+        AND s.is_deleted = FALSE
+        ${serviceNameFilter}
+    `;
+    const [countResult, priceRangeResult, deliveryRangeResult] = await Promise.all([
       query(countQuery, queryParams),
       query(priceRangeQuery, [suggestedFreelancerIds]),
+      query(deliveryRangeQuery, [suggestedFreelancerIds]),
     ]);
     const totalCount = parseInt(countResult.rows[0].count);
     const { min_price, max_price } = priceRangeResult.rows[0];
+    const { min_days, max_days } = deliveryRangeResult.rows[0];
 
     // Add sorting
     let orderByClause = '';
@@ -1037,6 +1049,10 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
       priceRange: {
         min: min_price !== null ? parseFloat(min_price) : 0,
         max: max_price !== null ? parseFloat(max_price) : 0,
+      },
+      deliveryRange: {
+        min: min_days != null ? parseInt(min_days) : null,
+        max: max_days != null ? parseInt(max_days) : null,
       },
     });
   } catch (error) {

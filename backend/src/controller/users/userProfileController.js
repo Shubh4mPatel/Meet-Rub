@@ -1393,11 +1393,33 @@ const getAllFreelancers = async (req, res, next) => {
       countParams.push(maxDays);
       countParamIndex++;
     }
+    // Delivery range query — same base filters but WITHOUT the days filter so the UI
+    // always knows the full min/max slider bounds for the current filter context.
+    let deliveryRangeQuery = `
+      SELECT MIN(s.min_delivery_days) AS min_days, MAX(s.max_delivery_days) AS max_days
+      FROM freelancer f
+      LEFT JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
+      WHERE 1=1 AND f.verification_status = 'VERIFIED' AND f.is_active = true
+    `;
+    const deliveryRangeParams = serviceTypes.length > 0 ? [serviceTypes] : [];
+    let drIdx = serviceTypes.length > 0 ? 2 : 1;
+    if (search) {
+      deliveryRangeQuery += ` AND f.freelancer_full_name ILIKE $${drIdx}`;
+      deliveryRangeParams.push(`%${search}%`);
+      drIdx++;
+    }
+    if (serviceTypes.length > 0) {
+      deliveryRangeQuery += ` AND s.service_name = ANY($1::text[])`;
+    }
+    deliveryRangeQuery += ` AND (COALESCE(s.service_price, 0) >= $${drIdx} AND COALESCE(s.service_price, 0) <= $${drIdx + 1})`;
+    deliveryRangeParams.push(minPrice, maxPrice);
+
     console.log("Final Query:", queryText);
     console.log("With Parameters:", queryParams);
-    const [results, countResult] = await Promise.all([
+    const [results, countResult, deliveryRangeResult] = await Promise.all([
       query(queryText, queryParams),
       query(countQuery, countParams),
+      query(deliveryRangeQuery, deliveryRangeParams),
     ]);
 
     const totalCount = parseInt(countResult.rows[0].count);
@@ -1468,6 +1490,7 @@ const getAllFreelancers = async (req, res, next) => {
       })
     );
 
+    const drRow = deliveryRangeResult.rows[0];
     logger.info(`Found ${totalCount} freelancers matching criteria`);
     return res.status(200).json({
       status: "success",
@@ -1478,6 +1501,10 @@ const getAllFreelancers = async (req, res, next) => {
           totalPages,
           totalItems: totalCount,
           itemsPerPage: limit,
+        },
+        deliveryRange: {
+          min: drRow.min_days != null ? parseInt(drRow.min_days) : null,
+          max: drRow.max_days != null ? parseInt(drRow.max_days) : null,
         },
       },
     });
@@ -4181,11 +4208,31 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         AND s.is_active = true
     `;
 
-    // --- Execute all three in parallel ---
-    const [results, countResult, priceRangeResult] = await Promise.all([
+    // Delivery range: same filters as the main query but without the days filter so the UI
+    // always knows the full slider bounds for the current filter context (search/serviceType/price).
+    const deliveryRangeFilters = buildFreelancerFilters(1, {
+      search,
+      serviceTypes,
+      minPrice,
+      maxPrice,
+      minDays: null,
+      maxDays: null,
+    });
+    const deliveryRangeQuery = `
+      SELECT MIN(s.min_delivery_days) AS min_days, MAX(s.max_delivery_days) AS max_days
+      FROM freelancer f
+      JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
+      WHERE f.verification_status = 'VERIFIED'
+        AND f.is_active = true
+        ${deliveryRangeFilters.whereClause}
+    `;
+
+    // --- Execute all four in parallel ---
+    const [results, countResult, priceRangeResult, deliveryRangeResult] = await Promise.all([
       query(mainQuery, mainParams),
       query(countQuery, countFilters.params),
       query(priceRangeQuery, []),
+      query(deliveryRangeQuery, deliveryRangeFilters.params),
     ]);
 
     const totalCount = parseInt(countResult.rows[0].count);
@@ -4228,6 +4275,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     );
 
     const { min_price, max_price } = priceRangeResult.rows[0];
+    const { min_days, max_days } = deliveryRangeResult.rows[0];
 
     logger.info(`[getAllFreelancers] Responding with ${freelancers.length} freelancers (page ${page}/${totalPages})`);
     return res.status(200).json({
@@ -4243,6 +4291,10 @@ const getAllfreelancersForcreator = async (req, res, next) => {
         priceRange: {
           min: min_price !== null ? parseFloat(min_price) : 0,
           max: max_price !== null ? parseFloat(max_price) : 0,
+        },
+        deliveryRange: {
+          min: min_days != null ? parseInt(min_days) : null,
+          max: max_days != null ? parseInt(max_days) : null,
         },
       },
     });

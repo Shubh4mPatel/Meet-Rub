@@ -98,7 +98,14 @@
       "Bash(pm2 list *)",
       "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; grep -oP \"href=\\\\\"[^\\\\\"]*\\\\\"\" {}')",
       "Bash(grep \"\\\\.js$\")",
-      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\" && grep -i \"hire\\\\|hireRequest\\\\|custom.package\\\\|email\" {} | tail -20')"
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\" && grep -i \"hire\\\\|hireRequest\\\\|custom.package\\\\|email\" {} | tail -20')",
+      "Bash(awk -F: '$2 <= 3960 && $2 >= 3500')",
+      "Bash(awk 'NR>=3480 && NR<=3510' /home/shubh4m/projects/Meet-Rub/backend/src/controller/users/userProfileController.js)",
+      "Bash(awk -F: '{if \\($2+0 >= 3510 && $2+0 <= 3650\\) print}')",
+      "Bash(awk -F: '{if \\($2+0 >= 3480 && $2+0 <= 3680\\) print}')",
+      "Bash(awk -F: '{if \\($2+0 >= 3480 && $2+0 <= 4100\\) print}')",
+      "Bash(awk -F: '{if \\($2+0 >= 3400 && $2+0 <= 4100\\) print}')",
+      "Bash(awk -F: '{if \\($2+0 >= 3480 && $2+0 <= 3640\\) print}')"
     ],
     "additionalDirectories": [
       "/tmp",

@@ -237,37 +237,65 @@
 
 ---
 
-### 14. `creator/hierAccepted.html` ⚠️ ORPHANED
+### 14. `creator/hierAccepted.html`
 
 | Field | Value |
 |---|---|
 | **Sent to** | Creator |
-| **Trigger** | Freelancer accepts a hire request (expected) |
-| **Sender function** | **None — no code sends this template** |
+| **Trigger** | Freelancer accepts a hire request — creator must now complete payment |
+| **Sender function** | `sendHireAcceptedEmail` — `backend/utils/offerEmails.js` + `chat-server/utils/offerEmails.js` |
+| **Trigger paths** | Socket: `accept-package` handler in `chat-server/controller/chat.js`; REST: `accept-hire-request` in `projectController.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{payment_url}}` | ❌ UNDEFINED — never passed | CTA — proceed to pay |
+| `{{payment_url}}` | `https://meetrub.com/creator/chatbot?userId=${freelancerUserId}` | CTA — "Pay Now" → opens chat with freelancer |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
+
+**Subject:** `{freelancerName} accepted your hire request`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{creator_username}}` | creator's display name |
+| `{{freelancer_username}}` | freelancer's display name |
+| `{{service_title}}` | package/service title |
+| `{{currency}}` | `₹` (env `CURRENCY`) |
+| `{{amount}}` | offer amount formatted to 2 d.p. |
+| `{{deadline}}` | `{deliveryDays} days` |
+| `{{payment_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
+
+**Body copy:** "Great news! **{freelancer}** has accepted your hire request on Meetrub. To activate the order, please complete your payment. Your funds are held securely in escrow and released only after you approve the delivery."
 
 ---
 
-### 15. `creator/hireDeclined.html` ⚠️ ORPHANED
+### 15. `creator/hireDeclined.html`
 
 | Field | Value |
 |---|---|
 | **Sent to** | Creator |
-| **Trigger** | Freelancer declines a hire request (expected) |
-| **Sender function** | **None — no code sends this template** |
+| **Trigger** | Freelancer declines a hire request |
+| **Sender function** | `sendHireDeclinedEmail` — `backend/utils/offerEmails.js` + `chat-server/utils/offerEmails.js` |
+| **Trigger paths** | Socket: `reject-package` handler (creator-sent path) in `chat-server/controller/chat.js`; REST: `reject-hire-request` in `projectController.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{browse_url}}` | ❌ UNDEFINED — never passed | CTA — browse other freelancers |
+| `{{browse_url}}` | `https://meetrub.com/creator/hire-freelancer` | CTA — "Browse Other Freelancers" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-> Suggested URL: `https://meetrub.com/creator/hire-freelancer`
+**Subject:** `{freelancerName} declined your hire request`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{creator_username}}` | creator's display name |
+| `{{freelancer_username}}` | freelancer's display name |
+| `{{browse_url}}` | `/creator/hire-freelancer` |
+
+**Body copy:** "Unfortunately, **{freelancer}** was unable to accept your request at this time. Don't worry — there are many talented freelancers on Meetrub ready to help."
 
 ---
 
@@ -276,16 +304,31 @@
 | Field | Value |
 |---|---|
 | **Sent to** | Creator |
-| **Trigger** | Creator sends a hire request to a freelancer |
-| **Sender function** | `sendHireRequestEmail` — `backend/utils/offerEmails.js` |
+| **Trigger** | Creator sends a hire request to a freelancer (confirmation to creator) |
+| **Sender function** | `sendHireRequestEmail` — `backend/utils/offerEmails.js` + `chat-server/utils/offerEmails.js` |
+| **Trigger paths** | Socket: `custom-package` handler (creator role) in `chat-server/controller/chat.js`; REST: `/api/proxy/projects/hire-request` → `projectController.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/creator/chat/:chatRoomId` | CTA — view chat |
+| `{{chat_url}}` | `https://meetrub.com/creator/chatbot?userId=${freelancerUserId}` | CTA — "View Chat" → opens chat with freelancer |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-> ⚠️ Chat route may not exist in frontend — see `email-url-doubts.md` §1.
+**Subject:** `Your hire request was sent to {freelancerName}`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{creator_username}}` | creator's display name |
+| `{{freelancer_username}}` | freelancer's display name |
+| `{{service_title}}` | package/service title |
+| `{{currency}}` | `₹` (env `CURRENCY`) |
+| `{{amount}}` | offer amount formatted to 2 d.p. |
+| `{{deadline}}` | `{deliveryDays} days` |
+| `{{chat_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
+
+**Body copy:** "Your hire request has been delivered to {freelancer}. You'll be notified as soon as they respond."
 
 ---
 
@@ -312,16 +355,32 @@
 |---|---|
 | **Sent to** | Creator |
 | **Trigger** | Freelancer sends a custom offer to creator |
-| **Sender function** | `sendOfferReceivedEmail` — `backend/utils/offerEmails.js` |
+| **Sender function** | `sendOfferReceivedEmail` — `backend/utils/offerEmails.js` + `chat-server/utils/offerEmails.js` |
+| **Trigger paths** | Socket: `custom-package` handler (freelancer role) in `chat-server/controller/chat.js`; REST: `/api/proxy/projects/hire-request` (freelancer as initiator) → `projectController.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{offer_url}}` | `https://meetrub.com/creator/chat/:chatRoomId` | CTA — view offer |
-| `{{chat_url}}` | `https://meetrub.com/creator/chat/:chatRoomId` | CTA — open chat |
+| `{{offer_url}}` | `https://meetrub.com/creator/chatbot?userId=${freelancerUserId}` | CTA — "Review Offer" → opens chat with freelancer |
+| `{{chat_url}}` | `https://meetrub.com/creator/chatbot?userId=${freelancerUserId}` | CTA — "Open Chat" → same target |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-> ⚠️ Chat route may not exist in frontend — see `email-url-doubts.md` §1.
+**Subject:** `New offer from {freelancerName}`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{creator_username}}` | creator's display name |
+| `{{freelancer_username}}` | freelancer's display name |
+| `{{service_title}}` | package/service title |
+| `{{currency}}` | `₹` (env `CURRENCY`) |
+| `{{amount}}` | offer amount formatted to 2 d.p. |
+| `{{delivery_days}}` | number of delivery days |
+| `{{offer_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
+| `{{chat_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
+
+**Body copy:** "You have a new custom offer from **{freelancer}** in your Meetrub chat. Review the details and accept or decline."
 
 ---
 
@@ -530,15 +589,28 @@
 |---|---|
 | **Sent to** | Freelancer |
 | **Trigger** | Creator sends a hire request to the freelancer |
-| **Sender function** | `sendHireRequestReceivedEmail` — `backend/utils/offerEmails.js` |
+| **Sender function** | `sendHireRequestReceivedEmail` — `backend/utils/offerEmails.js` + `chat-server/utils/offerEmails.js` |
+| **Trigger paths** | Socket: `custom-package` handler (creator role) in `chat-server/controller/chat.js`; REST: `/api/proxy/projects/hire-request` → `projectController.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/freelancer/chat/:chatRoomId` | CTA — view chat |
+| `{{chat_url}}` | `https://meetrub.com/freelancer/chatbot?userId=${creatorUserId}` | CTA — "View Request" → opens chat with creator |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-> ⚠️ Chat route may not exist in frontend — see `email-url-doubts.md` §1.
+**Subject:** `New hire request from {creatorName}`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{freelancer_username}}` | freelancer's display name |
+| `{{creator_username}}` | creator's display name |
+| `{{service_title}}` | package/service title |
+| `{{currency}}` | `₹` (env `CURRENCY`) |
+| `{{amount}}` | offer amount formatted to 2 d.p. |
+| `{{deadline}}` | `{deliveryDays} days` |
+| `{{chat_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
 
 ---
 
@@ -563,16 +635,31 @@
 | Field | Value |
 |---|---|
 | **Sent to** | Freelancer |
-| **Trigger** | Creator accepts the freelancer's custom offer |
+| **Trigger** | Creator accepts the freelancer's custom offer — payment pending from creator |
 | **Sender function** | `sendPackageAcceptedEmail` — `chat-server/utils/deliveryEmails.js` |
+| **Trigger paths** | Socket: `accept-package` handler in `chat-server/controller/chat.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/messages/:chatRoomId` | CTA — open chat |
+| `{{chat_url}}` | `https://meetrub.com/freelancer/chatbot?userId=${creatorUserId}` | CTA — "Open Chat" → opens chat with creator |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-> ⚠️ Uses `/messages/:chatRoomId` (chat-server path) — differs from backend which uses `/freelancer/chat/:chatRoomId`. See `email-url-doubts.md` §1.
+**Subject:** `Your offer was accepted — payment pending`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{freelancer_username}}` | freelancer's display name |
+| `{{creator_username}}` | creator's display name |
+| `{{service_title}}` | package/service title |
+| `{{currency}}` | `₹` (env `CURRENCY`) |
+| `{{amount}}` | offer amount |
+| `{{delivery_days}}` | number of delivery days |
+| `{{chat_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
+
+**Body copy:** "Great news! **{creator}** has accepted your custom package offer on Meetrub. They will complete the payment shortly to get your project started."
 
 ---
 
@@ -583,14 +670,29 @@
 | **Sent to** | Freelancer |
 | **Trigger** | Creator rejects the freelancer's custom offer |
 | **Sender function** | `sendPackageRejectedEmail` — `chat-server/utils/deliveryEmails.js` |
+| **Trigger paths** | Socket: `reject-package` handler (freelancer-sent path) in `chat-server/controller/chat.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/messages/:chatRoomId` | CTA — open chat |
+| `{{chat_url}}` | `https://meetrub.com/freelancer/chatbot?userId=${creatorUserId}` | CTA — "Open Chat" → opens chat with creator |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-> ⚠️ Uses `/messages/:chatRoomId` (chat-server path) — differs from backend. See `email-url-doubts.md` §1.
+**Subject:** `Your offer was declined`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{freelancer_username}}` | freelancer's display name |
+| `{{creator_username}}` | creator's display name |
+| `{{service_title}}` | package/service title |
+| `{{currency}}` | `₹` (env `CURRENCY`) |
+| `{{amount}}` | offer amount |
+| `{{delivery_days}}` | number of delivery days |
+| `{{chat_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
+
+**Body copy:** "Unfortunately, **{creator}** has declined your custom package offer. Don't be discouraged — you can reach out to discuss adjustments or explore other opportunities."
 
 ---
 
@@ -599,16 +701,31 @@
 | Field | Value |
 |---|---|
 | **Sent to** | Freelancer |
-| **Trigger** | Freelancer sends a custom offer to a creator |
-| **Sender function** | `sendOfferSentEmail` — `backend/utils/offerEmails.js` |
+| **Trigger** | Freelancer sends a custom offer to a creator (confirmation to freelancer) |
+| **Sender function** | `sendOfferSentEmail` — `backend/utils/offerEmails.js` + `chat-server/utils/offerEmails.js` |
+| **Trigger paths** | Socket: `custom-package` handler (freelancer role) in `chat-server/controller/chat.js`; REST: `/api/proxy/projects/hire-request` (freelancer as initiator) → `projectController.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/freelancer/chat/:chatRoomId` | CTA — view chat |
+| `{{chat_url}}` | `https://meetrub.com/freelancer/chatbot?userId=${creatorUserId}` | CTA — "Open Chat" → opens chat with creator |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-> ⚠️ Chat route may not exist in frontend — see `email-url-doubts.md` §1.
+**Subject:** `Offer sent to {creatorName}`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{freelancer_username}}` | freelancer's display name |
+| `{{creator_username}}` | creator's display name |
+| `{{service_title}}` | package/service title |
+| `{{currency}}` | `₹` (env `CURRENCY`) |
+| `{{amount}}` | offer amount formatted to 2 d.p. |
+| `{{delivery_days}}` | number of delivery days |
+| `{{chat_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
+
+**Body copy:** "Your custom offer has been delivered to **{creator}** on Meetrub. You'll be notified when they accept or decline."
 
 ---
 
@@ -741,11 +858,11 @@
 | `admin/KYCSubmission.html` | `admin_kyc_url` | `/admin/freelancer-panel/kyc-requests` |
 | `admin/orderCreated.html` | `admin_order_url` | `/admin/working-projects` |
 | `admin/WithdrawalRequest.html` | `admin_withdrawal_url` | `/admin/payment-request` |
-| `creator/hierAccepted.html` | `payment_url` | TBD — project detail or checkout |
-| `creator/hireDeclined.html` | `browse_url` | `/creator/hire-freelancer` |
 | `freelancer/paymentrealsed.html` | `wallet_url`, `withdraw_url` | `/freelancer/wallet` |
 | `freelancer/withdrawalApproved.html` | `wallet_url` | `/freelancer/wallet` |
 | `freelancer/withdrawalResquest.html` | `wallet_url` | `/freelancer/wallet` |
+
+> `creator/hierAccepted.html` and `creator/hireDeclined.html` are **no longer orphaned** — both are now wired to `sendHireAcceptedEmail` / `sendHireDeclinedEmail` in both `backend/utils/offerEmails.js` and `chat-server/utils/offerEmails.js`.
 
 ### Template variables missing from existing sender functions
 
@@ -761,11 +878,22 @@
 | `creator/paymentSuccess.html` | `sendPaymentSuccessEmailToCreator` — `backend/utils/paymentEmails.js` |
 | `freelancer/workStart.html` | `sendWorkStartEmailToFreelancer` — `backend/utils/paymentEmails.js` |
 
-### Inconsistent chat URL between backend and chat-server
+### Chat URL standard (RESOLVED)
 
-| File | Chat URL used |
-|---|---|
-| `backend/utils/offerEmails.js` | `https://meetrub.com/freelancer/chat/:chatRoomId` or `/creator/chat/:chatRoomId` |
-| `chat-server/utils/deliveryEmails.js` | `https://meetrub.com/messages/:chatRoomId` |
+All chat CTAs across offer/hire/delivery emails now use the `chatbot?userId=` pattern. The old `/chat/:chatRoomId` and `/messages/:chatRoomId` routes have been replaced everywhere.
 
-See `email-url-doubts.md` for the open question on the correct frontend route.
+**Rule:**
+- Email sent **to creator** → `https://meetrub.com/creator/chatbot?userId={freelancerUserId}`
+- Email sent **to freelancer** → `https://meetrub.com/freelancer/chatbot?userId={creatorUserId}`
+
+The `userId` parameter is always the **other party's** `users.id` (i.e., who you are chatting with).
+
+### Dual-path notification: offer and hire flows
+
+Both the socket path (`chat-server`) and REST API path (`backend`) send **two emails and two in-app notifications** per event — one to each party. `Promise.allSettled` is used so a failure in one email does not suppress the other.
+
+| Event | Creator gets | Freelancer gets |
+|---|---|---|
+| Creator sends hire request | `sendHireRequestEmail` (confirmation) + `hire_request_sent` in-app | `sendHireRequestReceivedEmail` + `hire_request` in-app |
+| Freelancer sends offer | `sendOfferReceivedEmail` + `package_sent` in-app | `sendOfferSentEmail` (confirmation) + `package_sent` in-app |
+| Creator accepts offer | `sendHireAcceptedEmail` (via `sendPackageAcceptedEmail` for freelancer) | `sendPackageAcceptedEmail` + `package_accepted` in-app |
