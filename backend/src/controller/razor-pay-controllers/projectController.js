@@ -1042,22 +1042,50 @@ const sendHireRequest = async (req, res, next) => {
     );
     const savedMessage = messageResult.rows[0];
 
-    // Push notification to recipient
-    const notifTitle = initiator_role === 'creator' ? 'New Hire Request' : 'New Package Offer';
-    const notifBody = initiator_role === 'creator'
-      ? `${senderName} has sent you a hire request.`
-      : `${senderName} has sent you a custom package offer.`;
-    const eventType = initiator_role === 'creator' ? 'hire_request' : 'package_sent';
-
-    await sendNotification({
-      recipientId: recipient_user_id,
-      senderId: senderUserId,
-      eventType,
-      title: notifTitle,
-      body: notifBody,
-      actionType: 'link',
-      actionRoute: chatRoomId,
-    });
+    // Push notifications to both parties
+    if (initiator_role === 'creator') {
+      await Promise.all([
+        sendNotification({
+          recipientId: recipient_user_id,
+          senderId: senderUserId,
+          eventType: 'hire_request',
+          title: 'New Hire Request',
+          body: `${senderName} has sent you a hire request.`,
+          actionType: 'link',
+          actionRoute: chatRoomId,
+        }),
+        sendNotification({
+          recipientId: senderUserId,
+          senderId: recipient_user_id,
+          eventType: 'hire_request_sent',
+          title: 'Hire Request Sent',
+          body: `Your hire request has been sent to the freelancer.`,
+          actionType: 'link',
+          actionRoute: chatRoomId,
+        }),
+      ]);
+    } else {
+      await Promise.all([
+        sendNotification({
+          recipientId: recipient_user_id,
+          senderId: senderUserId,
+          eventType: 'package_sent',
+          title: 'New Package Offer',
+          body: `${senderName} has sent you a custom package offer.`,
+          actionType: 'link',
+          actionRoute: chatRoomId,
+        }),
+        sendNotification({
+          recipientId: senderUserId,
+          senderId: recipient_user_id,
+          eventType: 'package_sent',
+          title: 'Package Offer Sent',
+          body: `Your package offer has been sent to the creator.`,
+          actionType: 'link',
+          actionRoute: chatRoomId,
+        }),
+      ]);
+    }
 
     // Get recipient user details for email
     const { rows: recipientUsers } = await db.query(

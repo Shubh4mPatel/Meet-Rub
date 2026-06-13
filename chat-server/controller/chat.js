@@ -673,15 +673,22 @@ const chatController = (io) => {
         io.to(chatRoomId).emit("receive-custom-package", messageData);
 
         if (userRole === 'creator') {
-          await emitWebNotification(io, recipientId, userId, 'hire_request',
-            'New Hire Request',
-            `${username} has sent you a job offer. Check the details.`,
-            'link', chatRoomId
-          );
+          await Promise.all([
+            emitWebNotification(io, recipientId, userId, 'hire_request',
+              'New Hire Request',
+              `${username} has sent you a job offer. Check the details.`,
+              'link', chatRoomId
+            ),
+            emitWebNotification(io, userId, recipientId, 'hire_request_sent',
+              'Hire Request Sent',
+              `Your hire request has been sent to the freelancer.`,
+              'link', chatRoomId
+            ),
+          ]);
 
           const freelancer = await chatModel.getUserByUserId(recipientId);
           if (freelancer) {
-            await Promise.all([
+            await Promise.allSettled([
               sendHireRequestEmail({
                 creatorEmail: socket.user.email,
                 creatorName: username,
@@ -703,15 +710,22 @@ const chatController = (io) => {
             ]);
           }
         } else {
-          await emitWebNotification(io, recipientId, userId, 'package_sent',
-            'New Package Offer',
-            `${username} has sent you a custom package offer.`,
-            'link', chatRoomId
-          );
+          await Promise.all([
+            emitWebNotification(io, recipientId, userId, 'package_sent',
+              'New Package Offer',
+              `${username} has sent you a custom package offer.`,
+              'link', chatRoomId
+            ),
+            emitWebNotification(io, userId, recipientId, 'package_sent',
+              'Package Offer Sent',
+              `Your package offer has been sent to the creator.`,
+              'link', chatRoomId
+            ),
+          ]);
 
           const recipient = await chatModel.getUserByUserId(recipientId);
           if (recipient) {
-            await Promise.all([
+            await Promise.allSettled([
               sendOfferSentEmail({
                 freelancerEmail: socket.user.email,
                 freelancerName: username,

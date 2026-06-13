@@ -30,12 +30,18 @@ function fillTemplate(html, vars) {
 }
 
 async function sendMail(to, subject, html) {
-  await transporter.sendMail({
-    from: process.env.EMAIL_SERVER_USER,
-    to,
-    subject,
-    html,
-  });
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_SERVER_USER,
+      to,
+      subject,
+      html,
+    });
+    console.log(`[email] sent to=${to} subject="${subject}"`);
+  } catch (error) {
+    console.error(`[email] failed to=${to} subject="${subject}" error=${error.message}`);
+    throw error;
+  }
 }
 
 async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, chatRoomId }) {
@@ -119,4 +125,40 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
   await sendMail(freelancerEmail, `New hire request from ${creatorName}`, filled);
 }
 
-module.exports = { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail };
+async function sendHireAcceptedEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, amount, deadline, chatRoomId }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/hierAccepted.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username: creatorName,
+    freelancer_username: freelancerName,
+    service_title: serviceTitle || 'Custom Package',
+    currency: CURRENCY,
+    amount: amount != null ? Number(amount).toFixed(2) : '—',
+    deadline: deadline ? `${deadline} days` : '—',
+    payment_url: `${APP_URL}/creator/chat/${chatRoomId}`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(creatorEmail, `${freelancerName} accepted your hire request`, filled);
+}
+
+async function sendHireDeclinedEmail({ creatorEmail, creatorName, freelancerName }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/hireDeclined.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username: creatorName,
+    freelancer_username: freelancerName,
+    browse_url: `${APP_URL}/creator/hire-freelancer`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(creatorEmail, `${freelancerName} declined your hire request`, filled);
+}
+
+module.exports = { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail, sendHireAcceptedEmail, sendHireDeclinedEmail };

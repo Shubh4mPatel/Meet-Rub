@@ -97,7 +97,8 @@
       "Bash(curl -s http://localhost:4008/api/health)",
       "Bash(pm2 list *)",
       "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; grep -oP \"href=\\\\\"[^\\\\\"]*\\\\\"\" {}')",
-      "Bash(grep \"\\\\.js$\")"
+      "Bash(grep \"\\\\.js$\")",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\" && grep -i \"hire\\\\|hireRequest\\\\|custom.package\\\\|email\" {} | tail -20')"
     ],
     "additionalDirectories": [
       "/tmp",
