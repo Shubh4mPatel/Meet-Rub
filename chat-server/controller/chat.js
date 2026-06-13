@@ -689,7 +689,7 @@ const chatController = (io) => {
                 serviceTitle: customPackage.service_type,
                 amount: customPackage.price,
                 deliveryDays: packageData.delivery_days,
-                chatRoomId,
+                freelancerUserId: recipientId,
               }),
               sendHireRequestReceivedEmail({
                 freelancerEmail: freelancer.user_email,
