@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { sendMail } = require('../config/email');
-const { query } = require('../config/db');
+const { query } = require('../config/dbConfig');
 
 const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
