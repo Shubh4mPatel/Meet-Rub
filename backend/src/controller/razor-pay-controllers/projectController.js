@@ -1117,7 +1117,7 @@ const sendHireRequest = async (req, res, next) => {
             serviceTitle: service_type,
             amount: price,
             deliveryDays: delivery_days,
-            chatRoomId,
+            creatorUserId: senderUserId,
           })
         );
       } else {
