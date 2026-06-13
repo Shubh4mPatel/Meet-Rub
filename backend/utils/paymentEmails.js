@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { sendMail } = require('../config/email');
+const { query } = require('../config/db');
 
 const TEMPLATES_DIR = path.join(__dirname, '../../Email-Templates');
 
@@ -93,8 +94,7 @@ async function sendPaymentReleasedEmail({ freelancerEmail, freelancerName, servi
         freelancer_earnings: freelancerEarnings != null ? Number(freelancerEarnings).toFixed(2) : '—',
         platform_fee: platformFee != null ? Number(platformFee).toFixed(2) : '—',
         wallet_balance: walletBalance != null ? Number(walletBalance).toFixed(2) : '—',
-        wallet_url: `${APP_URL}/freelancer/wallet`,
-        withdraw_url: `${APP_URL}/freelancer/wallet`,
+        withdraw_url: `${APP_URL}/freelancer/wallet/withdrawal-history`,
         asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
@@ -102,11 +102,15 @@ async function sendPaymentReleasedEmail({ freelancerEmail, freelancerName, servi
     await sendMail(freelancerEmail, 'Payment released to your wallet', filled, null, 'payment_released', null);
 }
 
-async function sendWithdrawalRequestEmail({ freelancerEmail, freelancerName, amount, bankLast4, requestTime }) {
+async function sendWithdrawalRequestEmail({ freelancerName, amount, bankLast4, requestTime }) {
+    const adminRes = await query("SELECT user_email FROM users WHERE user_role = 'admin'");
+    if (adminRes.rows.length === 0) return;
+
     const html = fs.readFileSync(
         path.join(TEMPLATES_DIR, 'freelancer/withdrawalResquest.html'),
         'utf8'
     );
+    const APP_ADMIN_URL = process.env.APP_ADMIN_URL || `${APP_URL}/admin`;
     const filled = fillTemplate(html, {
         freelancer_username: freelancerName,
         currency: CURRENCY,
@@ -117,12 +121,16 @@ async function sendWithdrawalRequestEmail({ freelancerEmail, freelancerName, amo
             timeStyle: 'short',
             timeZone: 'Asia/Kolkata',
         }).format(new Date()),
-        wallet_url: `${APP_URL}/freelancer/wallet`,
+        wallet_url: `${APP_ADMIN_URL}/payment-request`,
         asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
     });
-    await sendMail(freelancerEmail, 'Withdrawal request received', filled, null, 'withdrawal_request', null);
+    await Promise.all(
+        adminRes.rows.map((admin) =>
+            sendMail(admin.user_email, `New withdrawal request — ${freelancerName}`, filled, null, 'withdrawal_request', null)
+        )
+    );
 }
 
 async function sendWithdrawalApprovedEmail({ freelancerEmail, freelancerName, amount, bankLast4, txnId, arrivalDate }) {

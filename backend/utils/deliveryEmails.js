@@ -68,6 +68,7 @@ async function sendDeliveryReceivedEmail({
     service_title: serviceTitle || 'Your order',
     delivery_time: formatDeliveryTime(new Date()),
     delivery_message: deliveryMessage || '',
+    project_url: `${APP_URL}/creator/your-projects`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -85,7 +86,6 @@ async function sendCreatorRatingRequestEmail({ creatorEmail, creatorName, freela
     freelancer_username: freelancerName,
     order_id: String(projectId),
     service_title: serviceTitle || 'Your order',
-    review_url: `${APP_URL}/creator/your-projects`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -103,7 +103,6 @@ async function sendFreelancerRatingRequestEmail({ freelancerEmail, freelancerNam
     creator_username: creatorName,
     order_id: String(projectId),
     service_title: serviceTitle || 'Your order',
-    review_url: `${APP_URL}/freelancer/projects`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -216,7 +215,7 @@ async function sendOrderActivatedEmail({ freelancerEmail, freelancerName, creato
   await sendMail(freelancerEmail, `New order activated — Order #${projectId}`, filled, null, 'order_activated', projectId);
 }
 
-async function sendDeadlineExtensionRequestEmail({ creatorEmail, creatorName, freelancerName, projectId, serviceTitle, extensionTime, currentDeadline, newDeadline }) {
+async function sendDeadlineExtensionRequestEmail({ creatorEmail, creatorName, freelancerName, freelancerUserId, projectId, serviceTitle, extensionTime, currentDeadline, newDeadline }) {
   const html = fs.readFileSync(
     path.join(TEMPLATES_DIR, 'creator/deadlineExtensionRequest.html'),
     'utf8'
@@ -230,6 +229,7 @@ async function sendDeadlineExtensionRequestEmail({ creatorEmail, creatorName, fr
     current_deadline: currentDeadline,
     new_deadline: newDeadline,
     extension_url: `${APP_URL}/creator/your-projects`,
+    chat_url: `${APP_URL}/creator/chatbot?userId=${freelancerUserId}`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -237,7 +237,7 @@ async function sendDeadlineExtensionRequestEmail({ creatorEmail, creatorName, fr
   await sendMail(creatorEmail, `Deadline extension requested — Order #${projectId}`, filled, null, 'deadline_extension_request', projectId);
 }
 
-async function sendDeadlineExtensionAcceptedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, extensionTime, newDeadline }) {
+async function sendDeadlineExtensionAcceptedEmail({ freelancerEmail, freelancerName, creatorName, creatorUserId, projectId, serviceTitle, extensionTime, newDeadline }) {
   const html = fs.readFileSync(
     path.join(TEMPLATES_DIR, 'freelancer/deadlineExtensionAccepted.html'),
     'utf8'
@@ -249,7 +249,7 @@ async function sendDeadlineExtensionAcceptedEmail({ freelancerEmail, freelancerN
     service_title: serviceTitle || 'Your order',
     extension_time: extensionTime,
     new_deadline: newDeadline,
-    order_url: `${APP_URL}/freelancer/projects`,
+    order_url: `${APP_URL}/freelancer/chatbot?userId=${creatorUserId}`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -257,7 +257,7 @@ async function sendDeadlineExtensionAcceptedEmail({ freelancerEmail, freelancerN
   await sendMail(freelancerEmail, `Extension request accepted — Order #${projectId}`, filled, null, 'deadline_extension_accepted', projectId);
 }
 
-async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerName, creatorName, projectId, serviceTitle, currentDeadline }) {
+async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerName, creatorName, creatorUserId, projectId, serviceTitle, currentDeadline }) {
   const html = fs.readFileSync(
     path.join(TEMPLATES_DIR, 'freelancer/deadlineExtensionRejected.html'),
     'utf8'
@@ -268,7 +268,7 @@ async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerN
     order_id: String(projectId),
     service_title: serviceTitle || 'Your order',
     current_deadline: currentDeadline,
-    order_url: `${APP_URL}/freelancer/projects`,
+    order_url: `${APP_URL}/freelancer/chatbot?userId=${creatorUserId}`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,

@@ -121,7 +121,7 @@ async function sendHireAcceptedEmail({ creatorEmail, creatorName, freelancerName
     await sendMail(creatorEmail, `${freelancerName} accepted your hire request`, filled, null, 'hire_accepted', null);
 }
 
-async function sendHireDeclinedEmail({ creatorEmail, creatorName, freelancerName }) {
+async function sendHireDeclinedEmail({ creatorEmail, creatorName, freelancerName, freelancerUserId }) {
     const html = fs.readFileSync(
         path.join(TEMPLATES_DIR, 'creator/hireDeclined.html'),
         'utf8'
@@ -129,7 +129,7 @@ async function sendHireDeclinedEmail({ creatorEmail, creatorName, freelancerName
     const filled = fillTemplate(html, {
         creator_username: creatorName,
         freelancer_username: freelancerName,
-        browse_url: `${APP_URL}/creator/hire-freelancer`,
+        browse_url: `${APP_URL}/creator/chatbot?userId=${freelancerUserId}`,
         asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,

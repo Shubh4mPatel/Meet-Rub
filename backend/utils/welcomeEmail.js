@@ -43,7 +43,6 @@ async function sendWelcomeEmail(role, email, username) {
     const filled = fillTemplate(html, {
       creator_username: username,
       dashboard_url: `${APP_URL}/creator/your-projects`,
-      how_it_works_url: `${APP_URL}/services`,
       asset_base: ASSET_BASE,
       help_url: HELP_URL,
       privacy_url: PRIVACY_URL,
@@ -52,7 +51,7 @@ async function sendWelcomeEmail(role, email, username) {
   }
 }
 
-async function sendAdminNewUserEmail(role, username, userEmail, signupTime, ipAddress) {
+async function sendAdminNewUserEmail(role, username, userEmail, signupTime) {
   const adminRes = await query("SELECT user_email FROM users WHERE user_role = 'admin'");
   if (adminRes.rows.length === 0) return;
 
@@ -68,7 +67,6 @@ async function sendAdminNewUserEmail(role, username, userEmail, signupTime, ipAd
     user_email: userEmail,
     user_type: role,
     signup_time: signupTime,
-    ip_address: ipAddress || '—',
     admin_user_url: role === 'creator'
       ? `${APP_ADMIN_URL}/creator-panel/all-creators`
       : `${APP_ADMIN_URL}/freelancer-panel/all-freelancers`,
@@ -226,8 +224,6 @@ async function sendKYCStatusEmail({ email, username, status, reason }) {
     highlight_content: isApproved
       ? '<p><strong>Status:</strong> Verified ✅</p><p>Your account is now eligible to receive payments and withdrawals.</p>'
       : `<p><strong>Reason for rejection:</strong></p><p>${reason || 'Documents could not be verified. Please ensure they are clear and valid.'}</p>`,
-    action_url: isApproved ? `${APP_URL}/freelancer/projects` : `${APP_URL}/freelancer/govt-id`,
-    action_label: isApproved ? 'Go to Dashboard' : 'Resubmit KYC',
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
@@ -254,12 +250,6 @@ async function sendAdminKYCSubmissionEmail({ freelancerUsername, freelancerEmail
   const filled = fillTemplate(html, {
     freelancer_username: freelancerUsername,
     freelancer_email: freelancerEmail,
-    document_type: documentType || 'Government ID',
-    submission_time: new Intl.DateTimeFormat('en-IN', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      timeZone: 'Asia/Kolkata',
-    }).format(new Date()),
     admin_kyc_url: `${APP_ADMIN_URL}/freelancer-panel/kyc-requests`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,

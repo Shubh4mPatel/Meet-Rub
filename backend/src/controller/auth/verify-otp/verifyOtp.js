@@ -342,7 +342,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           sendWelcomeEmail('freelancer', email, userName).catch((err) =>
             logger.error('Failed to send freelancer welcome email:', err)
           );
-          sendAdminNewUserEmail('freelancer', userName, email, currentTimestamp, req.ip).catch((err) =>
+          sendAdminNewUserEmail('freelancer', userName, email, currentTimestamp).catch((err) =>
             logger.error('Failed to send admin new-user email:', err)
           );
           notifyAllAdmins({
@@ -440,7 +440,7 @@ const verifyOtpAndProcess = async (req, res, next) => {
           sendWelcomeEmail('creator', email, userName).catch((err) =>
             logger.error('Failed to send creator welcome email:', err)
           );
-          sendAdminNewUserEmail('creator', userName, email, currentTimestamp, req.ip).catch((err) =>
+          sendAdminNewUserEmail('creator', userName, email, currentTimestamp).catch((err) =>
             logger.error('Failed to send admin new-user email:', err)
           );
           notifyAllAdmins({

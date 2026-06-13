@@ -239,7 +239,7 @@ const googleRegisterUser = async (req, res, next) => {
         // ── Send welcome emails (non-blocking) ──────────────────────────────────
         sendWelcomeEmail(role, verifiedEmail, normalizedUsername)
             .catch((err) => logger.error('Failed to send Google registration welcome email:', err));
-        sendAdminNewUserEmail(role, normalizedUsername, verifiedEmail, now, req.ip)
+        sendAdminNewUserEmail(role, normalizedUsername, verifiedEmail, now)
             .catch((err) => logger.error('Failed to send admin new-user email:', err));
         notifyAllAdmins({
             senderId: user.id,

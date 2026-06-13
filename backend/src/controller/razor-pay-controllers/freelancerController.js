@@ -114,7 +114,6 @@ const requestPayout = async (req, res, next) => {
     // Fire-and-forget emails after successful commit
     const { freelancer_full_name, freelancer_email } = freelancer;
     sendWithdrawalRequestEmail({
-      freelancerEmail: freelancer_email,
       freelancerName: freelancer_full_name,
       amount: transaction.freelancer_amount,
     }).catch(() => {});

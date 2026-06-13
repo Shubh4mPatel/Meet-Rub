@@ -274,7 +274,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{help_url}}` | `https://meetrub.com/contact-us` | CTA — "Contact Support" + Footer |
+| `{{help_url}}` | `https://meetrub.com/contact-us` | CTA — "Contact Admin" + Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
 **Subject:** `Your MeetRub creator account has been suspended`
@@ -331,7 +331,7 @@
 | URL Variable | Resolved URL | Type |
 |---|---|---|
 | `{{extension_url}}` | `https://meetrub.com/creator/your-projects` | CTA — "Manage Extension" |
-| `{{chat_url}}` | `https://meetrub.com/creator/chatbot?userId={freelancerUserId}` | CTA — "Open Chat" (⚠️ not yet in template or sender — recommended addition since deadline is negotiated in chat) |
+| `{{chat_url}}` | `https://meetrub.com/creator/chatbot?userId={freelancerUserId}` | CTA — "Open Chat" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -364,7 +364,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{project_url}}` | `https://meetrub.com/creator/your-projects` | CTA — "Review Delivery" (⚠️ not yet in template or sender — recommended addition) |
+| `{{project_url}}` | `https://meetrub.com/creator/your-projects` | CTA — "Review Delivery" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -467,7 +467,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{browse_url}}` | `https://meetrub.com/creator/chatbot?userId={freelancerUserId}` | CTA — "Open Chat" (⚠️ currently passes `/creator/hire-freelancer` — should be chat URL with this freelancer; requires passing `freelancerUserId` to sender) |
+| `{{browse_url}}` | `https://meetrub.com/creator/chatbot?userId={freelancerUserId}` | CTA — "Open Chat" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -479,7 +479,7 @@
 |---|---|
 | `{{creator_username}}` | creator's display name |
 | `{{freelancer_username}}` | freelancer's display name |
-| `{{browse_url}}` | currently `/creator/hire-freelancer` → should be `/creator/chatbot?userId={freelancerUserId}` |
+| `{{browse_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
 
 **Body copy:** "Unfortunately, **{freelancer}** was unable to accept your request at this time. Don't worry — there are many talented freelancers on Meetrub ready to help."
 
@@ -802,7 +802,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{order_url}}` | `https://meetrub.com/freelancer/chatbot?userId={creatorUserId}` | CTA — "Open Chat" (⚠️ currently passes `/freelancer/projects` — should be chat URL with creator; requires passing `creatorUserId` to sender) |
+| `{{order_url}}` | `https://meetrub.com/freelancer/chatbot?userId={creatorUserId}` | CTA — "Open Chat" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -818,7 +818,7 @@
 | `{{service_title}}` | Service/package title |
 | `{{extension_time}}` | Approved extension duration |
 | `{{new_deadline}}` | New deadline date |
-| `{{order_url}}` | currently `/freelancer/projects` → should be `/freelancer/chatbot?userId={creatorUserId}` |
+| `{{order_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
 
 **Body copy:** "Good news! {creator} has accepted your deadline extension request." — Reminder: "Make sure to deliver by the new deadline to maintain your rating."
 
@@ -834,7 +834,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{order_url}}` | `https://meetrub.com/freelancer/chatbot?userId={creatorUserId}` | CTA — "Open Chat" (⚠️ currently passes `/freelancer/projects` — should be chat URL with creator; requires passing `creatorUserId` to sender) |
+| `{{order_url}}` | `https://meetrub.com/freelancer/chatbot?userId={creatorUserId}` | CTA — "Open Chat" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -849,7 +849,7 @@
 | `{{order_id}}` | `projectId` |
 | `{{service_title}}` | Service/package title |
 | `{{current_deadline}}` | Original deadline date |
-| `{{order_url}}` | currently `/freelancer/projects` → should be `/freelancer/chatbot?userId={creatorUserId}` |
+| `{{order_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
 
 **Body copy:** Creator has declined the extension. Reminder: "Please ensure you deliver by the original deadline. Late deliveries may affect your rating and future opportunities."
 ![1781293593840](image/email-templates-url-audit/1781293593840.png)![1781293596524](image/email-templates-url-audit/1781293596524.png)![1781293615748](image/email-templates-url-audit/1781293615748.png)![1781293618528](image/email-templates-url-audit/1781293618528.png)![1781293630848](image/email-templates-url-audit/1781293630848.png)
@@ -1184,13 +1184,14 @@
 
 ---
 
-### 38. `freelancer/paymentrealsed.html` ⚠️ ORPHANED
+### 38. `freelancer/paymentrealsed.html`
 
 | Field | Value |
 |---|---|
 | **Sent to** | Freelancer |
-| **Trigger** | Admin manually releases payment to freelancer (intended — no sender code exists yet) |
-| **Sender function** | **None — no code sends this template** |
+| **Trigger** | Admin approves payout — Razorpay transfer released to freelancer bank |
+| **Sender function** | `sendPaymentReleasedEmail` — `backend/utils/paymentEmails.js` |
+| **Trigger path** | `approvePayout` — `backend/src/controller/razor-pay-controllers/adminController.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
@@ -1198,20 +1199,22 @@
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-**Template placeholders (from HTML — no sender to confirm values):**
+**Subject:** `Payment released to your wallet`
 
-| Placeholder | Expected value |
+**Template placeholders:**
+
+| Placeholder | Source / Value |
 |---|---|
 | `{{freelancer_username}}` | Freelancer's display name |
 | `{{currency}}` | `₹` |
-| `{{freelancer_earnings}}` | Net earnings after platform fee |
-| `{{platform_fee}}` | Platform fee deducted |
-| `{{total_amount}}` | Gross order amount |
-| `{{wallet_balance}}` | Running wallet balance |
+| `{{freelancer_earnings}}` | 80% of order amount (2 d.p.) |
+| `{{platform_fee}}` | 20% platform fee (2 d.p.) |
+| `{{total_amount}}` | Gross order amount (2 d.p.) |
+| `{{wallet_balance}}` | Updated wallet balance (2 d.p.) |
 | `{{service_title}}` | Service/package title |
 | `{{withdraw_url}}` | `/freelancer/wallet/withdrawal-history` |
 
-**Body copy (expected):** Payment has been released to your Meetrub wallet. You can now raise a withdrawal request to transfer funds to your registered bank account.
+**Body copy:** "The creator has approved your delivery and your earnings have been released to your Meetrub wallet!" — Shows earnings breakdown (gross, platform fee, net) and updated wallet balance.
 
 ---
 
@@ -1270,13 +1273,14 @@
 
 ---
 
-### 41. `freelancer/withdrawalApproved.html` ⚠️ ORPHANED
+### 41. `freelancer/withdrawalApproved.html`
 
 | Field | Value |
 |---|---|
 | **Sent to** | Freelancer |
-| **Trigger** | Admin approves withdrawal request (intended — no sender code exists yet) |
-| **Sender function** | **None — no code sends this template** |
+| **Trigger** | Admin approves withdrawal request |
+| **Sender function** | `sendWithdrawalApprovedEmail` — `backend/utils/paymentEmails.js` |
+| **Trigger path** | `approveWithdrawal` — `backend/src/controller/razor-pay-controllers/adminController.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
@@ -1284,9 +1288,11 @@
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-**Template placeholders (from HTML — no sender to confirm values):**
+**Subject:** `Your withdrawal request has been approved`
 
-| Placeholder | Expected value |
+**Template placeholders:**
+
+| Placeholder | Source / Value |
 |---|---|
 | `{{freelancer_username}}` | Freelancer's display name |
 | `{{currency}}` | `₹` |
@@ -1296,17 +1302,18 @@
 | `{{txn_id}}` | Transaction / reference ID |
 | `{{wallet_url}}` | `/freelancer/wallet` |
 
-**Body copy (expected):** Your withdrawal request has been approved and processed. The funds are on their way to your registered bank account ending in {bank_last4} and should arrive by {arrival_date}.
+**Body copy:** Your withdrawal request has been approved and processed. The funds are on their way to your registered bank account ending in {bank_last4} and should arrive by {arrival_date}.
 
 ---
 
-### 42. `freelancer/withdrawalResquest.html` ⚠️ ORPHANED
+### 42. `freelancer/withdrawalResquest.html`
 
 | Field | Value |
 |---|---|
-| **Sent to** | Admin |
-| **Trigger** | Freelancer submits a withdrawal request — sends notification to admin (intended — no sender code exists yet) |
-| **Sender function** | **None — no code sends this template** |
+| **Sent to** | **Admin** (all users with `user_role = 'admin'`) |
+| **Trigger** | Freelancer submits a withdrawal request |
+| **Sender function** | `sendWithdrawalRequestEmail` — `backend/utils/paymentEmails.js` |
+| **Trigger path** | `requestWithdrawal` — `backend/src/controller/razor-pay-controllers/freelancerController.js` |
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
@@ -1314,9 +1321,11 @@
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
-**Template placeholders (from HTML — no sender to confirm values):**
+**Subject:** `New withdrawal request — {freelancerName}`
 
-| Placeholder | Expected value |
+**Template placeholders:**
+
+| Placeholder | Source / Value |
 |---|---|
 | `{{freelancer_username}}` | Freelancer's display name |
 | `{{currency}}` | `₹` |
@@ -1325,7 +1334,7 @@
 | `{{request_time}}` | Formatted request submission timestamp |
 | `{{wallet_url}}` | `/admin/payment-request` |
 
-**Body copy (expected):** A freelancer has submitted a withdrawal request. Admin action required to review and approve/reject the request.
+**Body copy:** A freelancer has submitted a withdrawal request. Admin action required to review and approve/reject the request.
 
 ---
 
@@ -1333,11 +1342,9 @@
 
 ### Orphaned templates (HTML exists, no sender code)
 
-| Template | Missing variable(s) | Suggested URL |
-|---|---|---|
-| `freelancer/paymentrealsed.html` | `wallet_url`, `withdraw_url` | `/freelancer/wallet` |
-| `freelancer/withdrawalApproved.html` | `wallet_url` | `/freelancer/wallet` |
-| `freelancer/withdrawalResquest.html` | `wallet_url` | `/freelancer/wallet` |
+None — all templates are wired to sender functions as of v2.
+
+> Previously flagged as orphaned: `freelancer/paymentrealsed.html`, `freelancer/withdrawalApproved.html`, and `freelancer/withdrawalResquest.html`. All three have full sender functions in `backend/utils/paymentEmails.js` — the original audit was wrong. See entries 38, 41, 42.
 
 > `admin/KYCSubmission.html`, `admin/orderCreated.html`, and `admin/WithdrawalRequest.html` are **not orphaned** — all three have full sender functions in `backend/utils/welcomeEmail.js` and their URLs are correctly resolved.
 

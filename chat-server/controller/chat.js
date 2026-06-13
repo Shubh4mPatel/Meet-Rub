@@ -893,6 +893,7 @@ const chatController = (io) => {
             creatorEmail: creatorInfo.email,
             creatorName: creatorInfo.name,
             freelancerName: freelancerInfo?.name || '',
+            freelancerUserId: freelancerInfo?.id,
           });
         } catch (emailError) {
           console.error('Error sending hire declined email to creator:', emailError);
@@ -1032,6 +1033,7 @@ const chatController = (io) => {
             creatorEmail: creatorInfo.email,
             creatorName: creatorInfo.name,
             freelancerName: freelancerInfo.name,
+            freelancerUserId: userId,
             projectId: extensionRequest.project_id,
             serviceTitle: projectInfo?.service_name || 'Your order',
             extensionTime: extensionText,
@@ -1112,6 +1114,7 @@ const chatController = (io) => {
             freelancerEmail: freelancerInfo.email,
             freelancerName: freelancerInfo.name,
             creatorName: creatorInfo.name,
+            creatorUserId: userId,
             projectId: updatedRequest.project_id,
             serviceTitle: updatedRequest.project?.service_name || 'Your order',
             extensionTime: extensionText,
@@ -1177,6 +1180,7 @@ const chatController = (io) => {
             freelancerEmail: freelancerInfo.email,
             freelancerName: freelancerInfo.name,
             creatorName: creatorInfo.name,
+            creatorUserId: userId,
             projectId: updatedRequest.project_id,
             serviceTitle: updatedRequest.project?.service_name || 'Your order',
             currentDeadline,
