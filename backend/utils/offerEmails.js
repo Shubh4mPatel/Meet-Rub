@@ -20,7 +20,7 @@ function fillTemplate(html, vars) {
     );
 }
 
-async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, chatRoomId }) {
+async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, creatorUserId }) {
     const html = fs.readFileSync(
         path.join(TEMPLATES_DIR, 'freelancer/offersent.html'),
         'utf8'
@@ -32,7 +32,7 @@ async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName
         currency: CURRENCY,
         amount: amount != null ? Number(amount).toFixed(2) : '—',
         delivery_days: deliveryDays || '—',
-        chat_url: `${APP_URL}/freelancer/chat/${chatRoomId}`,
+        chat_url: `${APP_URL}/freelancer/chatbot?userId=${creatorUserId}`,
         asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
@@ -40,7 +40,7 @@ async function sendOfferSentEmail({ freelancerEmail, freelancerName, creatorName
     await sendMail(freelancerEmail, `Offer sent to ${creatorName}`, filled, null, 'offer_sent', null);
 }
 
-async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, amount, deliveryDays, chatRoomId }) {
+async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, amount, deliveryDays, freelancerUserId }) {
     const html = fs.readFileSync(
         path.join(TEMPLATES_DIR, 'creator/offerRecived.html'),
         'utf8'
@@ -52,8 +52,8 @@ async function sendOfferReceivedEmail({ creatorEmail, creatorName, freelancerNam
         currency: CURRENCY,
         amount: amount != null ? Number(amount).toFixed(2) : '—',
         delivery_days: deliveryDays || '—',
-        offer_url: `${APP_URL}/creator/chat/${chatRoomId}`,
-        chat_url: `${APP_URL}/creator/chat/${chatRoomId}`,
+        offer_url: `${APP_URL}/creator/chatbot?userId=${freelancerUserId}`,
+        chat_url: `${APP_URL}/creator/chatbot?userId=${freelancerUserId}`,
         asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
@@ -101,7 +101,7 @@ async function sendHireRequestReceivedEmail({ freelancerEmail, freelancerName, c
     await sendMail(freelancerEmail, `New hire request from ${creatorName}`, filled, null, 'hire_request_received', null);
 }
 
-async function sendHireAcceptedEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, amount, deadline, chatRoomId }) {
+async function sendHireAcceptedEmail({ creatorEmail, creatorName, freelancerName, serviceTitle, amount, deadline, freelancerUserId }) {
     const html = fs.readFileSync(
         path.join(TEMPLATES_DIR, 'creator/hierAccepted.html'),
         'utf8'
@@ -113,7 +113,7 @@ async function sendHireAcceptedEmail({ creatorEmail, creatorName, freelancerName
         currency: CURRENCY,
         amount: amount != null ? Number(amount).toFixed(2) : '—',
         deadline: deadline ? `${deadline} days` : '—',
-        payment_url: `${APP_URL}/creator/chat/${chatRoomId}`,
+        payment_url: `${APP_URL}/creator/chatbot?userId=${freelancerUserId}`,
         asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,

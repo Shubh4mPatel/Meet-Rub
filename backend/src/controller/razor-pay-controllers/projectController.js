@@ -1130,7 +1130,7 @@ const sendHireRequest = async (req, res, next) => {
             serviceTitle: service_type,
             amount: price,
             deliveryDays: delivery_days,
-            chatRoomId,
+            creatorUserId: recipient_user_id,
           }),
           sendOfferReceivedEmail({
             creatorEmail: recipientUser.user_email,
@@ -1139,7 +1139,7 @@ const sendHireRequest = async (req, res, next) => {
             serviceTitle: service_type,
             amount: price,
             deliveryDays: delivery_days,
-            chatRoomId,
+            freelancerUserId: senderUserId,
           })
         );
       }

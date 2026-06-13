@@ -733,7 +733,7 @@ const chatController = (io) => {
                 serviceTitle: customPackage.service_type,
                 amount: customPackage.price,
                 deliveryDays: packageData.delivery_days,
-                chatRoomId,
+                creatorUserId: recipientId,
               }),
               sendOfferReceivedEmail({
                 creatorEmail: recipient.user_email,
@@ -742,7 +742,7 @@ const chatController = (io) => {
                 serviceTitle: customPackage.service_type,
                 amount: customPackage.price,
                 deliveryDays: packageData.delivery_days,
-                chatRoomId,
+                freelancerUserId: userId,
               }),
             ]);
           }
@@ -811,7 +811,7 @@ const chatController = (io) => {
             serviceTitle: updatedPackage.service_type,
             amount: updatedPackage.price,
             deliveryDays: updatedPackage.delivery_days,
-            chatRoomId,
+            creatorUserId: userId,
           });
         } catch (emailError) {
           console.error('Error sending package accepted email:', emailError);
@@ -827,7 +827,7 @@ const chatController = (io) => {
             serviceTitle: updatedPackage.service_type,
             amount: updatedPackage.price,
             deadline: updatedPackage.delivery_days,
-            chatRoomId,
+            freelancerUserId: recipientId,
           });
         } catch (emailError) {
           console.error('Error sending hire accepted email to creator:', emailError);
@@ -879,7 +879,7 @@ const chatController = (io) => {
             serviceTitle: updatedPackage.service_type,
             amount: updatedPackage.price,
             deliveryDays: updatedPackage.delivery_days,
-            chatRoomId,
+            creatorUserId: userId,
           });
         } catch (emailError) {
           console.error('Error sending package rejected email:', emailError);

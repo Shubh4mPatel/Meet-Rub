@@ -107,7 +107,7 @@ async function sendDeadlineExtensionRejectedEmail({ freelancerEmail, freelancerN
     await sendMail(freelancerEmail, `Extension request declined — Order #${projectId}`, filled);
 }
 
-async function sendPackageRejectedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, chatRoomId }) {
+async function sendPackageRejectedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, creatorUserId }) {
     const html = fs.readFileSync(
         path.join(TEMPLATES_DIR, 'freelancer/offerRejected.html'),
         'utf8'
@@ -119,7 +119,7 @@ async function sendPackageRejectedEmail({ freelancerEmail, freelancerName, creat
         currency: CURRENCY,
         amount: String(amount),
         delivery_days: String(deliveryDays),
-        chat_url: `${APP_URL}/messages/${chatRoomId}`,
+        chat_url: `${APP_URL}/freelancer/chatbot?userId=${creatorUserId}`,
         asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
@@ -127,7 +127,7 @@ async function sendPackageRejectedEmail({ freelancerEmail, freelancerName, creat
     await sendMail(freelancerEmail, `Your offer was declined`, filled);
 }
 
-async function sendPackageAcceptedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, chatRoomId }) {
+async function sendPackageAcceptedEmail({ freelancerEmail, freelancerName, creatorName, serviceTitle, amount, deliveryDays, creatorUserId }) {
     const html = fs.readFileSync(
         path.join(TEMPLATES_DIR, 'freelancer/offerAccepted.html'),
         'utf8'
@@ -139,7 +139,7 @@ async function sendPackageAcceptedEmail({ freelancerEmail, freelancerName, creat
         currency: CURRENCY,
         amount: String(amount),
         delivery_days: String(deliveryDays),
-        chat_url: `${APP_URL}/messages/${chatRoomId}`,
+        chat_url: `${APP_URL}/freelancer/chatbot?userId=${creatorUserId}`,
         asset_base: ASSET_BASE,
         help_url: HELP_URL,
         privacy_url: PRIVACY_URL,
