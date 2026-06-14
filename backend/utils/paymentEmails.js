@@ -153,10 +153,30 @@ async function sendWithdrawalApprovedEmail({ freelancerEmail, freelancerName, am
     await sendMail(freelancerEmail, 'Withdrawal approved — funds on the way', filled, null, 'withdrawal_approved', null);
 }
 
+async function sendWithdrawalRejectedEmail({ freelancerEmail, freelancerName, amount, bankLast4, rejectionReason }) {
+    const html = fs.readFileSync(
+        path.join(TEMPLATES_DIR, 'freelancer/withdrawalRejected.html'),
+        'utf8'
+    );
+    const filled = fillTemplate(html, {
+        freelancer_username: freelancerName,
+        currency: CURRENCY,
+        amount: amount != null ? Number(amount).toFixed(2) : '—',
+        bank_last4: bankLast4 || '****',
+        rejection_reason: rejectionReason || '—',
+        wallet_url: `${APP_URL}/freelancer/wallet`,
+        asset_base: ASSET_BASE,
+        help_url: HELP_URL,
+        privacy_url: PRIVACY_URL,
+    });
+    await sendMail(freelancerEmail, 'Withdrawal request rejected', filled, null, 'withdrawal_rejected', null);
+}
+
 module.exports = {
     sendPaymentSuccessEmailToCreator,
     sendWorkStartEmailToFreelancer,
     sendPaymentReleasedEmail,
     sendWithdrawalRequestEmail,
     sendWithdrawalApprovedEmail,
+    sendWithdrawalRejectedEmail,
 };

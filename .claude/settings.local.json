@@ -105,7 +105,8 @@
       "Bash(awk -F: '{if \\($2+0 >= 3480 && $2+0 <= 3680\\) print}')",
       "Bash(awk -F: '{if \\($2+0 >= 3480 && $2+0 <= 4100\\) print}')",
       "Bash(awk -F: '{if \\($2+0 >= 3400 && $2+0 <= 4100\\) print}')",
-      "Bash(awk -F: '{if \\($2+0 >= 3480 && $2+0 <= 3640\\) print}')"
+      "Bash(awk -F: '{if \\($2+0 >= 3480 && $2+0 <= 3640\\) print}')",
+      "Bash(grep -n \"### 23\\\\. \\\\`creator/welcome\" /home/shubh4m/projects/Meet-Rub/email-templates-url-audit-v2.md)"
     ],
     "additionalDirectories": [
       "/tmp",

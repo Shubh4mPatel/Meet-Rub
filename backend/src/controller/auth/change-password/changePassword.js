@@ -2,6 +2,7 @@ const bcrypt = require("bcrypt");
 const { query } = require("../../../../config/dbConfig");
 const AppError = require("../../../../utils/appError");
 const { logger } = require("../../../../utils/logger");
+const { sendPasswordChangedEmail } = require("../../../../utils/welcomeEmail");
 
 const changePassword = async (req, res, next) => {
   try {
@@ -46,6 +47,11 @@ const changePassword = async (req, res, next) => {
     );
 
     logger.info(`Password changed for user id=${userId}`);
+
+    sendPasswordChangedEmail({
+      username: req.user.name,
+      email: req.user.email,
+    }).catch((err) => logger.error('sendPasswordChangedEmail failed:', err.message));
 
     return res.status(200).json({
       status: "success",

@@ -3,6 +3,8 @@ const AppError = require("../../../utils/appError");
 const { logger } = require("../../../utils/logger");
 const { minioClient } = require("../../../config/minio");
 const { createPresignedUrl } = require("../../../utils/helper");
+const { sendAdminServiceRequestEmail, sendCreatorServiceRequestConfirmationEmail } = require("../../../utils/welcomeEmail");
+const { notifyAllAdmins } = require("../notification/notificationServicer");
 // const { log } = require("node:console");
 
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -702,6 +704,31 @@ const createSreviceRequest = async (req, res, next) => {
     );
 
     logger.info("Service request created successfully");
+
+    sendAdminServiceRequestEmail({
+      creatorUsername: user.name,
+      creatorEmail: user.email,
+      service,
+      details,
+      budget,
+    }).catch((err) => logger.error('sendAdminServiceRequestEmail failed:', err.message));
+
+    sendCreatorServiceRequestConfirmationEmail({
+      creatorUsername: user.name,
+      creatorEmail: user.email,
+      service,
+      budget,
+    }).catch((err) => logger.error('sendCreatorServiceRequestConfirmationEmail failed:', err.message));
+
+    notifyAllAdmins({
+      senderId: user.user_id,
+      eventType: 'service_request_created',
+      title: 'New service request',
+      body: `${user.name} has submitted a new service request for "${service}".`,
+      actionType: 'navigate',
+      actionRoute: '/admin/creator-panel/request-board',
+    }).catch((err) => logger.error('notifyAllAdmins (service_request) failed:', err.message));
+
     return res.status(201).json({
       status: "success",
       message: "Service request created successfully",

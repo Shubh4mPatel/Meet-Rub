@@ -7,7 +7,7 @@ const { createPresignedUrl } = require("../../../utils/helper");
 const razorpay = require('../../../config/razorpay');
 const { getLogger } = require('../../../utils/logger');
 const { sendAccountSuspendedEmail, sendAccountRestoredEmail, sendKYCStatusEmail } = require('../../../utils/welcomeEmail');
-const { sendWithdrawalApprovedEmail, sendPaymentReleasedEmail } = require('../../../utils/paymentEmails');
+const { sendWithdrawalApprovedEmail, sendPaymentReleasedEmail, sendWithdrawalRejectedEmail } = require('../../../utils/paymentEmails');
 const { sendNotification } = require('../notification/notificationServicer');
 const adminLogger = getLogger('admin-controller');
 const logger = getLogger('email');
@@ -882,7 +882,8 @@ const rejectPayout = async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: payouts } = await client.query(
-      `SELECT po.*, f.user_id AS freelancer_user_id
+      `SELECT po.*, f.user_id AS freelancer_user_id,
+              f.freelancer_full_name, f.freelancer_email
        FROM payouts po
        JOIN users u ON po.freelancer_id = u.id
        JOIN freelancer f ON f.user_id = u.id
@@ -911,6 +912,23 @@ const rejectPayout = async (req, res, next) => {
     );
 
     await client.query('COMMIT');
+
+    sendWithdrawalRejectedEmail({
+      freelancerEmail: payout.freelancer_email,
+      freelancerName: payout.freelancer_full_name,
+      amount: payout.amount,
+      rejectionReason: rejection_reason.trim(),
+    }).catch((err) => adminLogger.error('sendWithdrawalRejectedEmail failed:', err.message));
+
+    sendNotification({
+      recipientId: payout.freelancer_user_id,
+      senderId: null,
+      eventType: 'withdrawal_rejected',
+      title: 'Withdrawal request rejected',
+      body: `Your withdrawal request of ₹${Number(payout.amount).toFixed(2)} was not approved. Reason: ${rejection_reason.trim()}`,
+      actionType: 'navigate',
+      actionRoute: '/freelancer/wallet',
+    }).catch((err) => adminLogger.error('sendNotification (withdrawal_rejected) failed:', err.message));
 
     return res.status(200).json({
       status: 'success',

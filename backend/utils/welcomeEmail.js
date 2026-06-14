@@ -333,6 +333,89 @@ async function sendAdminWithdrawalRequestEmail({ freelancerUsername, freelancerE
   );
 }
 
+async function sendCreatorServiceRequestConfirmationEmail({ creatorUsername, creatorEmail, service, budget }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/serviceRequestConfirmation.html'),
+    'utf8'
+  );
+
+  const filled = fillTemplate(html, {
+    creator_username: creatorUsername,
+    service_title: service,
+    budget: Number(budget).toFixed(2),
+    request_time: new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date()),
+    currency: process.env.CURRENCY || '₹',
+    requests_url: `${APP_URL}/creator/your-projects`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  await sendMail(creatorEmail, `Service request received — ${service}`, filled, null, 'creator_service_request_confirmation', null);
+}
+
+async function sendAdminServiceRequestEmail({ creatorUsername, creatorEmail, service, details, budget }) {
+  const adminRes = await query("SELECT user_email FROM users WHERE user_role = 'admin'");
+  if (adminRes.rows.length === 0) return;
+
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'admin/serviceRequest.html'),
+    'utf8'
+  );
+
+  const APP_ADMIN_URL = process.env.APP_ADMIN_URL || `${APP_URL}/admin`;
+
+  const filled = fillTemplate(html, {
+    creator_username: creatorUsername,
+    creator_email: creatorEmail,
+    service_title: service,
+    budget: Number(budget).toFixed(2),
+    details: details,
+    request_time: new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date()),
+    currency: process.env.CURRENCY || '₹',
+    admin_request_url: `${APP_ADMIN_URL}/creator-panel/request-board`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  await Promise.all(
+    adminRes.rows.map((admin) =>
+      sendMail(admin.user_email, `New service request — ${creatorUsername}`, filled, null, 'admin_service_request', null)
+    )
+  );
+}
+
+async function sendPasswordChangedEmail({ username, email }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'auth/passwordChanged.html'),
+    'utf8'
+  );
+
+  const filled = fillTemplate(html, {
+    username,
+    email,
+    changed_at: new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date()),
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  await sendMail(email, 'Your Meetrub password was changed', filled, null, 'password_changed', null);
+}
+
 module.exports = {
   sendWelcomeEmail,
   sendAdminNewUserEmail,
@@ -340,6 +423,9 @@ module.exports = {
   sendAdminKYCSubmissionEmail,
   sendAdminOrderCreatedEmail,
   sendAdminWithdrawalRequestEmail,
+  sendAdminServiceRequestEmail,
+  sendCreatorServiceRequestConfirmationEmail,
+  sendPasswordChangedEmail,
   sendContactInquiryEmail,
   sendAccountSuspendedEmail,
   sendAccountRestoredEmail,

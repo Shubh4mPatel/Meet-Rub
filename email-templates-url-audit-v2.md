@@ -46,7 +46,46 @@
 
 ---
 
-### 2. `admin/disputeRaised.html`
+### 2. `admin/serviceRequest.html`
+
+| Field | Value |
+|---|---|
+| **Sent to** | Admin(s) |
+| **Trigger** | Creator submits a service request |
+| **Sender function** | `sendAdminServiceRequestEmail` — `backend/utils/welcomeEmail.js` |
+
+| URL Variable | Resolved URL | Type |
+|---|---|---|
+| `{{admin_request_url}}` | `https://meetrub.com/admin/creator-panel/request-board` | CTA — "Review on Request Board" |
+| `help_url` | `https://meetrub.com/contact-us` | Footer |
+| `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
+
+**Subject:** `New service request — {creatorUsername}`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{creator_username}}` | Creator's display name |
+| `{{creator_email}}` | Creator's email |
+| `{{service_title}}` | Requested service name |
+| `{{budget}}` | Requested budget (2 d.p.) |
+| `{{currency}}` | `₹` |
+| `{{details}}` | Creator's requirement details |
+| `{{request_time}}` | Current timestamp (IST) |
+| `{{admin_request_url}}` | `/admin/creator-panel/request-board` |
+
+**In-app notification (via `notifyAllAdmins`):**
+- `eventType`: `service_request_created`
+- `title`: `New service request`
+- `body`: `{creatorName} has submitted a new service request for "{service}".`
+- `actionRoute`: `/admin/creator-panel/request-board`
+
+**Body copy:** "A creator has submitted a new service request on Meetrub. Review the details and suggest suitable freelancers from the request board." — Shows creator info, service, budget, and full details/requirements.
+
+---
+
+### 3. `admin/disputeRaised.html`
 
 | Field | Value |
 |---|---|
@@ -331,7 +370,7 @@
 | URL Variable | Resolved URL | Type |
 |---|---|---|
 | `{{extension_url}}` | `https://meetrub.com/creator/your-projects` | CTA — "Manage Extension" |
-| `{{chat_url}}` | `https://meetrub.com/creator/chatbot?userId={freelancerUserId}` | CTA — "Open Chat" |
+| `{{chat_url}}` | `https://meetrub.com/chatbot?userId={freelancerUserId}` | CTA — "Open Chat" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -434,7 +473,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{payment_url}}` | `https://meetrub.com/creator/chatbot?userId=${freelancerUserId}` | CTA — "Pay Now" → opens chat with freelancer |
+| `{{payment_url}}` | `https://meetrub.com/chatbot?userId=${freelancerUserId}` | CTA — "Pay Now" → opens chat with freelancer |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -450,7 +489,7 @@
 | `{{currency}}` | `₹` (env `CURRENCY`) |
 | `{{amount}}` | offer amount formatted to 2 d.p. |
 | `{{deadline}}` | `{deliveryDays} days` |
-| `{{payment_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
+| `{{payment_url}}` | `/chatbot?userId={freelancerUserId}` |
 
 **Body copy:** "Great news! **{freelancer}** has accepted your hire request on Meetrub. To activate the order, please complete your payment. Your funds are held securely in escrow and released only after you approve the delivery."
 
@@ -467,7 +506,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{browse_url}}` | `https://meetrub.com/creator/chatbot?userId={freelancerUserId}` | CTA — "Open Chat" |
+| `{{browse_url}}` | `https://meetrub.com/chatbot?userId={freelancerUserId}` | CTA — "Open Chat" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -479,7 +518,7 @@
 |---|---|
 | `{{creator_username}}` | creator's display name |
 | `{{freelancer_username}}` | freelancer's display name |
-| `{{browse_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
+| `{{browse_url}}` | `/chatbot?userId={freelancerUserId}` |
 
 **Body copy:** "Unfortunately, **{freelancer}** was unable to accept your request at this time. Don't worry — there are many talented freelancers on Meetrub ready to help."
 
@@ -496,7 +535,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/creator/chatbot?userId=${freelancerUserId}` | CTA — "View Chat" → opens chat with freelancer |
+| `{{chat_url}}` | `https://meetrub.com/chatbot?userId=${freelancerUserId}` | CTA — "View Chat" → opens chat with freelancer |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -512,7 +551,7 @@
 | `{{currency}}` | `₹` (env `CURRENCY`) |
 | `{{amount}}` | offer amount formatted to 2 d.p. |
 | `{{deadline}}` | `{deliveryDays} days` |
-| `{{chat_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
+| `{{chat_url}}` | `/chatbot?userId={freelancerUserId}` |
 
 **Body copy:** "Your hire request has been delivered to {freelancer}. You'll be notified as soon as they respond."
 
@@ -557,8 +596,8 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{offer_url}}` | `https://meetrub.com/creator/chatbot?userId=${freelancerUserId}` | CTA — "Review Offer" → opens chat with freelancer |
-| `{{chat_url}}` | `https://meetrub.com/creator/chatbot?userId=${freelancerUserId}` | CTA — "Open Chat" → same target |
+| `{{offer_url}}` | `https://meetrub.com/chatbot?userId=${freelancerUserId}` | CTA — "Review Offer" → opens chat with freelancer |
+| `{{chat_url}}` | `https://meetrub.com/chatbot?userId=${freelancerUserId}` | CTA — "Open Chat" → same target |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -574,8 +613,8 @@
 | `{{currency}}` | `₹` (env `CURRENCY`) |
 | `{{amount}}` | offer amount formatted to 2 d.p. |
 | `{{delivery_days}}` | number of delivery days |
-| `{{offer_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
-| `{{chat_url}}` | `/creator/chatbot?userId={freelancerUserId}` |
+| `{{offer_url}}` | `/chatbot?userId={freelancerUserId}` |
+| `{{chat_url}}` | `/chatbot?userId={freelancerUserId}` |
 
 **Body copy:** "You have a new custom offer from **{freelancer}** in your Meetrub chat. Review the details and accept or decline."
 
@@ -707,7 +746,38 @@
 
 ---
 
-### 23. `creator/welcome.html`
+### 23. `creator/serviceRequestConfirmation.html`
+
+| Field | Value |
+|---|---|
+| **Sent to** | Creator |
+| **Trigger** | Creator submits a service request |
+| **Sender function** | `sendCreatorServiceRequestConfirmationEmail` — `backend/utils/welcomeEmail.js` |
+
+| URL Variable | Resolved URL | Type |
+|---|---|---|
+| `{{requests_url}}` | `https://meetrub.com/creator/your-projects` | CTA — "View My Requests" |
+| `help_url` | `https://meetrub.com/contact-us` | Footer |
+| `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
+
+**Subject:** `Service request received — {service}`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{creator_username}}` | Creator's display name |
+| `{{service_title}}` | Requested service name |
+| `{{budget}}` | Requested budget (2 d.p.) |
+| `{{currency}}` | `₹` |
+| `{{request_time}}` | Current timestamp (IST) |
+| `{{requests_url}}` | `/creator/your-projects` |
+
+**Body copy:** "We've received your service request on Meetrub. Our admin team will review it and suggest the most suitable freelancers for your requirements." — 3-step flow: request received → admin review → freelancer suggestions.
+
+---
+
+### 24. `creator/welcome.html`
 
 | Field | Value |
 |---|---|
@@ -802,7 +872,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{order_url}}` | `https://meetrub.com/freelancer/chatbot?userId={creatorUserId}` | CTA — "Open Chat" |
+| `{{order_url}}` | `https://meetrub.com/chatbot?userId={creatorUserId}` | CTA — "Open Chat" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -818,7 +888,7 @@
 | `{{service_title}}` | Service/package title |
 | `{{extension_time}}` | Approved extension duration |
 | `{{new_deadline}}` | New deadline date |
-| `{{order_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
+| `{{order_url}}` | `/chatbot?userId={creatorUserId}` |
 
 **Body copy:** "Good news! {creator} has accepted your deadline extension request." — Reminder: "Make sure to deliver by the new deadline to maintain your rating."
 
@@ -834,7 +904,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{order_url}}` | `https://meetrub.com/freelancer/chatbot?userId={creatorUserId}` | CTA — "Open Chat" |
+| `{{order_url}}` | `https://meetrub.com/chatbot?userId={creatorUserId}` | CTA — "Open Chat" |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -849,7 +919,7 @@
 | `{{order_id}}` | `projectId` |
 | `{{service_title}}` | Service/package title |
 | `{{current_deadline}}` | Original deadline date |
-| `{{order_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
+| `{{order_url}}` | `/chatbot?userId={creatorUserId}` |
 
 **Body copy:** Creator has declined the extension. Reminder: "Please ensure you deliver by the original deadline. Late deliveries may affect your rating and future opportunities."
 ![1781293593840](image/email-templates-url-audit/1781293593840.png)![1781293596524](image/email-templates-url-audit/1781293596524.png)![1781293615748](image/email-templates-url-audit/1781293615748.png)![1781293618528](image/email-templates-url-audit/1781293618528.png)![1781293630848](image/email-templates-url-audit/1781293630848.png)
@@ -967,7 +1037,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/freelancer/chatbot?userId=${creatorUserId}` | CTA — "View Request" → opens chat with creator |
+| `{{chat_url}}` | `https://meetrub.com/chatbot?userId=${creatorUserId}` | CTA — "View Request" → opens chat with creator |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -983,7 +1053,7 @@
 | `{{currency}}` | `₹` (env `CURRENCY`) |
 | `{{amount}}` | offer amount formatted to 2 d.p. |
 | `{{deadline}}` | `{deliveryDays} days` |
-| `{{chat_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
+| `{{chat_url}}` | `/chatbot?userId={creatorUserId}` |
 
 ---
 
@@ -1029,7 +1099,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/freelancer/chatbot?userId=${creatorUserId}` | CTA — "Open Chat" → opens chat with creator |
+| `{{chat_url}}` | `https://meetrub.com/chatbot?userId=${creatorUserId}` | CTA — "Open Chat" → opens chat with creator |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -1045,7 +1115,7 @@
 | `{{currency}}` | `₹` (env `CURRENCY`) |
 | `{{amount}}` | offer amount |
 | `{{delivery_days}}` | number of delivery days |
-| `{{chat_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
+| `{{chat_url}}` | `/chatbot?userId={creatorUserId}` |
 
 **Body copy:** "Great news! **{creator}** has accepted your custom package offer on Meetrub. They will complete the payment shortly to get your project started."
 
@@ -1062,7 +1132,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/freelancer/chatbot?userId=${creatorUserId}` | CTA — "Open Chat" → opens chat with creator |
+| `{{chat_url}}` | `https://meetrub.com/chatbot?userId=${creatorUserId}` | CTA — "Open Chat" → opens chat with creator |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -1078,7 +1148,7 @@
 | `{{currency}}` | `₹` (env `CURRENCY`) |
 | `{{amount}}` | offer amount |
 | `{{delivery_days}}` | number of delivery days |
-| `{{chat_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
+| `{{chat_url}}` | `/chatbot?userId={creatorUserId}` |
 
 **Body copy:** "Unfortunately, **{creator}** has declined your custom package offer. Don't be discouraged — you can reach out to discuss adjustments or explore other opportunities."
 
@@ -1095,7 +1165,7 @@
 
 | URL Variable | Resolved URL | Type |
 |---|---|---|
-| `{{chat_url}}` | `https://meetrub.com/freelancer/chatbot?userId=${creatorUserId}` | CTA — "Open Chat" → opens chat with creator |
+| `{{chat_url}}` | `https://meetrub.com/chatbot?userId=${creatorUserId}` | CTA — "Open Chat" → opens chat with creator |
 | `help_url` | `https://meetrub.com/contact-us` | Footer |
 | `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
 
@@ -1111,7 +1181,7 @@
 | `{{currency}}` | `₹` (env `CURRENCY`) |
 | `{{amount}}` | offer amount formatted to 2 d.p. |
 | `{{delivery_days}}` | number of delivery days |
-| `{{chat_url}}` | `/freelancer/chatbot?userId={creatorUserId}` |
+| `{{chat_url}}` | `/chatbot?userId={creatorUserId}` |
 
 **Body copy:** "Your custom offer has been delivered to **{creator}** on Meetrub. You'll be notified when they accept or decline."
 
@@ -1306,7 +1376,45 @@
 
 ---
 
-### 42. `freelancer/withdrawalResquest.html`
+### 42. `freelancer/withdrawalRejected.html`
+
+| Field | Value |
+|---|---|
+| **Sent to** | Freelancer |
+| **Trigger** | Admin rejects a withdrawal/payout request |
+| **Sender function** | `sendWithdrawalRejectedEmail` — `backend/utils/paymentEmails.js` |
+| **Trigger path** | `rejectPayout` — `backend/src/controller/razor-pay-controllers/adminController.js` |
+
+| URL Variable | Resolved URL | Type |
+|---|---|---|
+| `{{wallet_url}}` | `https://meetrub.com/freelancer/wallet` | CTA — "View Wallet" |
+| `help_url` | `https://meetrub.com/contact-us` | Footer |
+| `privacy_url` | `https://meetrub.com/privacy-policy` | Footer |
+
+**Subject:** `Withdrawal request rejected`
+
+**Template placeholders:**
+
+| Placeholder | Source / Value |
+|---|---|
+| `{{freelancer_username}}` | Freelancer's display name |
+| `{{currency}}` | `₹` |
+| `{{amount}}` | Requested withdrawal amount (2 d.p.) |
+| `{{bank_last4}}` | Last 4 digits of bank account (`****` default) |
+| `{{rejection_reason}}` | Admin-provided rejection reason |
+| `{{wallet_url}}` | `/freelancer/wallet` |
+
+**In-app notification (via `sendNotification`):**
+- `eventType`: `withdrawal_rejected`
+- `title`: `Withdrawal request rejected`
+- `body`: `Your withdrawal request of ₹{amount} was not approved. Reason: {reason}`
+- `actionRoute`: `/freelancer/wallet`
+
+**Body copy:** "Unfortunately, your withdrawal request on Meetrub has been reviewed and could not be approved at this time." — Shows amount, bank account, status, and the admin-provided rejection reason in a highlighted box. Informs the freelancer their wallet balance is unchanged.
+
+---
+
+### 43. `freelancer/withdrawalResquest.html`
 
 | Field | Value |
 |---|---|
@@ -1368,8 +1476,8 @@ No missing variables currently — all template placeholders are passed by their
 All chat CTAs across offer/hire/delivery emails now use the `chatbot?userId=` pattern. The old `/chat/:chatRoomId` and `/messages/:chatRoomId` routes have been replaced everywhere.
 
 **Rule:**
-- Email sent **to creator** → `https://meetrub.com/creator/chatbot?userId={freelancerUserId}`
-- Email sent **to freelancer** → `https://meetrub.com/freelancer/chatbot?userId={creatorUserId}`
+- Email sent **to creator** → `https://meetrub.com/chatbot?userId={freelancerUserId}`
+- Email sent **to freelancer** → `https://meetrub.com/chatbot?userId={creatorUserId}`
 
 The `userId` parameter is always the **other party's** `users.id` (i.e., who you are chatting with).
 

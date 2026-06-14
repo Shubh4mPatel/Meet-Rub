@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;}
+  .wrapper{max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);}
+  .header{background:#1A1A2E;padding:28px 32px 24px;text-align:center;}
+  .logo-row{text-align:center;margin-bottom:12px;}
+  .header-subtitle{color:#FCA5A5;font-size:13px;margin-top:2px;}
+  .body{padding:32px;}
+  .body h2{font-size:19px;color:#1A1A2E;margin:0 0 10px;font-family:Arial,sans-serif;}
+  .body p{font-size:15px;color:#4B5563;line-height:1.65;margin:0 0 16px;}
+  .highlight{background:#FFF1F2;border-left:4px solid #EF4444;border-radius:6px;padding:16px 20px;margin:20px 0;}
+  .highlight p{margin:5px 0;color:#1A1A2E;font-size:14px;}
+  .highlight strong{color:#DC2626;}
+  .reason-box{background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;padding:14px 18px;margin:16px 0;font-size:14px;color:#374151;line-height:1.6;}
+  .btn{display:inline-block;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;text-decoration:none;margin:6px 4px;}
+  .btn-primary{background:#7C3AED;color:#ffffff;}
+  .footer{background:#F8F7FF;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
+  .footer p{font-size:12px;color:#9CA3AF;margin:4px 0;}
+  .social-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 10px;}
+  .social-row a{display:inline-block;width:32px;height:32px;border-radius:50%;overflow:hidden;margin-right:10px;}
+  .social-row img{width:32px;height:32px;display:block;}
+  .footer-links{margin-top:8px;}
+  .footer-links a{font-size:12px;color:#7C3AED;text-decoration:none;margin:0 8px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="logo-row">
+      <img src="{{asset_base}}/email/logo.png" alt="Meetrub" style="height:48px;width:auto;display:block;margin:0 auto;">
+    </div>
+    <div class="header-subtitle">Withdrawal request not approved</div>
+  </div>
+  <div class="body">
+    <h2>Hi {{freelancer_username}},</h2>
+    <p>Unfortunately, your withdrawal request on Meetrub has been reviewed and could not be approved at this time.</p>
+    <div class="highlight">
+      <p><strong>Amount requested:</strong> {{currency}}{{amount}}</p>
+      <p><strong>Bank account:</strong> ending {{bank_last4}}</p>
+      <p><strong>Status:</strong> Rejected</p>
+    </div>
+    <p style="font-size:14px;color:#4B5563;margin-bottom:6px;"><strong>Reason for rejection:</strong></p>
+    <div class="reason-box">{{rejection_reason}}</div>
+    <p>Your wallet balance remains unchanged. You can raise a new withdrawal request after addressing the issue, or contact our support team if you have questions.</p>
+    <a href="{{wallet_url}}" class="btn btn-primary">View Wallet</a>
+  </div>
+  <div class="footer">
+    <div class="social-row">
+      <a href="https://www.facebook.com/people/Meetrub/61580564312674/?sk=reels_tab" title="Facebook"><img src="{{asset_base}}/email/facebook.png" alt="Facebook" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
+      <a href="https://www.instagram.com/meetrubofficial" title="Instagram"><img src="{{asset_base}}/email/instagram.png" alt="Instagram" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
+      <a href="https://www.youtube.com/@Meetrub" title="YouTube"><img src="{{asset_base}}/email/youtube.png" alt="YouTube" width="32" height="32" style="width:32px;height:32px;display:block;"></a>
+    </div>
+    <p>Meetrub — Freelancer Payouts</p>
+    <p>&copy; 2026 Meetrub. All rights reserved.</p>
+    <div class="footer-links">
+      <a href="{{help_url}}">Help Center</a>
+      <a href="{{privacy_url}}">Privacy Policy</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>
