@@ -6,7 +6,7 @@ const { requireRole, requirePermission } = require('../middleware/authMiddleware
 const upload = require('../../config/multer')
 const { getAllDisputes, resolveDispute, getDisputeById } = require('../controller/dispute/disputeController')
 const { getAllCreatorProfiles, getCreatorById, getFreelancerForAdmin, getFreeLancerByIdForAdmin, getFreelancerForSuggestion, getFreelancerForKYCApproval } = require('../controller/users/userProfileController')
-const { createAdmin, getAdminList, getMyAdminInfo, updateAdminPermissions, deleteAdmin } = require('../controller/admin/adminContoller')
+const { createAdmin, getAdminList, getMyAdminInfo, updateAdminPermissions, deleteAdmin, adminUpdateUserCredentials, adminUpdateCreatorEmail } = require('../controller/admin/adminContoller')
 const router = expess.Router()
 
 
@@ -17,6 +17,8 @@ router.get('/admins/userInfo', getMyAdminInfo)
 router.get('/admins', requireRole(['admin']), requirePermission('admin_management', 'view'), getAdminList)
 router.patch('/admins/:id/permissions', requireRole(['admin']), requirePermission('admin_management', 'update'), updateAdminPermissions)
 router.delete('/admins/:id', requireRole(['admin']), requirePermission('admin_management', 'delete'), deleteAdmin)
+router.patch('/users/credentials', requireRole(['admin']), requirePermission('user_management', 'update'), adminUpdateUserCredentials)
+router.patch('/creator/:creator_id/email', requireRole(['admin']), requirePermission('user_management', 'update'), adminUpdateCreatorEmail)
 
 
 router.get('/getServices', getServices)

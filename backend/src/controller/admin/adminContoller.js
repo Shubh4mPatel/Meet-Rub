@@ -359,4 +359,215 @@ const deleteAdmin = async (req, res, next) => {
     }
 };
 
-module.exports = { approveProfile, getAllFreelancers, getAllCreators, createAdmin, getAdminList, getMyAdminInfo, updateAdminPermissions, deleteAdmin };
+const adminUpdateCreatorEmail = async (req, res, next) => {
+    try {
+        const { creator_id } = req.params;
+        const { newEmail } = req.body;
+
+        if (!newEmail || !newEmail.trim()) {
+            return next(new AppError('newEmail is required', 400));
+        }
+
+        const email = newEmail.trim().toLowerCase();
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return next(new AppError('Invalid email format', 400));
+        }
+
+        // Check new email not already taken
+        const { rows: taken } = await query(
+            'SELECT id FROM users WHERE user_email = $1',
+            [email]
+        );
+        if (taken.length) {
+            return next(new AppError('This email is already in use by another account', 409));
+        }
+
+        // Resolve user_id and current auth_provider
+        const { rows: creatorRows } = await query(
+            `SELECT c.creator_id, c.user_id, u.auth_provider
+             FROM creators c
+             JOIN users u ON u.id = c.user_id
+             WHERE c.creator_id = $1`,
+            [creator_id]
+        );
+
+        if (!creatorRows.length) {
+            return next(new AppError('Creator not found', 404));
+        }
+
+        const { user_id, auth_provider } = creatorRows[0];
+        const isGoogleUser = auth_provider === 'google';
+
+        // Update users table — clear auth_provider if Google user
+        await query(
+            `UPDATE users
+             SET user_email = $1${isGoogleUser ? ', auth_provider = NULL' : ''}
+             WHERE id = $2`,
+            [email, user_id]
+        );
+
+        // Update creators table
+        await query(
+            'UPDATE creators SET email = $1, updated_at = NOW() WHERE creator_id = $2',
+            [email, creator_id]
+        );
+
+        logger.info(
+            `Creator ${creator_id} email updated to ${email} by admin ${req.user?.email}${isGoogleUser ? ' (converted from Google login)' : ''}`
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            message: isGoogleUser
+                ? 'Email updated and Google login removed. User must set a password via forgot password.'
+                : 'Email updated successfully',
+            data: { creator_id: Number(creator_id), email, wasGoogleUser: isGoogleUser },
+        });
+    } catch (error) {
+        logger.error(error);
+        return next(new AppError('Failed to update creator email', 500));
+    }
+};
+
+const adminUpdateUserCredentials = async (req, res, next) => {
+    try {
+        const { role, roleId, newEmail, password, confirmPassword } = req.body;
+
+        if (!role || !roleId) {
+            return next(new AppError('role and roleId are required', 400));
+        }
+
+        if (!newEmail && !password) {
+            return next(new AppError('Provide at least newEmail or password to update', 400));
+        }
+
+        const validRoles = ['creator', 'freelancer', 'admin'];
+        if (!validRoles.includes(role)) {
+            return next(new AppError(`Invalid role. Allowed: ${validRoles.join(', ')}`, 400));
+        }
+
+        if (password !== undefined) {
+            if (!confirmPassword) {
+                return next(new AppError('confirmPassword is required when password is provided', 400));
+            }
+            if (password !== confirmPassword) {
+                return next(new AppError('Passwords do not match', 400));
+            }
+            if (password.length < 8) {
+                return next(new AppError('Password must be at least 8 characters', 400));
+            }
+        }
+
+        // Resolve user_id from role table
+        let userId;
+        if (role === 'creator') {
+            const { rows } = await query('SELECT user_id FROM creators WHERE creator_id = $1', [roleId]);
+            if (!rows.length) return next(new AppError('Creator not found', 404));
+            userId = rows[0].user_id;
+        } else if (role === 'freelancer') {
+            const { rows } = await query('SELECT user_id FROM freelancer WHERE freelancer_id = $1', [roleId]);
+            if (!rows.length) return next(new AppError('Freelancer not found', 404));
+            userId = rows[0].user_id;
+        } else if (role === 'admin') {
+            const { rows } = await query('SELECT user_id FROM admin WHERE id = $1', [roleId]);
+            if (!rows.length) return next(new AppError('Admin not found', 404));
+            userId = rows[0].user_id;
+        }
+
+        // Fetch current user state
+        const { rows: userRows } = await query(
+            'SELECT user_email, auth_provider FROM users WHERE id = $1',
+            [userId]
+        );
+        if (!userRows.length) return next(new AppError('User not found', 404));
+
+        const currentEmail = userRows[0].user_email;
+        const isGoogleUser = userRows[0].auth_provider === 'google';
+
+        // Determine if email actually changed
+        const emailChanged = newEmail && newEmail.trim().toLowerCase() !== currentEmail.toLowerCase();
+
+        if (emailChanged) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(newEmail.trim())) {
+                return next(new AppError('Invalid email format', 400));
+            }
+            const { rows: taken } = await query(
+                'SELECT id FROM users WHERE user_email = $1',
+                [newEmail.trim().toLowerCase()]
+            );
+            if (taken.length) {
+                return next(new AppError('This email is already in use by another account', 409));
+            }
+        }
+
+        const clearGoogle = isGoogleUser && (emailChanged || !!password);
+
+        // Build users UPDATE
+        const userSetParts = [];
+        const userParams = [];
+        let paramIdx = 1;
+
+        if (emailChanged) {
+            userSetParts.push(`user_email = $${paramIdx++}`);
+            userParams.push(newEmail.trim().toLowerCase());
+        }
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            userSetParts.push(`user_password = $${paramIdx++}`);
+            userParams.push(hashedPassword);
+        }
+        if (clearGoogle) {
+            userSetParts.push('auth_provider = NULL');
+        }
+        userParams.push(userId);
+
+        await query(
+            `UPDATE users SET ${userSetParts.join(', ')} WHERE id = $${paramIdx}`,
+            userParams
+        );
+
+        // Update role-specific email field
+        if (emailChanged) {
+            const finalEmail = newEmail.trim().toLowerCase();
+            if (role === 'creator') {
+                await query(
+                    'UPDATE creators SET email = $1, updated_at = NOW() WHERE creator_id = $2',
+                    [finalEmail, roleId]
+                );
+            } else if (role === 'freelancer') {
+                await query(
+                    'UPDATE freelancer SET freelancer_email = $1, updated_at = NOW() WHERE freelancer_id = $2',
+                    [finalEmail, roleId]
+                );
+            }
+        }
+
+        const actions = [];
+        if (emailChanged) actions.push('email');
+        if (password) actions.push('password');
+
+        logger.info(
+            `Credentials updated [${actions.join(' + ')}] for ${role} roleId=${roleId} by admin ${req.user?.email}${clearGoogle ? ' (converted from Google login)' : ''}`
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            message: clearGoogle
+                ? `${actions.join(' and ')} updated. Google login removed — user can now log in with email and password.`
+                : `${actions.join(' and ')} updated successfully`,
+            data: {
+                emailChanged,
+                passwordChanged: !!password,
+                googleLoginRemoved: clearGoogle,
+            },
+        });
+    } catch (error) {
+        logger.error(error);
+        return next(new AppError('Failed to update credentials', 500));
+    }
+};
+
+module.exports = { approveProfile, getAllFreelancers, getAllCreators, createAdmin, getAdminList, getMyAdminInfo, updateAdminPermissions, deleteAdmin, adminUpdateUserCredentials, adminUpdateCreatorEmail };
