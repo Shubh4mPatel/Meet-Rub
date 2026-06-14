@@ -249,7 +249,7 @@ const getMyProjects = async (req, res, next) => {
     }
 
     if (search) {
-      whereClauses.push(`(f.freelancer_full_name ILIKE $${paramIndex} OR c.full_name ILIKE $${paramIndex})`);
+      whereClauses.push(`(f.freelancer_full_name ILIKE $${paramIndex} OR c.full_name ILIKE $${paramIndex} OR s.service_name ILIKE $${paramIndex} OR p.id::text ILIKE $${paramIndex})`);
       paramIndex++;
       filterParams.push(`%${search}%`);
     }
