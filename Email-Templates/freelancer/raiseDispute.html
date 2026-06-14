@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -18,7 +18,6 @@
   .highlight strong{color:#7C3AED;}
   .btn{display:inline-block;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;text-decoration:none;margin:6px 4px;}
   .btn-primary{background:#7C3AED;color:#ffffff;}
-  .btn-secondary{background:#F3F4F6;color:#1A1A2E;border:1px solid #D1D5DB;}
   .footer{background:#F8F7FF;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
   .footer p{font-size:12px;color:#9CA3AF;margin:4px 0;}
   .social-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 10px;}
@@ -37,15 +36,14 @@
     <div class="header-subtitle">Dispute received — under review</div>
   </div>
   <div class="body">
-
-        <h2>Hi {{creator_username}},</h2>
-        <p>We've received your dispute for Meetrub Order #{{order_id}}. Our admin team will review the chat history, files, and both parties' submissions. You'll be notified of the decision within <strong>7 business days</strong>.</p>
-        <div class="highlight">
-          <p><strong>Order ID:</strong> #{{order_id}}</p>
-          <p><strong>Dispute reason:</strong> {{dispute_reason}}</p>
-          <p><strong>Submitted at:</strong> {{dispute_time}}</p>
-        </div>
-        <a href="{{dispute_url}}" class="btn btn-primary">View Dispute</a>
+    <h2>Hi {{freelancer_username}},</h2>
+    <p>We've received your dispute for Meetrub Order #{{order_id}}. Our admin team will review the chat history, files, and both parties' submissions. You'll be notified of the decision within <strong>7 business days</strong>.</p>
+    <div class="highlight">
+      <p><strong>Order ID:</strong> #{{order_id}}</p>
+      <p><strong>Dispute reason:</strong> {{dispute_reason}}</p>
+      <p><strong>Submitted at:</strong> {{dispute_time}}</p>
+    </div>
+    <a href="{{dispute_url}}" class="btn btn-primary">View Dispute</a>
   </div>
   <div class="footer">
     <div class="social-row">
@@ -56,8 +54,8 @@
     <p>Funds remain in Meetrub escrow during the dispute process.</p>
     <p>&copy; 2026 Meetrub. All rights reserved.</p>
     <div class="footer-links">
-      <a href="https://meetrub.com/contact-us">Help Center</a>
-      <a href="https://meetrub.com/privacy-policy">Privacy Policy</a>
+      <a href="{{help_url}}">Help Center</a>
+      <a href="{{privacy_url}}">Privacy Policy</a>
     </div>
   </div>
 </div>

@@ -7,7 +7,7 @@ const paymentService = require('../../razor-pay-services/paymentService');
 const { createPresignedUrl } = require('../../../utils/helper');
 const { sendNotification, notifyAllAdmins } = require('../notification/notificationServicer');
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
-const { sendCreatorDisputeEmail, sendFreelancerDisputeEmail, sendDisputeResolvedCreatorEmail, sendDisputeResolvedFreelancerEmail } = require('../../../utils/deliveryEmails');
+const { sendCreatorDisputeEmail, sendFreelancerDisputeEmail, sendFreelancerRaisedDisputeEmail, sendCreatorDisputeAgainstEmail, sendDisputeResolvedCreatorEmail, sendDisputeResolvedFreelancerEmail } = require('../../../utils/deliveryEmails');
 
 const EXPIRY_SECONDS = 4 * 60 * 60; // 4 hours
 
@@ -160,7 +160,7 @@ const raiseDispute = async (req, res, next) => {
           actionType: 'navigate',
           actionRoute: `/admin/disputes/${disputeResult.rows[0].id}`,
         }),
-        // Email to creator (either raising it or being disputed)
+        // Creator: confirmation if they raised it, "against you" if freelancer raised it
         role === 'creator'
           ? sendCreatorDisputeEmail({
             creatorEmail: creator_email,
@@ -171,7 +171,7 @@ const raiseDispute = async (req, res, next) => {
             serviceTitle: serviceName,
             disputeReason: disputeReasonDisplay,
           })
-          : sendCreatorDisputeEmail({
+          : sendCreatorDisputeAgainstEmail({
             creatorEmail: creator_email,
             creatorName: creator_name,
             freelancerName: freelancer_name,
@@ -180,16 +180,25 @@ const raiseDispute = async (req, res, next) => {
             serviceTitle: serviceName,
             disputeReason: disputeReasonDisplay,
           }),
-        // Email to freelancer (either raising it or being disputed)
-        sendFreelancerDisputeEmail({
-          freelancerEmail: freelancer_email,
-          freelancerName: freelancer_name,
-          creatorName: creator_name,
-          disputeId: disputeResult.rows[0].id,
-          projectId: project_id,
-          serviceTitle: serviceName,
-          disputeReason: disputeReasonDisplay,
-        }),
+        // Freelancer: "against you" if creator raised it, confirmation if freelancer raised it
+        role === 'creator'
+          ? sendFreelancerDisputeEmail({
+            freelancerEmail: freelancer_email,
+            freelancerName: freelancer_name,
+            creatorName: creator_name,
+            disputeId: disputeResult.rows[0].id,
+            projectId: project_id,
+            serviceTitle: serviceName,
+            disputeReason: disputeReasonDisplay,
+          })
+          : sendFreelancerRaisedDisputeEmail({
+            freelancerEmail: freelancer_email,
+            freelancerName: freelancer_name,
+            disputeId: disputeResult.rows[0].id,
+            projectId: project_id,
+            serviceTitle: serviceName,
+            disputeReason: disputeReasonDisplay,
+          }),
       ]).then((results) => {
         results.forEach((result, i) => {
           if (result.status === 'rejected') {

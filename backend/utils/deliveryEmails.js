@@ -170,6 +170,44 @@ async function sendFreelancerDisputeEmail({ freelancerEmail, freelancerName, cre
   await sendMail(freelancerEmail, `Dispute raised against you — Order #${projectId || disputeId}`, filled, null, 'freelancer_dispute_raised', projectId);
 }
 
+async function sendFreelancerRaisedDisputeEmail({ freelancerEmail, freelancerName, disputeId, projectId, serviceTitle, disputeReason }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/raiseDispute.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    order_id: String(projectId || disputeId),
+    service_title: serviceTitle || 'your order',
+    dispute_reason: disputeReason,
+    dispute_time: formatDeliveryTime(new Date()),
+    dispute_url: `${APP_URL}/freelancer/disputes`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(freelancerEmail, `Dispute raised — Order #${projectId || disputeId}`, filled, null, 'freelancer_dispute_raised_by', projectId);
+}
+
+async function sendCreatorDisputeAgainstEmail({ creatorEmail, creatorName, freelancerName, disputeId, projectId, serviceTitle, disputeReason }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/disputeRaised.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username: creatorName,
+    freelancer_username: freelancerName,
+    order_id: String(projectId || disputeId),
+    service_title: serviceTitle || 'your order',
+    dispute_reason: disputeReason,
+    dispute_url: `${APP_URL}/creator/disputes`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(creatorEmail, `Dispute raised against you — Order #${projectId || disputeId}`, filled, null, 'creator_dispute_raised_against', projectId);
+}
+
 async function sendPaymentConfirmedEmail({ creatorEmail, creatorName, freelancerName, projectId, serviceTitle, amount, deadline, paymentMethod }) {
   const html = fs.readFileSync(
     path.join(TEMPLATES_DIR, 'creator/paymentConfirmed.html'),
@@ -332,6 +370,8 @@ module.exports = {
   sendOrderApprovedEmail,
   sendCreatorDisputeEmail,
   sendFreelancerDisputeEmail,
+  sendFreelancerRaisedDisputeEmail,
+  sendCreatorDisputeAgainstEmail,
   sendPaymentConfirmedEmail,
   sendOrderActivatedEmail,
   sendDeadlineExtensionRequestEmail,
