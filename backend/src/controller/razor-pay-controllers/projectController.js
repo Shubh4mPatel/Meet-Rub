@@ -249,7 +249,7 @@ const getMyProjects = async (req, res, next) => {
     }
 
     if (search) {
-      whereClauses.push(`(f.freelancer_full_name ILIKE $${paramIndex} OR c.full_name ILIKE $${paramIndex})`);
+      whereClauses.push(`(f.freelancer_full_name ILIKE $${paramIndex} OR c.full_name ILIKE $${paramIndex} OR s.service_name ILIKE $${paramIndex} OR p.id::text ILIKE $${paramIndex})`);
       paramIndex++;
       filterParams.push(`%${search}%`);
     }
@@ -552,8 +552,8 @@ const getAllProjects = async (req, res, next) => {
     // Search — applied to both sides using same param index
     let projectSearchWhere = '', packageSearchWhere = '';
     if (search) {
-      projectSearchWhere = `AND (c.full_name ILIKE $${p} OR f.freelancer_full_name ILIKE $${p} OR c.email ILIKE $${p} OR f.freelancer_email ILIKE $${p})`;
-      packageSearchWhere = `AND (c2.full_name ILIKE $${p} OR f2.freelancer_full_name ILIKE $${p} OR c2.email ILIKE $${p} OR f2.freelancer_email ILIKE $${p})`;
+      projectSearchWhere = `AND (c.full_name ILIKE $${p} OR f.freelancer_full_name ILIKE $${p} OR c.email ILIKE $${p} OR f.freelancer_email ILIKE $${p} OR s.service_name ILIKE $${p} OR p.id::text ILIKE $${p})`;
+      packageSearchWhere = `AND (c2.full_name ILIKE $${p} OR f2.freelancer_full_name ILIKE $${p} OR c2.email ILIKE $${p} OR f2.freelancer_email ILIKE $${p} OR s2.service_name ILIKE $${p} OR cp2.service_type ILIKE $${p} OR cp2.id::text ILIKE $${p})`;
       p++;
       params.push(`%${search}%`);
     }
