@@ -96,8 +96,8 @@ async function createPresignedUrl(bucketName, objectName, expirySeconds) {
     // Replace MinIO server URL with staging domain
     const parsedUrl = new URL(presignedUrl);
     const pathAndQuery = parsedUrl.pathname + parsedUrl.search;
-    const modifiedUrl = `https://staging.meetrub.com${pathAndQuery}`;
-    
+    const modifiedUrl = `https://meetrub.com${pathAndQuery}`;
+
     return modifiedUrl;
   } catch (err) {
     throw err;
@@ -121,7 +121,7 @@ async function createViewOnlyPresignedUrl(bucketName, objectName, expirySeconds)
     });
     const parsedUrl = new URL(presignedUrl);
     const pathAndQuery = parsedUrl.pathname + parsedUrl.search;
-    return `https://staging.meetrub.com${pathAndQuery}`;
+    return `https://meetrub.com${pathAndQuery}`;
   } catch (err) {
     throw err;
   }
@@ -158,7 +158,7 @@ async function createAttachmentPresignedUrl(bucketName, objectName, expirySecond
     });
     const parsedUrl = new URL(presignedUrl);
     const pathAndQuery = parsedUrl.pathname + parsedUrl.search;
-    return `https://staging.meetrub.com${pathAndQuery}`;
+    return `https://meetrub.com${pathAndQuery}`;
   } catch (err) {
     throw err;
   }
@@ -187,8 +187,8 @@ async function createDownloadablePresignedUrl(bucketName, objectName, expirySeco
     // Replace MinIO server URL with staging domain
     const parsedUrl = new URL(presignedUrl);
     const pathAndQuery = parsedUrl.pathname + parsedUrl.search;
-    const modifiedUrl = `https://staging.meetrub.com${pathAndQuery}`;
-    
+    const modifiedUrl = `https://meetrub.com${pathAndQuery}`;
+
     return modifiedUrl;
   } catch (err) {
     throw err;
