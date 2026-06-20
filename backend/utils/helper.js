@@ -1,8 +1,14 @@
 const {minioClient} = require('../config/minio');
 const jwt = require("jsonwebtoken");
+const fs = require('fs');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegStatic = require('ffmpeg-static');
 const { query } = require('../config/dbConfig');
 const redisClient = require('../config/reddis');
 const { logger } = require('./logger');
+
+// Point fluent-ffmpeg at the binary bundled by ffmpeg-static (no system install needed)
+ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const USERNAMES_SET_KEY = "usernames:set";
 
@@ -207,6 +213,45 @@ function getMediaType(filePathOrUrl) {
     return null;
 }
 
+// Optimize an uploaded media buffer before it goes to storage.
+// For videos: remux with `-movflags faststart` (moov atom moved to the front) using
+// `-c copy` — no re-encoding, so it's fast (~2-3s) and lossless, but the video can start
+// playing before it's fully downloaded. For non-videos (images): the buffer is returned
+// unchanged. If ffmpeg fails for any reason, the original buffer is returned so the upload
+// still succeeds.
+async function optimizeVideoBuffer(buffer, mimetype, userId) {
+  if (!mimetype || !mimetype.startsWith('video/')) {
+    return buffer;
+  }
+
+  // Unique temp paths so concurrent uploads from the same user don't collide
+  const tmpBase = `/tmp/${userId}_${Date.now()}`;
+  const tmpInput = `${tmpBase}_input.mp4`;
+  const tmpOutput = `${tmpBase}_output.mp4`;
+
+  try {
+    fs.writeFileSync(tmpInput, buffer);
+
+    await new Promise((resolve, reject) => {
+      ffmpeg(tmpInput)
+        .addOption('-movflags', 'faststart')
+        .addOption('-c', 'copy') // just moves the moov atom, no quality loss
+        .format('mp4')
+        .on('end', resolve)
+        .on('error', reject)
+        .save(tmpOutput);
+    });
+
+    return fs.readFileSync(tmpOutput);
+  } catch (err) {
+    logger.warn(`Video faststart optimization failed, uploading original: ${err.message}`);
+    return buffer;
+  } finally {
+    try { if (fs.existsSync(tmpInput)) fs.unlinkSync(tmpInput); } catch (_) {}
+    try { if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput); } catch (_) {}
+  }
+}
+
 function generateTokens(user, roleWiseId, permissions = null) {
     const payload = {
         user_id: user.id,
@@ -222,4 +267,4 @@ function generateTokens(user, roleWiseId, permissions = null) {
     return { accessToken, refreshToken };
 }
 
-module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile, createPresignedUrl, createViewOnlyPresignedUrl, createAttachmentPresignedUrl, createDownloadablePresignedUrl, toGoogleDrivePreviewUrl, getMediaType, generateTokens, loadUsernamesIntoRedis, USERNAMES_SET_KEY };
+module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile, createPresignedUrl, createViewOnlyPresignedUrl, createAttachmentPresignedUrl, createDownloadablePresignedUrl, toGoogleDrivePreviewUrl, getMediaType, optimizeVideoBuffer, generateTokens, loadUsernamesIntoRedis, USERNAMES_SET_KEY };

@@ -2,7 +2,7 @@ const { query, pool } = require("../../../config/dbConfig");
 const AppError = require("../../../utils/appError");
 const { logger } = require("../../../utils/logger");
 const { minioClient } = require("../../../config/minio");
-const { createPresignedUrl, getMediaType } = require("../../../utils/helper");
+const { createPresignedUrl, getMediaType, optimizeVideoBuffer } = require("../../../utils/helper");
 const { sendAdminServiceRequestEmail, sendCreatorServiceRequestConfirmationEmail } = require("../../../utils/welcomeEmail");
 const { notifyAllAdmins } = require("../notification/notificationServicer");
 // const { log } = require("node:console");
@@ -284,11 +284,14 @@ const addServicesByFreelancer = async (req, res, next) => {
       thumbnailFileUrl = `${BUCKET_NAME}/${objectName}`;
       uploadedObjectName = objectName;
 
+      // Optimize videos (faststart remux) before upload; images pass through unchanged
+      const uploadBuffer = await optimizeVideoBuffer(req.file.buffer, req.file.mimetype, user.user_id);
+
       await minioClient.putObject(
         BUCKET_NAME,
         objectName,
-        req.file.buffer,
-        req.file.size,
+        uploadBuffer,
+        uploadBuffer.length,
         { "Content-Type": req.file.mimetype }
       );
 
@@ -440,11 +443,14 @@ const updateServiceByFreelancer = async (req, res, next) => {
         return next(new AppError("Only image (JPEG, PNG, GIF, WEBP) and video (MP4, MPEG, MOV, WEBM) files are allowed", 400));
       }
 
+      // Optimize videos (faststart remux) before upload; images pass through unchanged
+      const uploadBuffer = await optimizeVideoBuffer(req.file.buffer, req.file.mimetype, user.user_id);
+
       await minioClient.putObject(
         BUCKET_NAME,
         objectName,
-        req.file.buffer,
-        req.file.size,
+        uploadBuffer,
+        uploadBuffer.length,
         { "Content-Type": req.file.mimetype }
       );
 

@@ -106,7 +106,12 @@
       "Bash(awk -F: '{if \\($2+0 >= 3480 && $2+0 <= 4100\\) print}')",
       "Bash(awk -F: '{if \\($2+0 >= 3400 && $2+0 <= 4100\\) print}')",
       "Bash(awk -F: '{if \\($2+0 >= 3480 && $2+0 <= 3640\\) print}')",
-      "Bash(grep -n \"### 23\\\\. \\\\`creator/welcome\" /home/shubh4m/projects/Meet-Rub/email-templates-url-audit-v2.md)"
+      "Bash(grep -n \"### 23\\\\. \\\\`creator/welcome\" /home/shubh4m/projects/Meet-Rub/email-templates-url-audit-v2.md)",
+      "Bash(grep -rln \"fluent-ffmpeg\\\\|require\\(\\\\\"ffmpeg\\\\|ffmpeg-static\" src/ utils/)",
+      "Bash(which ffmpeg *)",
+      "Bash(npm install *)",
+      "Bash(node --check utils/helper.js)",
+      "Bash(node --check src/controller/services/serviceController.js)"
     ],
     "additionalDirectories": [
       "/tmp",
