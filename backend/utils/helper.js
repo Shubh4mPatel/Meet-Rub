@@ -189,6 +189,24 @@ async function createDownloadablePresignedUrl(bucketName, objectName, expirySeco
   }
 }
 
+// Determine whether a stored file path/URL points to a video or an image,
+// based on its extension. Returns 'video', 'image', or null if unknown/empty.
+// Accepts raw object paths ("bucket/dir/file.mp4") or presigned URLs (extension
+// is read from before the query string).
+const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv', 'avi', 'm4v', 'ogv'];
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'heic', 'heif'];
+
+function getMediaType(filePathOrUrl) {
+    if (!filePathOrUrl || typeof filePathOrUrl !== 'string') return null;
+    const pathPart = filePathOrUrl.split('?')[0];
+    const lastDot = pathPart.lastIndexOf('.');
+    if (lastDot === -1) return null;
+    const ext = pathPart.slice(lastDot + 1).toLowerCase();
+    if (VIDEO_EXTENSIONS.includes(ext)) return 'video';
+    if (IMAGE_EXTENSIONS.includes(ext)) return 'image';
+    return null;
+}
+
 function generateTokens(user, roleWiseId, permissions = null) {
     const payload = {
         user_id: user.id,
@@ -204,4 +222,4 @@ function generateTokens(user, roleWiseId, permissions = null) {
     return { accessToken, refreshToken };
 }
 
-module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile, createPresignedUrl, createViewOnlyPresignedUrl, createAttachmentPresignedUrl, createDownloadablePresignedUrl, toGoogleDrivePreviewUrl, generateTokens, loadUsernamesIntoRedis, USERNAMES_SET_KEY };
+module.exports = { getObjectNameFromUrl, addAssetsPrefix, getNormalUrlFromPresigned, validateFile, createPresignedUrl, createViewOnlyPresignedUrl, createAttachmentPresignedUrl, createDownloadablePresignedUrl, toGoogleDrivePreviewUrl, getMediaType, generateTokens, loadUsernamesIntoRedis, USERNAMES_SET_KEY };

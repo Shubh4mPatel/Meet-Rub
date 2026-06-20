@@ -2,7 +2,7 @@ const { query, pool } = require("../../../config/dbConfig");
 const AppError = require("../../../utils/appError");
 const { logger } = require("../../../utils/logger");
 const { minioClient } = require("../../../config/minio");
-const { createPresignedUrl } = require("../../../utils/helper");
+const { createPresignedUrl, getMediaType } = require("../../../utils/helper");
 const { sendAdminServiceRequestEmail, sendCreatorServiceRequestConfirmationEmail } = require("../../../utils/welcomeEmail");
 const { notifyAllAdmins } = require("../notification/notificationServicer");
 // const { log } = require("node:console");
@@ -1044,6 +1044,10 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
             freelancer.freelancer_thumbnail_image = null;
           }
         }
+
+        // Media type (video/image) derived from the raw object path before the
+        // URL is replaced with a presigned URL.
+        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
 
         // Generate presigned URL for service banner
         if (freelancer.service_banner) {

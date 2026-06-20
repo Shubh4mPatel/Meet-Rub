@@ -4,7 +4,7 @@ const { minioClient } = require("../../../config/minio");
 const path = require("path");
 const crypto = require("crypto");
 const { logger } = require("../../../utils/logger");
-const { createPresignedUrl } = require("../../../utils/helper");
+const { createPresignedUrl, getMediaType } = require("../../../utils/helper");
 const Joi = require("joi");
 const { sendMail } = require("../../../config/email");
 const { VALID_STATE_NAMES, INDIAN_STATES } = require("../../utils/indianStates");
@@ -1471,6 +1471,10 @@ const getAllFreelancers = async (req, res, next) => {
           }
         }
 
+        // Media type (video/image) derived from the raw object path before the
+        // URL is replaced with a presigned URL.
+        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
+
         if (freelancer.service_banner) {
           const parts = freelancer.service_banner.split("/");
           const bucketName = parts[0];
@@ -1610,6 +1614,10 @@ const getFreelancerById = async (req, res, next) => {
     );
 
     for (const service of freelancerServices) {
+      // Media type (video/image) derived from the raw object path before the
+      // URL is replaced with a presigned URL.
+      service.thumbnail_file_type = getMediaType(service.thumbnail_file);
+
       if (service.thumbnail_file) {
         try {
           const firstSlash = service.thumbnail_file.indexOf("/");
@@ -2252,6 +2260,10 @@ const getWishlistFreelancers = async (req, res, next) => {
             freelancer.freelancer_thumbnail_image = null;
           }
         }
+
+        // Media type (video/image) derived from the raw object path before the
+        // URL is replaced with a presigned URL.
+        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
 
         // Generate presigned URL for service banner if it exists
         if (freelancer.service_banner) {
@@ -3135,6 +3147,10 @@ const getFreelancerForAdmin = async (req, res, next) => {
           }
         }
 
+        // Media type (video/image) derived from the raw object path before the
+        // URL is replaced with a presigned URL.
+        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
+
         if (freelancer.service_banner) {
           const parts = freelancer.service_banner.split("/");
           const bucketName = parts[0];
@@ -3762,6 +3778,10 @@ const getFreelancerForSuggestion = async (req, res, next) => {
           }
         }
 
+        // Media type (video/image) derived from the raw object path before the
+        // URL is replaced with a presigned URL.
+        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
+
         if (freelancer.service_banner) {
           const parts = freelancer.service_banner.split("/");
           const bucketName = parts[0];
@@ -4255,6 +4275,9 @@ const getAllfreelancersForcreator = async (req, res, next) => {
           generateSignedUrl(f.freelancer_thumbnail_image),
           generateSignedUrl(f.service_banner),
         ]);
+
+        // Media type (video/image) from the raw object path before overwrite.
+        f.service_banner_type = getMediaType(f.service_banner);
 
         f.profile_image_url = profileUrl;
         f.freelancer_thumbnail_image = thumbnailUrl;
