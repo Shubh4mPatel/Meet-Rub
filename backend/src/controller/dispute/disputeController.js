@@ -841,7 +841,7 @@ const resolveDispute = async (req, res, next) => {
         const raisedByUserId = details.raised_by === 'creator' ? details.creator_user_id : details.freelancer_user_id;
         const raisedByName = details.raised_by === 'creator' ? details.creator_name : details.freelancer_name;
 
-        logger.info(`resolveDispute: Sending resolve notification to raised_by=${details.raised_by} userId=${raisedByUserId} dispute=${id}`);
+        logger.info(`resolveDispute: Sending resolve notification + emails to both parties dispute=${id}`);
         Promise.allSettled([
           sendNotification({
             recipientId: raisedByUserId,
@@ -851,13 +851,40 @@ const resolveDispute = async (req, res, next) => {
             body: `Your dispute has been resolved by admin. ${admin_note ? 'Note: ' + admin_note : ''}`,
             actionType: 'link',
             actionRoute: String(details.project_id || id),
-          })
+          }),
+          // Email to creator (no money movement — neutral resolution)
+          sendDisputeResolvedCreatorEmail({
+            creatorEmail: details.creator_email,
+            creatorName: details.creator_name,
+            freelancerName: details.freelancer_name,
+            projectId: details.project_id,
+            disputeId: id,
+            serviceTitle: details.service_name,
+            resolution: 'Dispute resolved',
+            adminNote: admin_note,
+            amount: null,
+          }),
+          // Email to freelancer (no money movement — neutral resolution)
+          sendDisputeResolvedFreelancerEmail({
+            freelancerEmail: details.freelancer_email,
+            freelancerName: details.freelancer_name,
+            creatorName: details.creator_name,
+            projectId: details.project_id,
+            disputeId: id,
+            serviceTitle: details.service_name,
+            resolution: 'Dispute resolved',
+            adminNote: admin_note,
+            amount: null,
+          }),
         ]).then(results => {
-          if (results[0].status === 'rejected') {
-            logger.error(`resolveDispute: notification failed for userId=${raisedByUserId} dispute=${id}:`, results[0].reason?.message);
-          } else {
-            logger.info(`resolveDispute: Notification sent successfully to userId=${raisedByUserId} dispute=${id}`);
-          }
+          const labels = ['raiser notification', 'creator dispute email', 'freelancer dispute email'];
+          results.forEach((result, i) => {
+            if (result.status === 'rejected') {
+              logger.error(`resolveDispute: ${labels[i]} failed for dispute=${id}:`, result.reason?.message);
+            } else {
+              logger.info(`resolveDispute: ${labels[i]} sent successfully for dispute=${id}`);
+            }
+          });
         });
 
       } else {
