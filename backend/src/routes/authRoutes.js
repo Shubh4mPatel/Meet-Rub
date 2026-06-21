@@ -7,12 +7,13 @@ const { authenticateUser, refreshAccessToken, logout } = require('../middleware/
 const { changePassword } = require('../controller/auth/change-password/changePassword');
 const { setTokenCookies } = require('../middleware/tokenCookieMiddleware');
 const upload = require('../../config/multer');
+const registerImageUpload = require('../../config/registerImageUpload');
 
 
 router.post("/send-otp", otpSendApi);
 
 
-router.post("/verify-otp", upload.fields([{ name: 'govIdImage', maxCount: 1 }, { name: 'panCardImage', maxCount: 1 }]), verifyOtpAndProcess, setTokenCookies, (req, res) => {
+router.post("/verify-otp", registerImageUpload.fields([{ name: 'govIdImage', maxCount: 1 }, { name: 'panCardImage', maxCount: 1 }]), verifyOtpAndProcess, setTokenCookies, (req, res) => {
 
   res.status(200).json({
     message: "Login successful ",
@@ -54,7 +55,7 @@ router.post('/social-login', socialLoginUser, setTokenCookies, (req, res) => {
 
 router.post(
   '/social-register',
-  upload.single('pan_card_document'),
+  registerImageUpload.single('pan_card_document'),
   googleRegisterUser,
   setTokenCookies,
   (req, res) => {
