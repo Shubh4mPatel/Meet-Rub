@@ -2082,6 +2082,10 @@ const getWishlistFreelancers = async (req, res, next) => {
         f.freelancer_thumbnail_image,
         f.rating,
         f.worked_with,
+        f.views_generated,
+        f.channels_scaled,
+        f.viral_videos,
+        f.average_retention,
         ARRAY_AGG(DISTINCT s.service_name) FILTER (WHERE s.service_name IS NOT NULL) as service_names,
         MIN(s.service_price) as lowest_price,
         w.created_at as wishlist_added_at,
@@ -2135,7 +2139,7 @@ const getWishlistFreelancers = async (req, res, next) => {
     }
 
     // Add GROUP BY clause
-    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, w.created_at`;
+    queryText += ` GROUP BY f.freelancer_id, f.freelancer_full_name, f.profile_image_url, f.freelancer_thumbnail_image, f.rating, f.worked_with, f.views_generated, f.channels_scaled, f.viral_videos, f.average_retention, w.created_at`;
 
     // Add sorting based on sortBy parameter
     let orderByClause = "";
