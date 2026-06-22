@@ -71,7 +71,7 @@ const getProject = async (req, res, next) => {
         p.id, p.number_of_units, p.amount, p.status,
         p.created_at, p.updated_at, p.completed_at, p.end_date,
         p.creator_id, p.freelancer_id, p.service_id,
-        s.service_name,
+        s.service_name, s.plan_type,
         c.full_name          AS creator_name,
         c.profile_image_url  AS creator_avatar,
         f.freelancer_full_name AS freelancer_name,
