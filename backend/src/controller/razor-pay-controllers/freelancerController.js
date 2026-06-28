@@ -1,8 +1,11 @@
 const { pool: db } = require('../../../config/dbConfig');
 const payoutService = require('../../razor-pay-services/payoutService');
 const AppError = require("../../../utils/appError");
+const { getLogger } = require('../../../utils/logger');
 const { sendWithdrawalRequestEmail } = require('../../../utils/paymentEmails');
 const { sendAdminWithdrawalRequestEmail } = require('../../../utils/welcomeEmail');
+const { notifyAllAdmins } = require('../notification/notificationServicer');
+const freelancerLogger = getLogger('freelancer-controller');
 
 // Get freelancer's withdrawal history with filters and pagination
 const getMyPayouts = async (req, res, next) => {
@@ -111,18 +114,29 @@ const requestPayout = async (req, res, next) => {
 
     await client.query('COMMIT');
 
-    // Fire-and-forget emails after successful commit
+    // Fire-and-forget notifications + emails after successful commit
     const { freelancer_full_name, freelancer_email } = freelancer;
+
+    notifyAllAdmins({
+      senderId: freelancerUserId,
+      eventType: 'withdrawal_requested',
+      title: 'New Withdrawal Request',
+      body: `${freelancer_full_name} has requested a withdrawal of ₹${Number(transaction.freelancer_amount).toFixed(2)}.`,
+      actionType: 'navigate',
+      actionRoute: '/admin/payment-request',
+    }).catch((err) => freelancerLogger.error('notifyAllAdmins (withdrawal_requested) failed:', err.message));
+
     sendWithdrawalRequestEmail({
       freelancerName: freelancer_full_name,
       amount: transaction.freelancer_amount,
-    }).catch(() => {});
+    }).catch((err) => freelancerLogger.error('sendWithdrawalRequestEmail failed:', err.message));
+
     sendAdminWithdrawalRequestEmail({
       freelancerUsername: freelancer_full_name,
       freelancerEmail: freelancer_email,
       amount: transaction.freelancer_amount,
       kycStatus: freelancer.verification_status,
-    }).catch(() => {});
+    }).catch((err) => freelancerLogger.error('sendAdminWithdrawalRequestEmail failed:', err.message));
 
     return res.status(201).json({
       status: 'success',
