@@ -378,6 +378,7 @@ CREATE TABLE IF NOT EXISTS public.freelancer
     profile_title text COLLATE pg_catalog."default",
     gov_id_type character varying(50) COLLATE pg_catalog."default",
     gov_id_url text COLLATE pg_catalog."default",
+    gov_id_back_url text COLLATE pg_catalog."default",
     first_name character varying(100) COLLATE pg_catalog."default",
     last_name character varying(100) COLLATE pg_catalog."default",
     date_of_birth date,
