@@ -349,7 +349,7 @@ async function sendCreatorServiceRequestConfirmationEmail({ creatorUsername, cre
       timeZone: 'Asia/Kolkata',
     }).format(new Date()),
     currency: process.env.CURRENCY || '₹',
-    requests_url: `${APP_URL}/creator/your-projects`,
+    requests_url: `${APP_URL}/creator/request-board`,
     asset_base: ASSET_BASE,
     help_url: HELP_URL,
     privacy_url: PRIVACY_URL,
