@@ -133,7 +133,18 @@ const chatModel = {
     cp.expires_at as cp_expires_at,
     cp.created_at as cp_created_at,
     cp_proj.id AS cp_project_id,
-    cp_proj.status AS cp_project_status
+    cp_proj.status AS cp_project_status,
+    pr_lat.id as pr_id,
+    pr_lat.project_id as pr_project_id,
+    pr_lat.days as pr_days,
+    pr_lat.hours as pr_hours,
+    pr_lat.new_end_date as pr_new_end_date,
+    pr_lat.requested_at as pr_requested_at,
+    pr_proj.id as pr_proj_id,
+    pr_proj.status as pr_proj_status,
+    pr_proj.amount as pr_proj_amount,
+    pr_proj.end_date as pr_proj_end_date,
+    pr_serv.service_name as pr_service_name
 FROM messages m
 LEFT JOIN users u ON m.sender_id = u.id
 LEFT JOIN freelancer f ON m.sender_id = f.user_id
@@ -144,6 +155,16 @@ LEFT JOIN projects dp ON der.project_id = dp.id
 LEFT JOIN services ds ON dp.service_id = ds.id
 LEFT JOIN custom_packages cp ON m.custom_package_id = cp.id
 LEFT JOIN projects cp_proj ON cp.id = cp_proj.custom_package_id
+LEFT JOIN LATERAL (
+    SELECT id, project_id, days, hours, new_end_date, requested_at
+    FROM project_revisions
+    WHERE chat_room_id = m.room_id
+    AND ABS(EXTRACT(EPOCH FROM (requested_at - m.created_at))) < 10
+    ORDER BY requested_at DESC
+    LIMIT 1
+) pr_lat ON m.message_type = 'revision'
+LEFT JOIN projects pr_proj ON pr_lat.project_id = pr_proj.id
+LEFT JOIN services pr_serv ON pr_proj.service_id = pr_serv.id
 WHERE m.room_id = $1
 ORDER BY m.created_at DESC
 LIMIT $2 OFFSET $3;
@@ -180,7 +201,25 @@ LIMIT $2 OFFSET $3;
             expires_at: row.der_expires_at,
           }
           : null,
-        project: row.deadline_extension_id
+        revision: row.pr_id
+          ? {
+            id: row.pr_id,
+            project_id: row.pr_project_id,
+            days: row.pr_days,
+            hours: row.pr_hours,
+            new_end_date: row.pr_new_end_date,
+            requested_at: row.pr_requested_at,
+          }
+          : null,
+        project: row.pr_id
+          ? {
+            id: row.pr_proj_id,
+            status: row.pr_proj_status,
+            amount: row.pr_proj_amount,
+            end_date: row.pr_proj_end_date,
+            service_name: row.pr_service_name,
+          }
+          : (row.deadline_extension_id
           ? {
             id: row.der_project_id,
             status: row.der_project_status,
@@ -190,7 +229,7 @@ LIMIT $2 OFFSET $3;
             plan_type: row.der_plan_type,
             delivery_time: row.der_delivery_time,
           }
-          : null,
+          : null),
         customPackage: row.custom_package_id
           ? {
             id: row.cp_id,
