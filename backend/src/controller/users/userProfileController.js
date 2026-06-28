@@ -1614,6 +1614,10 @@ const getFreelancerById = async (req, res, next) => {
     );
 
     for (const service of freelancerServices) {
+      if (service.delivery_time) {
+        service.delivery_time = `${service.delivery_time} days`;
+      }
+
       // Media type (video/image) derived from the raw object path before the
       // URL is replaced with a presigned URL.
       service.thumbnail_file_type = getMediaType(service.thumbnail_file);

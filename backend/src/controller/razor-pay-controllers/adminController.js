@@ -90,19 +90,30 @@ const approvePayout = async (req, res, next) => {
 
     await client.query('COMMIT');
 
-    // Fire-and-forget emails to freelancer after successful release
+    // Fire-and-forget notifications + emails to freelancer after successful release
+    sendNotification({
+      recipientId: payout.freelancer_id,
+      senderId: null,
+      eventType: 'withdrawal_approved',
+      title: 'Withdrawal approved',
+      body: `Your withdrawal request of ₹${Number(payout.amount).toFixed(2)} has been approved. Funds will be credited to your bank account shortly.`,
+      actionType: 'navigate',
+      actionRoute: '/freelancer/wallet',
+    }).catch((err) => adminLogger.error('sendNotification (withdrawal_approved) failed:', err.message));
+
     sendWithdrawalApprovedEmail({
       freelancerEmail: payout.freelancer_email,
       freelancerName: payout.freelancer_full_name,
       amount: payout.amount,
       txnId: payout.razorpay_transfer_id,
-    }).catch(() => {});
+    }).catch((err) => adminLogger.error('sendWithdrawalApprovedEmail failed:', err.message));
+
     sendPaymentReleasedEmail({
       freelancerEmail: payout.freelancer_email,
       freelancerName: payout.freelancer_full_name,
       totalAmount: payout.amount,
       freelancerEarnings: payout.amount,
-    }).catch(() => {});
+    }).catch((err) => adminLogger.error('sendPaymentReleasedEmail failed:', err.message));
 
     return res.status(200).json({
       status: 'success',
