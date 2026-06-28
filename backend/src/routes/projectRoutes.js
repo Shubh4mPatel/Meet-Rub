@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createProject, getMyProjects, getProject, updateProjectStatus, deleteProject, getAllProjects, uploadDeliverable, sendHireRequest, approveProject, rejectProject } = require('../controller/razor-pay-controllers/projectController');
+const { createProject, getMyProjects, getProject, updateProjectStatus, deleteProject, getAllProjects, uploadDeliverable, sendHireRequest, approveProject, rejectProject, reviseProject } = require('../controller/razor-pay-controllers/projectController');
 const { requestDeadlineExtension, respondToDeadlineExtension, getExtensionRequests } = require('../controller/deadline/deadlineExtensionController');
 const { requireRole } = require('../middleware/authMiddleware');
 
@@ -29,6 +29,9 @@ router.post('/hire-request', sendHireRequest);
 
 // Creator approves completed project — credits freelancer earnings_balance
 router.post('/:id/approve', requireRole(['creator']), approveProject);
+
+//creator want some revvision in the project
+router.post('/:id/revision', requireRole(['creator']), reviseProject);
 
 // Creator rejects completed project — auto-creates dispute, funds stay in escrow
 router.post('/:id/reject', requireRole(['creator']), rejectProject);

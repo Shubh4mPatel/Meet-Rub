@@ -3,7 +3,9 @@ const AppError = require("../../../utils/appError");
 const { logger } = require('../../../utils/logger');
 const { createPresignedUrl, createViewOnlyPresignedUrl, createAttachmentPresignedUrl, toGoogleDrivePreviewUrl, createDownloadablePresignedUrl } = require('../../../utils/helper');
 const { sendNotification } = require('../notification/notificationServicer');
-const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail, sendCreatorRatingRequestEmail, sendFreelancerRatingRequestEmail, sendOrderApprovedEmail, sendCreatorDisputeEmail, sendFreelancerDisputeEmail } = require('../../../utils/deliveryEmails');
+const { sendDeliverySubmittedEmail, sendDeliveryReceivedEmail, sendCreatorRatingRequestEmail, sendFreelancerRatingRequestEmail, sendOrderApprovedEmail, sendCreatorDisputeEmail, sendFreelancerDisputeEmail, sendRevisionRequestedEmail, sendRevisionAcknowledgedEmail } = require('../../../utils/deliveryEmails');
+const { minioClient } = require('../../../config/minio');
+const DELIVERABLE_BUCKET = process.env.BUCKET_NAME || 'meet-rub-assets';
 const { sendAdminDisputeEmail } = require('../../../utils/welcomeEmail');
 const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail } = require('../../../utils/offerEmails');
 const { generateAndSendInvoices } = require('../../utils/invoiceService');
@@ -836,15 +838,40 @@ const uploadDeliverable = async (req, res, next) => {
 
     const client = await db.connect();
     let inserted;
+    let oldS3Keys = [];
     try {
       await client.query('BEGIN');
 
-      const { rows } = await client.query(
-        `INSERT INTO deliverables (deliverable_url, project_description, service_id, creator_id, freelancer_id, project_id)
-         VALUES ($1::jsonb, $2, $3, $4, $5, $6)
-         RETURNING id, deliverable_url, project_description, created_at`,
-        [JSON.stringify(files), project_description || null, project.service_id, project.creator_id, freelancerId, project_id]
+      // Check for an existing deliverable (revision re-submission)
+      const { rows: existing } = await client.query(
+        `SELECT id, deliverable_url FROM deliverables WHERE project_id = $1 LIMIT 1`,
+        [project_id]
       );
+
+      if (existing.length > 0) {
+        // Collect old S3 keys for cleanup after commit
+        const oldFiles = existing[0].deliverable_url;
+        if (Array.isArray(oldFiles)) {
+          oldS3Keys = oldFiles.filter(f => f.type === 's3' && f.key).map(f => f.key);
+        }
+
+        const { rows } = await client.query(
+          `UPDATE deliverables
+           SET deliverable_url = $1::jsonb, project_description = $2
+           WHERE project_id = $3
+           RETURNING id, deliverable_url, project_description, created_at`,
+          [JSON.stringify(files), project_description || null, project_id]
+        );
+        inserted = rows;
+      } else {
+        const { rows } = await client.query(
+          `INSERT INTO deliverables (deliverable_url, project_description, service_id, creator_id, freelancer_id, project_id)
+           VALUES ($1::jsonb, $2, $3, $4, $5, $6)
+           RETURNING id, deliverable_url, project_description, created_at`,
+          [JSON.stringify(files), project_description || null, project.service_id, project.creator_id, freelancerId, project_id]
+        );
+        inserted = rows;
+      }
 
       await client.query(
         `UPDATE projects SET status = 'SUBMITTED' WHERE id = $1`,
@@ -852,12 +879,22 @@ const uploadDeliverable = async (req, res, next) => {
       );
 
       await client.query('COMMIT');
-      inserted = rows;
     } catch (txErr) {
       await client.query('ROLLBACK');
       throw txErr;
     } finally {
       client.release();
+    }
+
+    // Delete old S3 files after commit (fire-and-forget, errors logged but don't fail request)
+    if (oldS3Keys.length > 0) {
+      await Promise.allSettled(
+        oldS3Keys.map(key =>
+          minioClient.removeObject(DELIVERABLE_BUCKET, key).catch(err =>
+            logger.error(`uploadDeliverable: failed to delete old S3 key=${key}: ${err.message}`)
+          )
+        )
+      );
     }
 
     logger.info(`Deliverable uploaded by freelancer=${freelancerId} project=${project_id} status set to SUBMITTED`);
@@ -1648,6 +1685,167 @@ const rejectProject = async (req, res, next) => {
   }
 };
 
+const reviseProject = async (req, res, next) => {
+  const creatorId = req.user.roleWiseId;
+  const creatorUserId = req.user.user_id;
+  const projectId = parseInt(req.params.id);
+  const { revision_message, hours, days } = req.body;
+
+  if (!revision_message || (!hours && !days)) {
+    return next(new AppError('revision_message and at least one of hours or days are required', 400));
+  }
+
+  const parsedDays = parseInt(days) || 0;
+  const parsedHours = parseInt(hours) || 0;
+
+  if (parsedHours < 0) {
+    return next(new AppError('hours must be non-negative', 400));
+  }
+  if (parsedDays === 0 && parsedHours === 0) {
+    return next(new AppError('At least one of days or hours must be greater than 0', 400));
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: projects } = await client.query(
+      `SELECT p.id, p.status, p.freelancer_id, p.service_id,
+              f.user_id AS freelancer_user_id, f.freelancer_email, f.freelancer_full_name,
+              s.service_name,
+              u_c.user_email AS creator_email, u_c.user_name AS creator_name
+       FROM projects p
+       JOIN freelancer f ON p.freelancer_id = f.freelancer_id
+       LEFT JOIN services s ON p.service_id = s.id
+       JOIN creators c ON p.creator_id = c.creator_id
+       JOIN users u_c ON c.user_id = u_c.id
+       WHERE p.id = $1 AND p.creator_id = $2`,
+      [projectId, creatorId]
+    );
+
+    if (projects.length === 0) {
+      await client.query('ROLLBACK');
+      return next(new AppError('Project not found or access denied', 404));
+    }
+
+    const project = projects[0];
+
+    if (project.status !== 'SUBMITTED') {
+      await client.query('ROLLBACK');
+      return next(new AppError('Project must be in SUBMITTED status before requesting a revision', 400));
+    }
+
+    const { rows: endDateRows } = await client.query(
+      `SELECT NOW() + ($1 || ' days')::interval + ($2 || ' hours')::interval AS new_end_date`,
+      [parsedDays, parsedHours]
+    );
+    const newEndDate = endDateRows[0].new_end_date;
+
+    // Get or create chat room between creator and freelancer
+    const [smallerId, largerId] = [creatorUserId, project.freelancer_user_id].sort((a, b) => a - b);
+    const chatRoomId = `${smallerId}-${largerId}`;
+
+    await client.query(
+      `INSERT INTO chat_rooms (room_id, user1_id, user2_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (room_id) DO NOTHING`,
+      [chatRoomId, smallerId, largerId]
+    );
+
+    const { rows: revisionRows } = await client.query(
+      `INSERT INTO project_revisions (project_id, creator_id, freelancer_id, chat_room_id, revision_message, days, hours, new_end_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [projectId, creatorId, project.freelancer_id, chatRoomId, revision_message, parsedDays, parsedHours, newEndDate]
+    );
+
+    await client.query(
+      `UPDATE projects SET status = 'IN_PROGRESS', end_date = $1, updated_at = NOW() WHERE id = $2`,
+      [newEndDate, projectId]
+    );
+
+    await client.query(
+      `INSERT INTO messages (room_id, sender_id, recipient_id, message, message_type, created_at)
+       VALUES ($1, $2, $3, $4, 'revision', NOW())`,
+      [chatRoomId, creatorUserId, project.freelancer_user_id, revision_message]
+    );
+
+    await client.query('COMMIT');
+
+    logger.info(`reviseProject: creator=${creatorId} project=${projectId} revision_id=${revisionRows[0].id} new_end_date=${newEndDate}`);
+
+    const notificationResults = await Promise.allSettled([
+      sendNotification({
+        recipientId: project.freelancer_user_id,
+        senderId: creatorUserId,
+        eventType: 'revision_requested',
+        title: 'Revision Requested',
+        body: `${req.user.name} has requested a revision for Order #${projectId}. Please review and resubmit.`,
+        actionType: 'link',
+        actionRoute: chatRoomId,
+      }),
+      sendNotification({
+        recipientId: creatorUserId,
+        senderId: creatorUserId,
+        eventType: 'revision_acknowledged',
+        title: 'Revision Request Sent',
+        body: `Your revision request for Order #${projectId} has been sent to the freelancer.`,
+        actionType: 'link',
+        actionRoute: chatRoomId,
+      }),
+      sendRevisionRequestedEmail({
+        freelancerEmail: project.freelancer_email,
+        freelancerName: project.freelancer_full_name,
+        creatorName: req.user.name,
+        creatorUserId,
+        projectId,
+        serviceTitle: project.service_name,
+        revisionMessage: revision_message,
+        newEndDate,
+      }),
+      sendRevisionAcknowledgedEmail({
+        creatorEmail: project.creator_email,
+        creatorName: project.creator_name,
+        freelancerName: project.freelancer_full_name,
+        freelancerUserId: project.freelancer_user_id,
+        projectId,
+        serviceTitle: project.service_name,
+        revisionMessage: revision_message,
+        newEndDate,
+      }),
+    ]);
+
+    notificationResults.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        const labels = [
+          'revision_requested notification (freelancer)',
+          'revision_acknowledged notification (creator)',
+          'revision email (freelancer)',
+          'revision email (creator)',
+        ];
+        logger.error(`reviseProject: ${labels[i]} failed: ${result.reason?.message}`, result.reason?.stack);
+      }
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Revision requested successfully',
+      data: {
+        revision_id: revisionRows[0].id,
+        project_id: projectId,
+        new_end_date: newEndDate,
+        revision_message,
+      },
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('reviseProject error:', error);
+    return next(new AppError('Failed to request revision', 500));
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   createProject,
   getProject,
@@ -1661,4 +1859,5 @@ module.exports = {
   rateCreator,
   approveProject,
   rejectProject,
+  reviseProject
 }

@@ -362,6 +362,46 @@ async function sendDisputeResolvedFreelancerEmail({ freelancerEmail, freelancerN
   await sendMail(freelancerEmail, `Dispute resolved — Order #${projectId || disputeId}`, filled, null, 'dispute_resolved_freelancer', projectId);
 }
 
+async function sendRevisionRequestedEmail({ freelancerEmail, freelancerName, creatorName, creatorUserId, projectId, serviceTitle, revisionMessage, newEndDate }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'freelancer/revisionRequest.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    freelancer_username: freelancerName,
+    creator_name: creatorName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'your order',
+    revision_message: revisionMessage,
+    new_deadline: formatDeliveryTime(new Date(newEndDate)),
+    chat_url: `${APP_URL}/chatbot?userId=${creatorUserId}`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(freelancerEmail, `Revision requested — Order #${projectId}`, filled, null, 'revision_requested', projectId);
+}
+
+async function sendRevisionAcknowledgedEmail({ creatorEmail, creatorName, freelancerName, freelancerUserId, projectId, serviceTitle, revisionMessage, newEndDate }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/revisionRequested.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    creator_username: creatorName,
+    freelancer_name: freelancerName,
+    order_id: String(projectId),
+    service_title: serviceTitle || 'your order',
+    revision_message: revisionMessage,
+    new_deadline: formatDeliveryTime(new Date(newEndDate)),
+    chat_url: `${APP_URL}/chatbot?userId=${freelancerUserId}`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(creatorEmail, `Revision request sent — Order #${projectId}`, filled, null, 'revision_acknowledged', projectId);
+}
+
 module.exports = {
   sendDeliverySubmittedEmail,
   sendDeliveryReceivedEmail,
@@ -379,4 +419,6 @@ module.exports = {
   sendDeadlineExtensionRejectedEmail,
   sendDisputeResolvedCreatorEmail,
   sendDisputeResolvedFreelancerEmail,
+  sendRevisionRequestedEmail,
+  sendRevisionAcknowledgedEmail,
 };

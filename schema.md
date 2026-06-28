@@ -265,6 +265,48 @@ ALTER TABLE IF EXISTS public.deadline_extension_requested
 
 
     
+-- Table: public.project_revisions
+
+-- DROP TABLE IF EXISTS public.project_revisions;
+
+CREATE TABLE IF NOT EXISTS public.project_revisions
+(
+    id            SERIAL PRIMARY KEY,
+    project_id    integer NOT NULL,
+    creator_id    integer NOT NULL,
+    freelancer_id integer NOT NULL,
+    chat_room_id  character varying(255) COLLATE pg_catalog."default",
+    revision_message text COLLATE pg_catalog."default" NOT NULL,
+    days          integer NOT NULL DEFAULT 0,
+    hours         integer NOT NULL DEFAULT 0,
+    new_end_date  timestamp with time zone NOT NULL,
+    requested_at  timestamp with time zone DEFAULT now(),
+    CONSTRAINT project_revisions_pkey PRIMARY KEY (id),
+    CONSTRAINT project_revisions_project_id_fkey FOREIGN KEY (project_id)
+        REFERENCES public.projects (id) MATCH SIMPLE
+        ON UPDATE NO ACTION ON DELETE CASCADE,
+    CONSTRAINT project_revisions_creator_id_fkey FOREIGN KEY (creator_id)
+        REFERENCES public.creators (creator_id) MATCH SIMPLE
+        ON UPDATE NO ACTION ON DELETE NO ACTION,
+    CONSTRAINT project_revisions_freelancer_id_fkey FOREIGN KEY (freelancer_id)
+        REFERENCES public.freelancer (freelancer_id) MATCH SIMPLE
+        ON UPDATE NO ACTION ON DELETE NO ACTION,
+    CONSTRAINT project_revisions_chat_room_id_fkey FOREIGN KEY (chat_room_id)
+        REFERENCES public.chat_rooms (room_id) MATCH SIMPLE
+        ON UPDATE NO ACTION ON DELETE NO ACTION
+)
+
+TABLESPACE pg_default;
+
+CREATE INDEX IF NOT EXISTS idx_project_revisions_project_id
+    ON public.project_revisions USING btree (project_id ASC NULLS LAST)
+    TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.project_revisions
+    OWNER to postgres;
+
+
+    
 -- Table: public.deliverables
 
 -- DROP TABLE IF EXISTS public.deliverables;
@@ -540,7 +582,7 @@ CREATE TABLE IF NOT EXISTS public.messages
         REFERENCES public.chat_rooms (room_id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE CASCADE,
-    CONSTRAINT messages_message_type_check CHECK (message_type::text = ANY (ARRAY['text'::character varying::text, 'image'::character varying::text, 'file'::character varying::text, 'video'::character varying::text, 'audio'::character varying::text, 'package'::character varying::text, 'deadline_extension'::character varying::text]))
+    CONSTRAINT messages_message_type_check CHECK (message_type::text = ANY (ARRAY['text'::character varying::text, 'image'::character varying::text, 'file'::character varying::text, 'video'::character varying::text, 'audio'::character varying::text, 'package'::character varying::text, 'deadline_extension'::character varying::text, 'revision'::character varying::text]))
 )
 
 TABLESPACE pg_default;
