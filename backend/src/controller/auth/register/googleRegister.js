@@ -62,8 +62,14 @@ const googleRegisterUser = async (req, res, next) => {
         if (role === 'freelancer' && !rawPanCardNumber) {
             return next(new AppError('pan_card_number is required for freelancer', 400));
         }
-        if (role === 'freelancer' && !req.file) {
+        if (role === 'freelancer' && !req.files?.pan_card_document?.[0]) {
             return next(new AppError('PAN card document is required for freelancer', 400));
+        }
+        if (role === 'freelancer' && !req.files?.govIdFrontImage?.[0]) {
+            return next(new AppError('Government ID front image is required for freelancer', 400));
+        }
+        if (role === 'freelancer' && !req.files?.govIdBackImage?.[0]) {
+            return next(new AppError('Government ID back image is required for freelancer', 400));
         }
 
         // ── PAN format validation ───────────────────────────────────────────────
@@ -134,6 +140,8 @@ const googleRegisterUser = async (req, res, next) => {
         let user, roleWiseId;
         let panCardImageUrl = null;
         let panObjectName = null;
+        let govFrontObjectName = null;
+        let govBackObjectName = null;
 
         try {
             await client.query('BEGIN');
@@ -149,27 +157,38 @@ const googleRegisterUser = async (req, res, next) => {
 
             // ── Role-specific record ──────────────────────────────────────────────
             if (role === 'freelancer') {
-                logger.info('state information while registring with google',state)
-                // Upload PAN card to MinIO
-                const panCardFile = req.file;
-                const ext = panCardFile.originalname.split('.').pop();
-                panObjectName = `kyc/pan/${user.id}_${Date.now()}.${ext}`;
+                logger.info('state information while registring with google', state);
 
-                await minioClient.putObject(
-                    BUCKET_NAME,
-                    panObjectName,
-                    panCardFile.buffer,
-                    panCardFile.size,
-                    { 'Content-Type': panCardFile.mimetype }
-                );
+                const panCardFile = req.files.pan_card_document[0];
+                const govFrontFile = req.files.govIdFrontImage[0];
+                const govBackFile = req.files.govIdBackImage[0];
+
+                const panExt = panCardFile.originalname.split('.').pop();
+                panObjectName = `kyc/pan/${user.id}_${Date.now()}.${panExt}`;
+
+                const govFrontExt = govFrontFile.originalname.split('.').pop();
+                govFrontObjectName = `freelancer/goverment-doc/front-${user.id}_${Date.now()}.${govFrontExt}`;
+
+                const govBackExt = govBackFile.originalname.split('.').pop();
+                govBackObjectName = `freelancer/goverment-doc/back-${user.id}_${Date.now()}.${govBackExt}`;
+
+                await Promise.all([
+                    minioClient.putObject(BUCKET_NAME, panObjectName, panCardFile.buffer, panCardFile.size, { 'Content-Type': panCardFile.mimetype }),
+                    minioClient.putObject(BUCKET_NAME, govFrontObjectName, govFrontFile.buffer, govFrontFile.size, { 'Content-Type': govFrontFile.mimetype }),
+                    minioClient.putObject(BUCKET_NAME, govBackObjectName, govBackFile.buffer, govBackFile.size, { 'Content-Type': govBackFile.mimetype }),
+                ]);
+
                 panCardImageUrl = `${BUCKET_NAME}/${panObjectName}`;
+                const govIdFrontUrl = `${BUCKET_NAME}/${govFrontObjectName}`;
+                const govIdBackUrl = `${BUCKET_NAME}/${govBackObjectName}`;
 
                 const { rows: freelancerRows } = await client.query(
                     `INSERT INTO freelancer
             (user_id, phone_number, freelancer_full_name, freelancer_email,
              niche, verification_status, user_name, pan_card_number, pan_card_image_url,
+             gov_id_front_image, gov_id_back_image,
              street_address, city, state, postal_code, first_name, last_name, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,'PENDING',$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+           VALUES ($1,$2,$3,$4,$5,'PENDING',$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
            RETURNING *`,
                     [
                         user.id,
@@ -180,6 +199,8 @@ const googleRegisterUser = async (req, res, next) => {
                         normalizedUsername,
                         pan_card_number,
                         panCardImageUrl,
+                        govIdFrontUrl,
+                        govIdBackUrl,
                         street_address,
                         city,
                         state,
@@ -227,9 +248,9 @@ const googleRegisterUser = async (req, res, next) => {
             await client.query('ROLLBACK');
             // Cleanup Redis username if added
             try { await redisClient.sRem(USERNAMES_SET_KEY, normalizedUsername); } catch (_) { }
-            // Cleanup MinIO upload if it happened
-            if (panObjectName) {
-                try { await minioClient.removeObject(BUCKET_NAME, panObjectName); } catch (_) { }
+            // Cleanup MinIO uploads if they happened
+            for (const obj of [panObjectName, govFrontObjectName, govBackObjectName]) {
+                if (obj) try { await minioClient.removeObject(BUCKET_NAME, obj); } catch (_) { }
             }
             throw err;
         } finally {

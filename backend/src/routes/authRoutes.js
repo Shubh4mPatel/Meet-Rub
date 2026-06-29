@@ -55,7 +55,11 @@ router.post('/social-login', socialLoginUser, setTokenCookies, (req, res) => {
 
 router.post(
   '/social-register',
-  registerImageUpload.single('pan_card_document'),
+  registerImageUpload.fields([
+    { name: 'govIdFrontImage', maxCount: 1 },
+    { name: 'govIdBackImage', maxCount: 1 },
+    { name: 'pan_card_document', maxCount: 1 },
+  ]),
   googleRegisterUser,
   setTokenCookies,
   (req, res) => {
