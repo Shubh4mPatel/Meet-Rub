@@ -161,4 +161,21 @@ async function sendHireDeclinedEmail({ creatorEmail, creatorName, freelancerName
   await sendMail(creatorEmail, `${freelancerName} declined your hire request`, filled);
 }
 
-module.exports = { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail, sendHireAcceptedEmail, sendHireDeclinedEmail };
+async function sendNewMessageEmail({ recipientEmail, recipientName, senderName, messagePreview, senderUserId }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'newMessage.html'),
+    'utf8'
+  );
+  const filled = fillTemplate(html, {
+    recipient_name: recipientName,
+    sender_name: senderName,
+    message_preview: messagePreview,
+    chat_url: `${APP_URL}/chatbot?userId=${senderUserId}`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+  await sendMail(recipientEmail, `${senderName} sent you a message on Meetrub`, filled);
+}
+
+module.exports = { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail, sendHireAcceptedEmail, sendHireDeclinedEmail, sendNewMessageEmail };

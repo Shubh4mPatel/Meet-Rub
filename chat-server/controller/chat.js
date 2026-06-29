@@ -1,9 +1,8 @@
 const chatModel = require("../model/chatmodel");
 const redis = require("../config/reddis");
 const { createPresignedUrl } = require("../utils/helper");
-const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail } = require("../utils/offerEmails");
+const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail, sendHireAcceptedEmail, sendHireDeclinedEmail, sendNewMessageEmail } = require("../utils/offerEmails");
 const { sendDeadlineExtensionRequestEmail, sendDeadlineExtensionAcceptedEmail, sendDeadlineExtensionRejectedEmail, sendPackageRejectedEmail, sendPackageAcceptedEmail } = require("../utils/deliveryEmails");
-const { sendHireAcceptedEmail, sendHireDeclinedEmail } = require("../utils/offerEmails");
 
 // Save a web notification to DB and emit live to recipient if online.
 // For new_message: skips save and emit entirely if recipient is already in that chat room.
@@ -1235,6 +1234,30 @@ const chatController = (io) => {
         io.to(chatRoomId).emit("receive-message", messageData);
 
         await emitWebNotification(io, recipientId, userId, 'new_message', 'New Message', `You have received a new message from ${username}`, 'link', chatRoomId);
+
+        // Send email if recipient is offline — debounced once per room per hour
+        const recipientOnline = await redis.get(`user:${recipientId}:online`);
+        if (!recipientOnline) {
+          const emailDebounceKey = `emailNotif:${recipientId}:${chatRoomId}`;
+          const alreadySent = await redis.get(emailDebounceKey);
+          if (!alreadySent) {
+            try {
+              const recipientInfo = await chatModel.getUserInfo(recipientId);
+              if (recipientInfo?.email) {
+                await sendNewMessageEmail({
+                  recipientEmail: recipientInfo.email,
+                  recipientName: recipientInfo.name || recipientInfo.email,
+                  senderName: username,
+                  messagePreview: message.length > 200 ? message.slice(0, 200) + '…' : message,
+                  senderUserId: userId,
+                });
+                await redis.set(emailDebounceKey, '1', 'EX', 3600);
+              }
+            } catch (emailErr) {
+              console.error(`[send-message] Email notification failed for recipient ${recipientId}:`, emailErr.message);
+            }
+          }
+        }
       } catch (error) {
         console.error(`[send-message] ERROR - Sender ${userId}, Recipient ${recipientId}:`, error);
         socket.emit("error", { message: "Failed to send message" });
