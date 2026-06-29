@@ -12,6 +12,7 @@ const router = express.Router();
 const { requireRole, authenticateUser } = require('../middleware/authMiddleware');
 const { uploadBeforeAfter, getBeforeAfter, deleteBeforeAfter, updateBeforeAfter, getPortfolioByFreelancerId, addFreelancerPortfolio, updateFreelancerPortfolio, deleteFreelancerPortfolio, getAllFreelancers, getFreelancerById, getFreelancerPortfolio, getFreelancerImpact, addFreelancerToWishlist, getServices } = require('../controller');
 const { addServicesByFreelancer, getServicesByFreelaner, deleteServiceByFreelancer, updateServiceByFreelancer } = require('../controller');
+const { getServiceUploadUrls } = require('../controller/services/serviceController');
 const { getUserProfileProgress, getCreatorByUserId, getCreatorByCreatorId } = require('../controller/users/userProfileController');
 const { deleteFreelancerProtfolioItem } = require("../controller/portfoilio/portfolioController");
 const { getFreelancerOverview } = require("../controller/users/freelancerOverviewController");
@@ -45,7 +46,9 @@ router.put('/portfolio/update-after-before/:id', authenticateUser, requireRole([
 ]), updateBeforeAfter)
 
 
-router.post('/add-service', authenticateUser, requireRole(['freelancer']), upload.single('file'), addServicesByFreelancer)
+router.get('/service-upload-urls', authenticateUser, requireRole(['freelancer']), getServiceUploadUrls)
+
+router.post('/add-service', authenticateUser, requireRole(['freelancer']), addServicesByFreelancer)
 
 
 router.get('/get-services', authenticateUser, requireRole(['freelancer']), getServicesByFreelaner)
@@ -56,7 +59,7 @@ router.get('/get-available-services', getServices);
 router.delete('/delete-services', authenticateUser, requireRole(['freelancer']), deleteServiceByFreelancer)
 
 
-router.put('/update-service', authenticateUser, requireRole(['freelancer']), upload.single('file'), updateServiceByFreelancer)
+router.put('/update-service', authenticateUser, requireRole(['freelancer']), updateServiceByFreelancer)
 
 
 router.get('/portfolio/get-protfolio', authenticateUser, requireRole(['freelancer']), getPortfolioByFreelancerId)

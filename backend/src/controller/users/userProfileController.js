@@ -1451,19 +1451,16 @@ const getAllFreelancers = async (req, res, next) => {
           }
         }
 
-        // Media type (video/image) derived from the raw object path before the
-        // URL is replaced with a presigned URL.
-        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
-
-        if (freelancer.service_banner) {
-          const parts = freelancer.service_banner.split("/");
-          const bucketName = parts[0];
-          const objectName = parts.slice(1).join("/");
-          try {
-            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
-          } catch {
-            freelancer.service_banner = null;
-          }
+        {
+          const bannerFiles = Array.isArray(freelancer.service_banner) ? freelancer.service_banner : [];
+          freelancer.service_banner = await Promise.all(bannerFiles.map(async (path) => {
+            if (!path) return null;
+            try {
+              const s = path.indexOf("/");
+              if (s === -1) return null;
+              return await createPresignedUrl(path.substring(0, s), path.substring(s + 1), expirySeconds);
+            } catch { return null; }
+          }));
         }
 
         if (freelancer.delivery_time) {
@@ -1598,25 +1595,15 @@ const getFreelancerById = async (req, res, next) => {
         service.delivery_time = `${service.delivery_time} days`;
       }
 
-      // Media type (video/image) derived from the raw object path before the
-      // URL is replaced with a presigned URL.
-      service.thumbnail_file_type = getMediaType(service.thumbnail_file);
-
-      if (service.thumbnail_file) {
+      const files = Array.isArray(service.thumbnail_file) ? service.thumbnail_file : [];
+      service.thumbnail_file = await Promise.all(files.map(async (path) => {
+        if (!path) return null;
         try {
-          const firstSlash = service.thumbnail_file.indexOf("/");
-          if (firstSlash !== -1) {
-            const bucketName = service.thumbnail_file.substring(0, firstSlash);
-            const objectName = service.thumbnail_file.substring(firstSlash + 1);
-            service.thumbnail_file = await createPresignedUrl(bucketName, objectName, expirySeconds);
-          } else {
-            service.thumbnail_file = null;
-          }
-        } catch (error) {
-          logger.error(`Error generating signed URL for service thumbnail: ${error}`);
-          service.thumbnail_file = null;
-        }
-      }
+          const firstSlash = path.indexOf("/");
+          if (firstSlash === -1) return null;
+          return await createPresignedUrl(path.substring(0, firstSlash), path.substring(firstSlash + 1), expirySeconds);
+        } catch { return null; }
+      }));
     }
 
     logger.info(`Successfully fetched freelancer data for ID: ${freelancerId}`);
@@ -2249,20 +2236,16 @@ const getWishlistFreelancers = async (req, res, next) => {
           }
         }
 
-        // Media type (video/image) derived from the raw object path before the
-        // URL is replaced with a presigned URL.
-        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
-
-        // Generate presigned URL for service banner if it exists
-        if (freelancer.service_banner) {
-          const parts = freelancer.service_banner.split("/");
-          const bucketName = parts[0];
-          const objectName = parts.slice(1).join("/");
-          try {
-            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
-          } catch {
-            freelancer.service_banner = null;
-          }
+        {
+          const bannerFiles = Array.isArray(freelancer.service_banner) ? freelancer.service_banner : [];
+          freelancer.service_banner = await Promise.all(bannerFiles.map(async (path) => {
+            if (!path) return null;
+            try {
+              const s = path.indexOf("/");
+              if (s === -1) return null;
+              return await createPresignedUrl(path.substring(0, s), path.substring(s + 1), expirySeconds);
+            } catch { return null; }
+          }));
         }
 
         if (freelancer.delivery_time) {
@@ -3135,19 +3118,16 @@ const getFreelancerForAdmin = async (req, res, next) => {
           }
         }
 
-        // Media type (video/image) derived from the raw object path before the
-        // URL is replaced with a presigned URL.
-        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
-
-        if (freelancer.service_banner) {
-          const parts = freelancer.service_banner.split("/");
-          const bucketName = parts[0];
-          const objectName = parts.slice(1).join("/");
-          try {
-            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
-          } catch {
-            freelancer.service_banner = null;
-          }
+        {
+          const bannerFiles = Array.isArray(freelancer.service_banner) ? freelancer.service_banner : [];
+          freelancer.service_banner = await Promise.all(bannerFiles.map(async (path) => {
+            if (!path) return null;
+            try {
+              const s = path.indexOf("/");
+              if (s === -1) return null;
+              return await createPresignedUrl(path.substring(0, s), path.substring(s + 1), expirySeconds);
+            } catch { return null; }
+          }));
         }
 
         return freelancer;
@@ -3757,19 +3737,16 @@ const getFreelancerForSuggestion = async (req, res, next) => {
           }
         }
 
-        // Media type (video/image) derived from the raw object path before the
-        // URL is replaced with a presigned URL.
-        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
-
-        if (freelancer.service_banner) {
-          const parts = freelancer.service_banner.split("/");
-          const bucketName = parts[0];
-          const objectName = parts.slice(1).join("/");
-          try {
-            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
-          } catch {
-            freelancer.service_banner = null;
-          }
+        {
+          const bannerFiles = Array.isArray(freelancer.service_banner) ? freelancer.service_banner : [];
+          freelancer.service_banner = await Promise.all(bannerFiles.map(async (path) => {
+            if (!path) return null;
+            try {
+              const s = path.indexOf("/");
+              if (s === -1) return null;
+              return await createPresignedUrl(path.substring(0, s), path.substring(s + 1), expirySeconds);
+            } catch { return null; }
+          }));
         }
 
         if (freelancer.delivery_time) {
@@ -3928,21 +3905,15 @@ const getFreelancerByIdForCreator = async (req, res, next) => {
       if (row.delivery_time) {
         row.delivery_time = `${row.delivery_time} days`;
       }
-      if (row.thumbnail_file) {
+      const rowFiles = Array.isArray(row.thumbnail_file) ? row.thumbnail_file : [];
+      row.thumbnail_file = await Promise.all(rowFiles.map(async (path) => {
+        if (!path) return null;
         try {
-          const firstSlashIndex = row.thumbnail_file.indexOf("/");
-          if (firstSlashIndex !== -1) {
-            const bucketName = row.thumbnail_file.substring(0, firstSlashIndex);
-            const objectName = row.thumbnail_file.substring(firstSlashIndex + 1);
-            row.thumbnail_file = await createPresignedUrl(bucketName, objectName, expirySeconds);
-          } else {
-            row.thumbnail_file = null;
-          }
-        } catch (error) {
-          logger.error(`Error generating signed URL for service thumbnail: ${error}`);
-          row.thumbnail_file = null;
-        }
-      }
+          const firstSlashIndex = path.indexOf("/");
+          if (firstSlashIndex === -1) return null;
+          return await createPresignedUrl(path.substring(0, firstSlashIndex), path.substring(firstSlashIndex + 1), expirySeconds);
+        } catch { return null; }
+      }));
 
       const { service_name, ...serviceOption } = row;
       if (!servicesMap[service_name]) {
@@ -4146,7 +4117,7 @@ const getAllfreelancersForcreator = async (req, res, next) => {
       JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
       LEFT JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
       LEFT JOIN LATERAL (
-        SELECT s2.thumbnail_file, s2.service_title, s2.min_delivery_days, s2.max_delivery_days
+        SELECT s2.thumbnail_file AS thumbnail_file, s2.service_title, s2.min_delivery_days, s2.max_delivery_days
         FROM services s2
         WHERE s2.freelancer_id = f.freelancer_id AND s2.is_deleted = FALSE
           ${lateralServiceFilter}
@@ -4249,18 +4220,23 @@ const getAllfreelancersForcreator = async (req, res, next) => {
     // --- Generate presigned URLs in parallel ---
     const freelancers = await Promise.all(
       results.rows.map(async (f) => {
-        const [profileUrl, thumbnailUrl, bannerUrl] = await Promise.all([
+        const [profileUrl, thumbnailUrl] = await Promise.all([
           generateSignedUrl(f.profile_image_url),
           generateSignedUrl(f.freelancer_thumbnail_image),
-          generateSignedUrl(f.service_banner),
         ]);
-
-        // Media type (video/image) from the raw object path before overwrite.
-        f.service_banner_type = getMediaType(f.service_banner);
 
         f.profile_image_url = profileUrl;
         f.freelancer_thumbnail_image = thumbnailUrl;
-        f.service_banner = bannerUrl;
+
+        const bannerFiles = Array.isArray(f.service_banner) ? f.service_banner : [];
+        f.service_banner = await Promise.all(bannerFiles.map(async (path) => {
+          if (!path) return null;
+          try {
+            const s = path.indexOf("/");
+            if (s === -1) return null;
+            return await createPresignedUrl(path.substring(0, s), path.substring(s + 1), expirySeconds);
+          } catch { return null; }
+        }));
 
         // Format delivery time for response
         if (f.min_delivery_days != null && f.max_delivery_days != null) {

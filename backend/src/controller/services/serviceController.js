@@ -8,6 +8,34 @@ const { notifyAllAdmins } = require("../notification/notificationServicer");
 // const { log } = require("node:console");
 
 const expirySeconds = 4 * 60 * 60; // 4 hours
+const BUCKET_NAME = "meet-rub-assets";
+const MAX_SERVICE_MEDIA = 5;
+
+// Helper: generate presigned GET URLs for a thumbnail_file array
+async function presignThumbnailArray(files) {
+  if (!Array.isArray(files) || files.length === 0) return [];
+  return Promise.all(files.map(async (path) => {
+    if (!path) return null;
+    try {
+      const objectName = path.split('/').slice(1).join('/');
+      return await createPresignedUrl(BUCKET_NAME, objectName, expirySeconds);
+    } catch {
+      return null;
+    }
+  }));
+}
+
+// Helper: generate a single presigned PUT URL for direct client upload
+async function createPresignedPutUrl(objectName) {
+  const raw = await new Promise((resolve, reject) => {
+    minioClient.presignedPutObject(BUCKET_NAME, objectName, 15 * 60, (err, url) => {
+      if (err) reject(err);
+      else resolve(url);
+    });
+  });
+  const parsed = new URL(raw);
+  return `https://meetrub.com${parsed.pathname}${parsed.search}`;
+}
 
 // ✅ Get all available services
 const getServices = async (req, res, next) => {
@@ -188,11 +216,30 @@ const addServices = async (req, res, next) => {
   }
 };
 
+// ✅ Generate presigned PUT URLs so client can upload service media directly to MinIO
+const getServiceUploadUrls = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const count = Math.min(parseInt(req.query.count) || MAX_SERVICE_MEDIA, MAX_SERVICE_MEDIA);
+
+    const slots = await Promise.all(
+      Array.from({ length: count }, async (_, i) => {
+        const objectName = `freelancer/services/${user.user_id}/${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`;
+        const uploadUrl = await createPresignedPutUrl(objectName);
+        return { uploadUrl, objectPath: `${BUCKET_NAME}/${objectName}` };
+      })
+    );
+
+    return res.status(200).json({ status: 'success', data: slots });
+  } catch (error) {
+    logger.error('Failed to generate service upload URLs:', error);
+    return next(new AppError('Failed to generate upload URLs', 500));
+  }
+};
+
 // ✅ Freelancer - Add their own servicesF
 const addServicesByFreelancer = async (req, res, next) => {
   logger.info("Freelancer adding service");
-  const BUCKET_NAME = "meet-rub-assets";
-  let uploadedObjectName = null;
 
   try {
     const { service, price, description, deliveryDuration, planType, serviceTitle, aboutService } = req.body;
@@ -251,59 +298,39 @@ const addServicesByFreelancer = async (req, res, next) => {
       return next(new AppError(`You have already added a ${normalizedPlanType} plan for this service`, 400));
     }
 
-    // Only basic plan accepts a file upload
-    if (req.file && normalizedPlanType !== 'basic') {
-      logger.warn(`File upload rejected for plan type: ${normalizedPlanType}`);
-      return next(new AppError("Image can only be uploaded when creating the basic plan", 400));
+    // Parse thumbnail_files from body (array of objectPaths returned by /service-upload-urls)
+    let thumbnailFiles = null;
+    if (req.body.thumbnail_files) {
+      thumbnailFiles = Array.isArray(req.body.thumbnail_files)
+        ? req.body.thumbnail_files
+        : JSON.parse(req.body.thumbnail_files);
     }
 
-    // Thumbnail is required for basic plan
-    if (normalizedPlanType === 'basic' && !req.file) {
-      logger.warn("Thumbnail image is required for basic plan");
-      return next(new AppError("Please add a thumbnail image for the basic plan", 400));
-    }
-
-    // Handle file upload — basic plan only
-    let thumbnailFileUrl = null;
-    if (normalizedPlanType === 'basic' && req.file) {
-      logger.info(`Uploading thumbnail file: ${req.file.originalname}`);
-
-      // Validate file type (images and videos only)
-      const allowedMimeTypes = [
-        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-        'video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm'
-      ];
-
-      if (!allowedMimeTypes.includes(req.file.mimetype)) {
-        logger.warn("Invalid file type uploaded");
-        return next(new AppError("Only image (JPEG, PNG, GIF, WEBP) and video (MP4, MPEG, MOV, WEBM) files are allowed", 400));
+    // Basic plan requires at least one media file; validate ownership and count
+    if (normalizedPlanType === 'basic') {
+      if (!thumbnailFiles || thumbnailFiles.length === 0) {
+        return next(new AppError("At least one image or video is required for the basic plan", 400));
       }
+      if (thumbnailFiles.length > MAX_SERVICE_MEDIA) {
+        return next(new AppError(`Maximum ${MAX_SERVICE_MEDIA} images/videos allowed per service`, 400));
+      }
+      const expectedPrefix = `${BUCKET_NAME}/freelancer/services/${user.user_id}/`;
+      if (thumbnailFiles.some(p => !p.startsWith(expectedPrefix))) {
+        return next(new AppError("Invalid file path", 400));
+      }
+    }
 
-      const fileName = `${Date.now()}_${req.file.originalname}`;
-      const objectName = `freelancer/services/${user.user_id}/${fileName}`;
-      thumbnailFileUrl = `${BUCKET_NAME}/${objectName}`;
-      uploadedObjectName = objectName;
-
-      // Optimize videos (faststart remux) before upload; images pass through unchanged
-      const uploadBuffer = await optimizeVideoBuffer(req.file.buffer, req.file.mimetype, user.user_id);
-
-      await minioClient.putObject(
-        BUCKET_NAME,
-        objectName,
-        uploadBuffer,
-        uploadBuffer.length,
-        { "Content-Type": req.file.mimetype }
-      );
-
-      logger.info(`Thumbnail file uploaded successfully: ${fileName}`);
-    } else if (normalizedPlanType !== 'basic') {
-      // Reuse the thumbnail from the basic plan for the same service
+    let thumbnailFileArray = null;
+    if (normalizedPlanType === 'basic') {
+      thumbnailFileArray = thumbnailFiles;
+    } else {
+      // Reuse the media array from the basic plan for the same service
       const { rows: basicPlan } = await query(
         `SELECT thumbnail_file FROM services WHERE freelancer_id=$1 AND service_name=$2 AND plan_type='basic' AND is_deleted = FALSE`,
         [freelancer_id, service]
       );
-      thumbnailFileUrl = basicPlan[0]?.thumbnail_file || null;
-      logger.info(`Reusing basic plan thumbnail for ${normalizedPlanType} plan: ${thumbnailFileUrl}`);
+      thumbnailFileArray = basicPlan[0]?.thumbnail_file || null;
+      logger.info(`Reusing basic plan media for ${normalizedPlanType} plan`);
     }
 
     // For non-basic plans, reuse service_title and about_service from basic if not provided
@@ -322,27 +349,13 @@ const addServicesByFreelancer = async (req, res, next) => {
       `INSERT INTO services (freelancer_id, service_name, service_description, service_price, created_at, updated_at, min_delivery_days, max_delivery_days, plan_type, thumbnail_file, service_title, about_service)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [freelancer_id, service, description, price, new Date(), new Date(), minDeliveryDays, maxDeliveryDays, normalizedPlanType, thumbnailFileUrl, resolvedServiceTitle, resolvedAboutService]
+      [freelancer_id, service, description, price, new Date(), new Date(), minDeliveryDays, maxDeliveryDays, normalizedPlanType, thumbnailFileArray, resolvedServiceTitle, resolvedAboutService]
     );
 
     logger.info("Service added successfully");
 
-    // Generate presigned URL for thumbnail if exists
     const serviceData = rows[0];
-    if (serviceData.thumbnail_file) {
-      try {
-        const objectName = serviceData.thumbnail_file.split("/").slice(1).join("/");
-        const presignedUrl = await createPresignedUrl(
-          BUCKET_NAME,
-          objectName,
-          expirySeconds
-        );
-        serviceData.thumbnail_file = presignedUrl;
-      } catch (error) {
-        logger.warn("Failed to generate presigned URL for thumbnail:", error);
-        serviceData.thumbnail_file = null;
-      }
-    }
+    serviceData.thumbnail_file = await presignThumbnailArray(serviceData.thumbnail_file);
 
     serviceData.delivery_time = serviceData.min_delivery_days != null && serviceData.max_delivery_days != null
       ? `${serviceData.min_delivery_days}-${serviceData.max_delivery_days}`
@@ -356,16 +369,6 @@ const addServicesByFreelancer = async (req, res, next) => {
       data: serviceData,
     });
   } catch (error) {
-    // Clean up uploaded file if service creation failed
-    if (uploadedObjectName) {
-      try {
-        await minioClient.removeObject("meet-rub-assets", uploadedObjectName);
-        logger.info("Cleaned up uploaded file after error");
-      } catch (cleanupError) {
-        logger.error("Failed to cleanup uploaded file:", cleanupError);
-      }
-    }
-
     logger.error("Failed to add freelancer service:", error);
     return next(new AppError("Failed to add service", 500));
   }
@@ -374,9 +377,7 @@ const addServicesByFreelancer = async (req, res, next) => {
 // ✅ Freelancer Update their service
 const updateServiceByFreelancer = async (req, res, next) => {
   logger.info("Freelancer updating service");
-  const BUCKET_NAME = "meet-rub-assets";
   const client = await pool.connect();
-  let uploadedObjectName = null;
 
   try {
     const { service, price, description, serviceId, deliveryDuration, planType, serviceTitle, aboutService } = req.body;
@@ -419,48 +420,26 @@ const updateServiceByFreelancer = async (req, res, next) => {
       return next(new AppError("Service not found", 404));
     }
 
-    let thumbnailFileUrl = existingService[0].thumbnail_file;
-    let oldObjectName = null;
+    // Parse incoming thumbnail_files if provided
+    let newThumbnailFiles = null;
+    if (req.body.thumbnail_files) {
+      newThumbnailFiles = Array.isArray(req.body.thumbnail_files)
+        ? req.body.thumbnail_files
+        : JSON.parse(req.body.thumbnail_files);
 
-    // Handle file upload if provided
-    if (req.file) {
-      logger.info(`Uploading new thumbnail file: ${req.file.originalname}`);
-      const fileName = `${Date.now()}_${req.file.originalname}`;
-      const folder = `freelancer/services/${user.user_id}`;
-      const objectName = `${folder}/${fileName}`;
-      thumbnailFileUrl = `${BUCKET_NAME}/${objectName}`;
-      uploadedObjectName = objectName;
-
-      // Validate file type (images and videos only)
-      const allowedMimeTypes = [
-        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-        'video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm'
-      ];
-
-      if (!allowedMimeTypes.includes(req.file.mimetype)) {
+      if (newThumbnailFiles.length > MAX_SERVICE_MEDIA) {
         await client.query('ROLLBACK');
-        logger.warn("Invalid file type uploaded");
-        return next(new AppError("Only image (JPEG, PNG, GIF, WEBP) and video (MP4, MPEG, MOV, WEBM) files are allowed", 400));
+        return next(new AppError(`Maximum ${MAX_SERVICE_MEDIA} images/videos allowed per service`, 400));
       }
-
-      // Optimize videos (faststart remux) before upload; images pass through unchanged
-      const uploadBuffer = await optimizeVideoBuffer(req.file.buffer, req.file.mimetype, user.user_id);
-
-      await minioClient.putObject(
-        BUCKET_NAME,
-        objectName,
-        uploadBuffer,
-        uploadBuffer.length,
-        { "Content-Type": req.file.mimetype }
-      );
-
-      logger.info(`New thumbnail file uploaded successfully: ${fileName}`);
-
-      // Store old object name for deletion after successful update
-      if (existingService[0].thumbnail_file) {
-        oldObjectName = existingService[0].thumbnail_file.split("/").slice(1).join("/");
+      const expectedPrefix = `${BUCKET_NAME}/freelancer/services/${user.user_id}/`;
+      if (newThumbnailFiles.some(p => !p.startsWith(expectedPrefix))) {
+        await client.query('ROLLBACK');
+        return next(new AppError("Invalid file path", 400));
       }
     }
+
+    const thumbnailFileArray = newThumbnailFiles ?? existingService[0].thumbnail_file;
+    const oldFiles = newThumbnailFiles ? (existingService[0].thumbnail_file || []) : [];
 
     const { rows } = await client.query(
       `UPDATE services
@@ -468,7 +447,7 @@ const updateServiceByFreelancer = async (req, res, next) => {
            service_title=COALESCE($11, service_title), about_service=COALESCE($12, about_service)
        WHERE id=$9 AND freelancer_id=$10
        RETURNING *`,
-      [service, price, description, new Date(), minDeliveryDays, maxDeliveryDays, planType || null, thumbnailFileUrl, serviceId, freelancer_id, serviceTitle?.trim() || null, aboutService?.trim() || null]
+      [service, price, description, new Date(), minDeliveryDays, maxDeliveryDays, planType || null, thumbnailFileArray, serviceId, freelancer_id, serviceTitle?.trim() || null, aboutService?.trim() || null]
     );
 
     if (!rows.length) {
@@ -477,36 +456,20 @@ const updateServiceByFreelancer = async (req, res, next) => {
       return next(new AppError("Service not found", 404));
     }
 
-    // Commit transaction
     await client.query('COMMIT');
     logger.info("Service updated successfully - transaction committed");
 
-    // Delete old thumbnail file if a new one was uploaded
-    if (oldObjectName && req.file) {
-      try {
-        await minioClient.removeObject(BUCKET_NAME, oldObjectName);
-        logger.info(`Old thumbnail file deleted from MinIO: ${oldObjectName}`);
-      } catch (minioError) {
-        logger.warn(`Failed to delete old thumbnail file: ${oldObjectName}`, minioError);
-      }
+    // Delete old MinIO files that were replaced
+    for (const oldPath of oldFiles) {
+      if (!oldPath) continue;
+      const oldObjectName = oldPath.split('/').slice(1).join('/');
+      minioClient.removeObject(BUCKET_NAME, oldObjectName).catch((err) =>
+        logger.warn(`Failed to delete old service file: ${oldObjectName}`, err)
+      );
     }
 
-    // Generate presigned URL for thumbnail if exists
     const serviceData = rows[0];
-    if (serviceData.thumbnail_file) {
-      try {
-        const objectName = serviceData.thumbnail_file.split("/").slice(1).join("/");
-        const presignedUrl = await createPresignedUrl(
-          BUCKET_NAME,
-          objectName,
-          expirySeconds
-        );
-        serviceData.thumbnail_file = presignedUrl;
-      } catch (error) {
-        logger.warn("Failed to generate presigned URL for thumbnail:", error);
-        serviceData.thumbnail_file = null;
-      }
-    }
+    serviceData.thumbnail_file = await presignThumbnailArray(serviceData.thumbnail_file);
 
     serviceData.delivery_time = serviceData.min_delivery_days != null && serviceData.max_delivery_days != null
       ? `${serviceData.min_delivery_days}-${serviceData.max_delivery_days}`
@@ -522,17 +485,6 @@ const updateServiceByFreelancer = async (req, res, next) => {
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error("Failed to update service - transaction rolled back:", error);
-
-    // Clean up uploaded file if update failed
-    if (uploadedObjectName) {
-      try {
-        await minioClient.removeObject(BUCKET_NAME, uploadedObjectName);
-        logger.info("Cleaned up uploaded file after error");
-      } catch (cleanupError) {
-        logger.error("Failed to cleanup uploaded file:", cleanupError);
-      }
-    }
-
     return next(new AppError("Failed to update service", 500));
   } finally {
     client.release();
@@ -613,26 +565,10 @@ const getServicesByFreelaner = async (req, res, next) => {
       });
     }
 
-    // Generate presigned URLs for thumbnails
+    // Generate presigned GET URLs for thumbnail arrays
     const servicesWithSignedUrls = await Promise.all(
       services.map(async (service) => {
-        if (service.thumbnail_file) {
-          try {
-            const objectName = service.thumbnail_file.split("/").slice(1).join("/");
-            const signedUrl = await createPresignedUrl(
-              BUCKET_NAME,
-              objectName,
-              expirySeconds
-            );
-            service.thumbnail_file = signedUrl;
-          } catch (error) {
-            logger.error(
-              `Error generating signed URL for service ${service.id}:`,
-              error
-            );
-            service.thumbnail_file = null;
-          }
-        }
+        service.thumbnail_file = await presignThumbnailArray(service.thumbnail_file);
         return service;
       })
     );
@@ -1051,21 +987,16 @@ const getUserServiceRequestsSuggestion = async (req, res, next) => {
           }
         }
 
-        // Media type (video/image) derived from the raw object path before the
-        // URL is replaced with a presigned URL.
-        freelancer.service_banner_type = getMediaType(freelancer.service_banner);
-
-        // Generate presigned URL for service banner
-        if (freelancer.service_banner) {
-          const parts = freelancer.service_banner.split("/");
-          const bucketName = parts[0];
-          const objectName = parts.slice(1).join("/");
+        // Generate presigned GET URLs for all service banner images/videos
+        const bannerFiles = Array.isArray(freelancer.service_banner) ? freelancer.service_banner : [];
+        freelancer.service_banner = await Promise.all(bannerFiles.map(async (path) => {
+          if (!path) return null;
           try {
-            freelancer.service_banner = await createPresignedUrl(bucketName, objectName, expirySeconds);
-          } catch {
-            freelancer.service_banner = null;
-          }
-        }
+            const firstSlash = path.indexOf("/");
+            if (firstSlash === -1) return null;
+            return await createPresignedUrl(path.substring(0, firstSlash), path.substring(firstSlash + 1), expirySeconds);
+          } catch { return null; }
+        }));
 
         return freelancer;
       })
@@ -1510,6 +1441,7 @@ module.exports = {
   updateServiceByFreelancer,
   addServicesByFreelancer,
   getServicesByFreelaner,
+  getServiceUploadUrls,
   createSreviceRequest,
   getUserServiceRequests,
   getUserServiceRequestsSuggestion,
