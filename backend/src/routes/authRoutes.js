@@ -13,7 +13,7 @@ const registerImageUpload = require('../../config/registerImageUpload');
 router.post("/send-otp", otpSendApi);
 
 
-router.post("/verify-otp", registerImageUpload.fields([{ name: 'govIdImage', maxCount: 1 }, { name: 'panCardImage', maxCount: 1 }]), verifyOtpAndProcess, setTokenCookies, (req, res) => {
+router.post("/verify-otp", registerImageUpload.fields([{ name: 'govIdFrontImage', maxCount: 1 }, { name: 'govIdBackImage', maxCount: 1 }, { name: 'panCardImage', maxCount: 1 }]), verifyOtpAndProcess, setTokenCookies, (req, res) => {
 
   res.status(200).json({
     message: "Login successful ",

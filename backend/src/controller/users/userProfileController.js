@@ -169,42 +169,33 @@ const getUserProfile = async (req, res, next) => {
       if (type === "govtId") {
         logger.info("Fetching: Freelancer Govt ID");
         const { rows } = await query(
-          "SELECT gov_id_type, gov_id_url, gov_id_number, verification_status, pan_card_number, pan_card_image_url FROM freelancer WHERE user_id = $1",
+          "SELECT gov_id_type, gov_id_front_image, gov_id_back_image, gov_id_number, verification_status, pan_card_number, pan_card_image_url FROM freelancer WHERE user_id = $1",
           [user.user_id]
         );
 
-        // Aadhaar is optional, so require at least one document (Aadhaar OR PAN)
-        if (!rows[0] || (!rows[0].gov_id_url && !rows[0].pan_card_image_url)) {
+        if (!rows[0] || (!rows[0].gov_id_front_image && !rows[0].pan_card_image_url)) {
           logger.warn("Gov ID not uploaded");
           return next(new AppError("No govt ID found", 404));
         }
 
-        let signedUrl = null;
-        if (rows[0].gov_id_url) {
-          const parts = rows[0].gov_id_url.split("/");
-          const bucketName = parts[0];
-          const objectName = parts.slice(1).join("/");
+        const presignPath = (rawUrl) => {
+          if (!rawUrl) return Promise.resolve(null);
+          const parts = rawUrl.split("/");
+          return createPresignedUrl(parts[0], parts.slice(1).join("/"), expirySeconds);
+        };
 
-          signedUrl = await createPresignedUrl(
-            bucketName,
-            objectName,
-            expirySeconds
-          );
-        }
-
-        let panCardSignedUrl = null;
-        if (rows[0]?.pan_card_image_url) {
-          const panParts = rows[0].pan_card_image_url.split("/");
-          const panBucket = panParts[0];
-          const panObject = panParts.slice(1).join("/");
-          panCardSignedUrl = await createPresignedUrl(panBucket, panObject, expirySeconds);
-        }
+        const [govFrontSignedUrl, govBackSignedUrl, panCardSignedUrl] = await Promise.all([
+          presignPath(rows[0].gov_id_front_image),
+          presignPath(rows[0].gov_id_back_image),
+          presignPath(rows[0].pan_card_image_url),
+        ]);
 
         return res.status(200).json({
           status: "success",
           message: "Govt ID fetched successfully",
           data: {
-            userGovtIdUrl: signedUrl,
+            userGovtIdFrontImage: govFrontSignedUrl,
+            userGovtIdBackImage: govBackSignedUrl,
             userGovtIdType: rows[0]?.gov_id_type,
             userGovtIdNumber: rows[0]?.gov_id_number,
             verificationStatus: rows[0]?.verification_status,
@@ -742,67 +733,54 @@ const editProfile = async (req, res, next) => {
           return next(new AppError("Invalid userData format. Must be valid JSON", 400));
         }
 
-        // Validate only single file upload
-        if (req.files && Array.isArray(req.files) && req.files.length > 1) {
-          logger.warn("Multiple files uploaded, only single file allowed");
-          return next(
-            new AppError(
-              "Only one government ID image can be uploaded at a time",
-              400
-            )
-          );
+        const filesArr = Array.isArray(req.files) ? req.files : [];
+        const frontFile = filesArr.find(f => f.fieldname === 'govIdFrontImage');
+        const backFile = filesArr.find(f => f.fieldname === 'govIdBackImage');
+
+        if (!frontFile) {
+          logger.warn("Missing front image for govt ID update");
+          return next(new AppError("Government ID front image is required", 400));
         }
 
-        if (!req.file) {
-          logger.warn("Missing file for govt ID update");
-          return next(new AppError("Government ID file is required", 400));
+        if (!backFile) {
+          logger.warn("Missing back image for govt ID update");
+          return next(new AppError("Government ID back image is required", 400));
         }
 
-        // Validate that the file is an image
-        if (!req.file.mimetype.startsWith("image/")) {
-          logger.warn("Invalid file type for govt ID:", req.file.mimetype);
-          return next(
-            new AppError(
-              "Government ID must be an image file (JPEG, PNG, GIF, etc.)",
-              400
-            )
-          );
+        if (!frontFile.mimetype.startsWith("image/") || !backFile.mimetype.startsWith("image/")) {
+          logger.warn("Invalid file type for govt ID");
+          return next(new AppError("Government ID images must be image files (JPEG, PNG, etc.)", 400));
         }
 
-        const fileExt = path.extname(req.file.originalname);
-        const fileName = `${crypto.randomUUID()}${fileExt}`;
         const folder = `freelancer/goverment-doc/${gov_id_type}`;
-        const objectName = `${folder}/${fileName}`;
-        const gov_id_url = `${BUCKET_NAME}/${objectName}`;
+
+        const frontObjectName = `${folder}/front-${crypto.randomUUID()}${path.extname(frontFile.originalname)}`;
+        const backObjectName = `${folder}/back-${crypto.randomUUID()}${path.extname(backFile.originalname)}`;
+        const gov_id_front_image = `${BUCKET_NAME}/${frontObjectName}`;
+        const gov_id_back_image = `${BUCKET_NAME}/${backObjectName}`;
 
         // Start transaction
         await query("BEGIN");
         try {
-          await minioClient.putObject(
-            BUCKET_NAME,
-            objectName,
-            req.file.buffer,
-            req.file.size,
-            {
-              "Content-Type": req.file.mimetype,
-            }
-          );
+          await Promise.all([
+            minioClient.putObject(BUCKET_NAME, frontObjectName, frontFile.buffer, frontFile.size, { "Content-Type": frontFile.mimetype }),
+            minioClient.putObject(BUCKET_NAME, backObjectName, backFile.buffer, backFile.size, { "Content-Type": backFile.mimetype }),
+          ]);
 
           const { rows: freelancerGovInfo } = await query(
             `UPDATE freelancer
-             SET gov_id_type=$1, gov_id_url=$2, gov_id_number=$3,
+             SET gov_id_type=$1, gov_id_front_image=$2, gov_id_back_image=$3, gov_id_number=$4,
                verification_status = CASE WHEN verification_status = 'REJECTED' THEN 'PENDING' ELSE verification_status END,
                reason_for_rejection = CASE WHEN verification_status = 'REJECTED' THEN NULL ELSE reason_for_rejection END
-             WHERE user_id=$4
-             RETURNING gov_id_type, gov_id_url, gov_id_number`,
-            [gov_id_type, gov_id_url, gov_id_number, user.user_id]
+             WHERE user_id=$5
+             RETURNING gov_id_type, gov_id_front_image, gov_id_back_image, gov_id_number`,
+            [gov_id_type, gov_id_front_image, gov_id_back_image, gov_id_number, user.user_id]
           );
 
-          const signedUrl = await createPresignedUrl(
-            BUCKET_NAME,
-            objectName,
-            expirySeconds
-          );
+          const [frontSignedUrl, backSignedUrl] = await Promise.all([
+            createPresignedUrl(BUCKET_NAME, frontObjectName, expirySeconds),
+            createPresignedUrl(BUCKET_NAME, backObjectName, expirySeconds),
+          ]);
 
           // Commit transaction
           await query("COMMIT");
@@ -815,9 +793,11 @@ const editProfile = async (req, res, next) => {
           return res.status(200).json({
             status: "success",
             message: "Government ID updated successfully",
-            data: freelancerGovInfo[0].gov_id_url
-              ? { ...freelancerGovInfo[0], gov_id_url: signedUrl }
-              : freelancerGovInfo[0],
+            data: {
+              ...freelancerGovInfo[0],
+              gov_id_front_image: frontSignedUrl,
+              gov_id_back_image: backSignedUrl,
+            },
           });
         } catch (error) {
           await query("ROLLBACK");
@@ -2324,7 +2304,7 @@ const getUserProfileProgress = async (req, res, next) => {
       Portfolio: 0,
     };
     const { rows: freelancerRows } = await query(
-      "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_url, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, verification_status, reason_for_rejection FROM freelancer WHERE user_id=$1",
+      "SELECT freelancer_thumbnail_image, date_of_birth, phone_number, profile_title, profile_image_url, gov_id_front_image, bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, verification_status, reason_for_rejection FROM freelancer WHERE user_id=$1",
       [user.user_id]
     );
     let verificationStatus = null;
@@ -2340,7 +2320,7 @@ const getUserProfileProgress = async (req, res, next) => {
       ) {
         freelancerProgressWeights.ProfileInfo += 20;
       }
-      if (freelancer.gov_id_url) {
+      if (freelancer.gov_id_front_image) {
         freelancerProgressWeights.GovtID += 20;
       }
       if (
@@ -3217,7 +3197,8 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         created_at as date_of_joining,
         gov_id_type,
         gov_id_number,
-        gov_id_url,
+        gov_id_front_image,
+        gov_id_back_image,
         profile_image_url,
         niche,
         about_me,
@@ -3290,31 +3271,20 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
       }
     }
 
-    // Generate presigned URL for government ID proof if it exists
-    if (freelancer.gov_id_url) {
+    // Generate presigned URLs for government ID front and back images
+    const presignGovImage = async (rawUrl, label) => {
+      if (!rawUrl) return null;
+      const idx = rawUrl.indexOf("/");
+      if (idx === -1) { logger.warn(`Invalid govt ID ${label} URL format: ${rawUrl}`); return null; }
       try {
-        const govIdPath = freelancer.gov_id_url;
-        const firstSlashIndex = govIdPath.indexOf("/");
-
-        if (firstSlashIndex !== -1) {
-          const bucketName = govIdPath.substring(0, firstSlashIndex);
-          const objectName = govIdPath.substring(firstSlashIndex + 1);
-
-          const signedUrl = await createPresignedUrl(
-            bucketName,
-            objectName,
-            expirySeconds
-          );
-          freelancer.gov_id_url = signedUrl;
-        } else {
-          logger.warn(`Invalid govt ID URL format: ${govIdPath}`);
-          freelancer.gov_id_url = null;
-        }
-      } catch (error) {
-        logger.error(`Error generating signed URL for govt ID: ${error}`);
-        freelancer.gov_id_url = null;
+        return await createPresignedUrl(rawUrl.substring(0, idx), rawUrl.substring(idx + 1), expirySeconds);
+      } catch (err) {
+        logger.error(`Error generating signed URL for govt ID ${label}: ${err}`);
+        return null;
       }
-    }
+    };
+    freelancer.gov_id_front_image = await presignGovImage(freelancer.gov_id_front_image, 'front');
+    freelancer.gov_id_back_image = await presignGovImage(freelancer.gov_id_back_image, 'back');
 
     // Generate presigned URL for PAN card image if it exists
     if (freelancer.pan_card_image_url) {
@@ -3416,7 +3386,8 @@ const getFreeLancerByIdForAdmin = async (req, res, next) => {
         date_of_joining: freelancer.date_of_joining,
         gov_id_type: freelancer.gov_id_type,
         gov_id_number: freelancer.gov_id_number,
-        gov_id_url: freelancer.gov_id_url,
+        gov_id_front_image: freelancer.gov_id_front_image,
+        gov_id_back_image: freelancer.gov_id_back_image,
         profile_image_url: freelancer.profile_image_url,
         niches: freelancer.niche || [],
         about_me: freelancer.about_me,

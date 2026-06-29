@@ -228,8 +228,17 @@ const verifyOtpAndProcess = async (req, res, next) => {
           return next(new AppError("Username already taken", 400));
         }
 
-        const govIdFile = req.files?.govIdImage?.[0];
+        const govIdFrontFile = req.files?.govIdFrontImage?.[0];
+        const govIdBackFile = req.files?.govIdBackImage?.[0];
         const panCardFile = req.files?.panCardImage?.[0];
+
+        if (!govIdFrontFile) {
+          return next(new AppError("Government ID front image is required", 400));
+        }
+
+        if (!govIdBackFile) {
+          return next(new AppError("Government ID back image is required", 400));
+        }
 
         if (!panCardFile) {
           return next(new AppError("PAN card image is required", 400));
@@ -240,15 +249,15 @@ const verifyOtpAndProcess = async (req, res, next) => {
         }
 
         const BUCKET_NAME = "meet-rub-assets";
-        let objectName = null;
-        let govIdUrl = null;
-        if (govIdFile) {
-          const fileExt = path.extname(govIdFile.originalname);
-          const fileName = `${crypto.randomUUID()}${fileExt}`;
-          const folder = `freelancer/goverment-doc/${govIdType || 'aadhar'}`;
-          objectName = `${folder}/${fileName}`;
-          govIdUrl = `${BUCKET_NAME}/${objectName}`;
-        }
+        const govIdFolder = `freelancer/goverment-doc/${govIdType || 'aadhar'}`;
+
+        const govFrontExt = path.extname(govIdFrontFile.originalname);
+        const govFrontObjectName = `${govIdFolder}/front-${crypto.randomUUID()}${govFrontExt}`;
+        const govIdFrontUrl = `${BUCKET_NAME}/${govFrontObjectName}`;
+
+        const govBackExt = path.extname(govIdBackFile.originalname);
+        const govBackObjectName = `${govIdFolder}/back-${crypto.randomUUID()}${govBackExt}`;
+        const govIdBackUrl = `${BUCKET_NAME}/${govBackObjectName}`;
 
         const panFileExt = path.extname(panCardFile.originalname);
         const panFileName = `${crypto.randomUUID()}${panFileExt}`;
@@ -277,22 +286,9 @@ const verifyOtpAndProcess = async (req, res, next) => {
           );
 
           try {
-            if (govIdFile) {
-              await minioClient.putObject(
-                BUCKET_NAME,
-                objectName,
-                govIdFile.buffer,
-                govIdFile.size,
-                { "Content-Type": govIdFile.mimetype }
-              );
-            }
-            await minioClient.putObject(
-              BUCKET_NAME,
-              panObjectName,
-              panCardFile.buffer,
-              panCardFile.size,
-              { "Content-Type": panCardFile.mimetype }
-            );
+            await minioClient.putObject(BUCKET_NAME, govFrontObjectName, govIdFrontFile.buffer, govIdFrontFile.size, { "Content-Type": govIdFrontFile.mimetype });
+            await minioClient.putObject(BUCKET_NAME, govBackObjectName, govIdBackFile.buffer, govIdBackFile.size, { "Content-Type": govIdBackFile.mimetype });
+            await minioClient.putObject(BUCKET_NAME, panObjectName, panCardFile.buffer, panCardFile.size, { "Content-Type": panCardFile.mimetype });
           } catch (s3Err) {
             logger.error(`MinIO upload failed — code: ${s3Err.code} message: ${s3Err.message}`);
             throw s3Err;
@@ -300,17 +296,18 @@ const verifyOtpAndProcess = async (req, res, next) => {
 
           const { rows: freelancer } = await client.query(
             `INSERT INTO freelancer
-            (user_id, profile_title, gov_id_type, gov_id_url, first_name, last_name,
+            (user_id, profile_title, gov_id_type, gov_id_front_image, gov_id_back_image, first_name, last_name,
              date_of_birth, phone_number, created_at, updated_at, freelancer_full_name,
              freelancer_email, gov_id_number, niche, verification_status, user_name, interested_service,
              pan_card_number, pan_card_image_url, street_address, city, state, postal_code)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'PENDING', $15, $16, $17, $18, $19, $20, $21, $22)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'PENDING', $16, $17, $18, $19, $20, $21, $22, $23)
             RETURNING *`,
             [
               newUserResMeetRub[0].id,
               profileTitle,
               govIdType || null,
-              govIdUrl,
+              govIdFrontUrl,
+              govIdBackUrl,
               firstName,
               lastName,
               dateOfBirth || null,
