@@ -737,35 +737,58 @@ const editProfile = async (req, res, next) => {
         const frontFile = filesArr.find(f => f.fieldname === 'govIdFrontImage');
         const backFile = filesArr.find(f => f.fieldname === 'govIdBackImage');
 
-        if (!frontFile) {
+        // On resubmit/edit, a side the user didn't re-upload keeps its existing
+        // image. Load current values so we only require/replace what changed.
+        const { rows: existingGovRows } = await query(
+          "SELECT gov_id_front_image, gov_id_back_image FROM freelancer WHERE user_id = $1",
+          [user.user_id]
+        );
+        const existingGov = existingGovRows[0] || {};
+
+        if (!frontFile && !existingGov.gov_id_front_image) {
           logger.warn("Missing front image for govt ID update");
           return next(new AppError("Government ID front image is required", 400));
         }
 
-        if (!backFile) {
+        if (!backFile && !existingGov.gov_id_back_image) {
           logger.warn("Missing back image for govt ID update");
           return next(new AppError("Government ID back image is required", 400));
         }
 
-        if (!frontFile.mimetype.startsWith("image/") || !backFile.mimetype.startsWith("image/")) {
+        if ((frontFile && !frontFile.mimetype.startsWith("image/")) || (backFile && !backFile.mimetype.startsWith("image/"))) {
           logger.warn("Invalid file type for govt ID");
           return next(new AppError("Government ID images must be image files (JPEG, PNG, etc.)", 400));
         }
 
         const folder = `freelancer/goverment-doc/${gov_id_type}`;
 
-        const frontObjectName = `${folder}/front-${crypto.randomUUID()}${path.extname(frontFile.originalname)}`;
-        const backObjectName = `${folder}/back-${crypto.randomUUID()}${path.extname(backFile.originalname)}`;
-        const gov_id_front_image = `${BUCKET_NAME}/${frontObjectName}`;
-        const gov_id_back_image = `${BUCKET_NAME}/${backObjectName}`;
+        // Default to existing images; overwrite only for sides that were re-uploaded.
+        let gov_id_front_image = existingGov.gov_id_front_image;
+        let gov_id_back_image = existingGov.gov_id_back_image;
+        let frontObjectName, backObjectName;
+        if (frontFile) {
+          frontObjectName = `${folder}/front-${crypto.randomUUID()}${path.extname(frontFile.originalname)}`;
+          gov_id_front_image = `${BUCKET_NAME}/${frontObjectName}`;
+        }
+        if (backFile) {
+          backObjectName = `${folder}/back-${crypto.randomUUID()}${path.extname(backFile.originalname)}`;
+          gov_id_back_image = `${BUCKET_NAME}/${backObjectName}`;
+        }
+
+        // Presign whatever the final stored path is (new upload or kept existing).
+        const presignStored = (stored) => {
+          if (!stored) return Promise.resolve(null);
+          const parts = stored.split("/");
+          return createPresignedUrl(parts[0], parts.slice(1).join("/"), expirySeconds);
+        };
 
         // Start transaction
         await query("BEGIN");
         try {
-          await Promise.all([
-            minioClient.putObject(BUCKET_NAME, frontObjectName, frontFile.buffer, frontFile.size, { "Content-Type": frontFile.mimetype }),
-            minioClient.putObject(BUCKET_NAME, backObjectName, backFile.buffer, backFile.size, { "Content-Type": backFile.mimetype }),
-          ]);
+          const uploads = [];
+          if (frontFile) uploads.push(minioClient.putObject(BUCKET_NAME, frontObjectName, frontFile.buffer, frontFile.size, { "Content-Type": frontFile.mimetype }));
+          if (backFile) uploads.push(minioClient.putObject(BUCKET_NAME, backObjectName, backFile.buffer, backFile.size, { "Content-Type": backFile.mimetype }));
+          if (uploads.length) await Promise.all(uploads);
 
           const { rows: freelancerGovInfo } = await query(
             `UPDATE freelancer
@@ -778,8 +801,8 @@ const editProfile = async (req, res, next) => {
           );
 
           const [frontSignedUrl, backSignedUrl] = await Promise.all([
-            createPresignedUrl(BUCKET_NAME, frontObjectName, expirySeconds),
-            createPresignedUrl(BUCKET_NAME, backObjectName, expirySeconds),
+            presignStored(gov_id_front_image),
+            presignStored(gov_id_back_image),
           ]);
 
           // Commit transaction
@@ -819,30 +842,50 @@ const editProfile = async (req, res, next) => {
           ? req.files.find((f) => f.fieldname === "panCardImage")
           : req.file;
 
-        if (!panFile) {
+        // On resubmit, keep the existing PAN image if a new one wasn't uploaded.
+        const { rows: existingPanRows } = await query(
+          "SELECT pan_card_image_url FROM freelancer WHERE user_id = $1",
+          [user.user_id]
+        );
+        const existingPanImage = existingPanRows[0]?.pan_card_image_url || null;
+
+        if (!panFile && !existingPanImage) {
           logger.warn("Missing PAN card image file");
           return next(new AppError("PAN card image is required", 400));
         }
 
-        if (!panFile.mimetype.startsWith("image/")) {
+        if (panFile && !panFile.mimetype.startsWith("image/")) {
           logger.warn("Invalid file type for PAN card:", panFile.mimetype);
           return next(new AppError("PAN card must be an image file (JPEG, PNG, etc.)", 400));
         }
 
-        const panFileExt = path.extname(panFile.originalname);
-        const panFileName = `${crypto.randomUUID()}${panFileExt}`;
-        const panObjectName = `freelancer/pan-card/${panFileName}`;
-        const panCardImageUrl = `${BUCKET_NAME}/${panObjectName}`;
+        // Default to the existing image; overwrite only if a new file came in.
+        let panCardImageUrl = existingPanImage;
+        let panObjectName;
+        if (panFile) {
+          const panFileExt = path.extname(panFile.originalname);
+          const panFileName = `${crypto.randomUUID()}${panFileExt}`;
+          panObjectName = `freelancer/pan-card/${panFileName}`;
+          panCardImageUrl = `${BUCKET_NAME}/${panObjectName}`;
+        }
+
+        const presignStoredPan = (stored) => {
+          if (!stored) return Promise.resolve(null);
+          const parts = stored.split("/");
+          return createPresignedUrl(parts[0], parts.slice(1).join("/"), expirySeconds);
+        };
 
         await query("BEGIN");
         try {
-          await minioClient.putObject(
-            BUCKET_NAME,
-            panObjectName,
-            panFile.buffer,
-            panFile.size,
-            { "Content-Type": panFile.mimetype }
-          );
+          if (panFile) {
+            await minioClient.putObject(
+              BUCKET_NAME,
+              panObjectName,
+              panFile.buffer,
+              panFile.size,
+              { "Content-Type": panFile.mimetype }
+            );
+          }
 
           await query(
             `UPDATE freelancer
@@ -853,7 +896,7 @@ const editProfile = async (req, res, next) => {
             [pan_card_number, panCardImageUrl, user.user_id]
           );
 
-          const signedUrl = await createPresignedUrl(BUCKET_NAME, panObjectName, expirySeconds);
+          const signedUrl = await presignStoredPan(panCardImageUrl);
 
           await query("COMMIT");
           logger.info("PAN card updated successfully");
