@@ -439,7 +439,11 @@ const updateServiceByFreelancer = async (req, res, next) => {
     }
 
     const thumbnailFileArray = newThumbnailFiles ?? existingService[0].thumbnail_file;
-    const oldFiles = newThumbnailFiles ? (existingService[0].thumbnail_file || []) : [];
+    // Only delete previous files that are no longer referenced; files the
+    // client kept in thumbnail_files must not be removed from storage.
+    const oldFiles = newThumbnailFiles
+      ? (existingService[0].thumbnail_file || []).filter((p) => !newThumbnailFiles.includes(p))
+      : [];
 
     const { rows } = await client.query(
       `UPDATE services
