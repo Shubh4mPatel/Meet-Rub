@@ -666,8 +666,19 @@ const editProfile = async (req, res, next) => {
         }
 
         // Razorpay validation: bank account holder name must be 4-200 characters
-        if (bank_account_holder_name && (bank_account_holder_name.length < 4 || bank_account_holder_name.length > 200)) {
-          return next(new AppError('Bank account holder name must be between 4 and 200 characters', 400));
+        if (bank_account_holder_name) {
+          // Normalize whitespace before validating/storing so a trailing space or
+          // double space doesn't slip through and get rejected later by Razorpay
+          bank_account_holder_name = bank_account_holder_name.trim().replace(/\s+/g, ' ');
+
+          if (bank_account_holder_name.length < 4 || bank_account_holder_name.length > 200) {
+            return next(new AppError('Bank account holder name must be between 4 and 200 characters', 400));
+          }
+
+          // Razorpay validation: contact_name/legal_business_name only accept letters and spaces
+          if (!/^[a-zA-Z]+(?: [a-zA-Z]+)*$/.test(bank_account_holder_name)) {
+            return next(new AppError('Bank account holder name must contain only letters and spaces (no numbers, punctuation, or extra spaces)', 400));
+          }
         }
 
         // Check if Razorpay linked account exists

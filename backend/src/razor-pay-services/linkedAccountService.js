@@ -21,8 +21,8 @@ class LinkedAccountService {
                 email: freelancer.freelancer_email,
                 phone: Number(phoneDigits),
                 type: 'route',
-                legal_business_name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
-                contact_name: freelancer.bank_account_holder_name || freelancer.freelancer_full_name,
+                legal_business_name: freelancer.bank_account_holder_name ,
+                contact_name: freelancer.bank_account_holder_name ,
                 business_type: 'individual',
                 // Note: For business_type 'individual', PAN is provided in stakeholder, not here
                 // legal_info.pan is only for company/partnership/trust business types
