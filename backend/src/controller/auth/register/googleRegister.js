@@ -41,7 +41,7 @@ const googleRegisterUser = async (req, res, next) => {
     try {
         const { provider, accessToken, email, name, role, username, phone_number, niches,
             pan_card_number: rawPanCardNumber, street_address, city, state, postal_code,
-            socialLinks } = req.body;
+            socialLinks, govId, govIdType } = req.body;
 
         // ── Basic validation ────────────────────────────────────────────────────
         if (provider !== 'google') {
@@ -187,8 +187,9 @@ const googleRegisterUser = async (req, res, next) => {
             (user_id, phone_number, freelancer_full_name, freelancer_email,
              niche, verification_status, user_name, pan_card_number, pan_card_image_url,
              gov_id_front_image, gov_id_back_image,
-             street_address, city, state, postal_code, first_name, last_name, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,'PENDING',$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+             street_address, city, state, postal_code, first_name, last_name, created_at, updated_at,
+             gov_id_type, gov_id_number)
+           VALUES ($1,$2,$3,$4,$5,'PENDING',$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
            RETURNING *`,
                     [
                         user.id,
@@ -209,6 +210,8 @@ const googleRegisterUser = async (req, res, next) => {
                         lastName,
                         now,
                         now,
+                        govIdType || 'aadhar',
+                        govId || null,
                     ]
                 );
                 roleWiseId = freelancerRows[0].freelancer_id;
