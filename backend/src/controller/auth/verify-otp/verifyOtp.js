@@ -11,6 +11,7 @@ const { sendWelcomeEmail, sendAdminNewUserEmail } = require("../../../../utils/w
 const { notifyAllAdmins } = require('../../notification/notificationServicer');
 const redisClient = require("../../../../config/reddis");
 const { INDIAN_STATES } = require("../../../utils/indianStates");
+const { appendFreelancerToSheet } = require("../../../services/googleSheetsService");
 
 const USERNAMES_SET_KEY = "usernames:set";
 
@@ -350,6 +351,20 @@ const verifyOtpAndProcess = async (req, res, next) => {
             actionType: 'navigate',
             actionRoute: '/admin/freelancer-panel/kyc-requests',
           }).catch((err) => logger.error('Failed to send admin in-app notification:', err));
+
+          // Add the new freelancer to the Google Sheet roster (non-blocking).
+          appendFreelancerToSheet({
+            freelancer_id: freelancer[0].freelancer_id,
+            full_name: fullName,
+            user_name: userName,
+            email,
+            phone_number: phoneNumber,
+            niche: parsedNiche,
+            pan_card_number: panCardNumber,
+            verification_status: 'PENDING',
+            registered_via: 'OTP',
+            created_at: freelancer[0].created_at,
+          }).catch((err) => logger.error('Failed to append freelancer to Google Sheet:', err.message));
         } catch (error) {
           await client.query("ROLLBACK");
           // Clean up Redis username if it was already added before the commit failed

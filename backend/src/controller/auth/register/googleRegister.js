@@ -7,6 +7,7 @@ const redisClient = require('../../../../config/reddis');
 const { sendWelcomeEmail, sendAdminNewUserEmail } = require('../../../../utils/welcomeEmail');
 const { notifyAllAdmins } = require('../../notification/notificationServicer');
 const { INDIAN_STATES } = require('../../../utils/indianStates');
+const { appendFreelancerToSheet } = require('../../../services/googleSheetsService');
 
 const USERNAMES_SET_KEY = 'usernames:set';
 const BUCKET_NAME = 'meet-rub-assets';
@@ -275,6 +276,22 @@ const googleRegisterUser = async (req, res, next) => {
                 ? '/admin/freelancer-panel/kyc-requests'
                 : '/admin/creator-panel/all-creators',
         }).catch((err) => logger.error('Failed to send admin in-app notification:', err));
+
+        // Add the new freelancer to the Google Sheet roster (non-blocking).
+        if (role === 'freelancer') {
+            appendFreelancerToSheet({
+                freelancer_id: roleWiseId,
+                full_name: fullName,
+                user_name: normalizedUsername,
+                email: verifiedEmail,
+                phone_number: phone_number.trim(),
+                niche: parsedNiches,
+                pan_card_number,
+                verification_status: 'PENDING',
+                registered_via: 'Google',
+                created_at: now,
+            }).catch((err) => logger.error('Failed to append freelancer to Google Sheet:', err.message));
+        }
 
         // ── Generate tokens ─────────────────────────────────────────────────────
         const { accessToken: jwtAccessToken, refreshToken } = generateTokens(user, roleWiseId);
