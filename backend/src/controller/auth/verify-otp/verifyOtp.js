@@ -11,7 +11,7 @@ const { sendWelcomeEmail, sendAdminNewUserEmail } = require("../../../../utils/w
 const { notifyAllAdmins } = require('../../notification/notificationServicer');
 const redisClient = require("../../../../config/reddis");
 const { INDIAN_STATES } = require("../../../utils/indianStates");
-const { appendFreelancerToSheet } = require("../../../services/googleSheetsService");
+const { appendFreelancerToSheet, appendCreatorToSheet } = require("../../../services/googleSheetsService");
 
 const USERNAMES_SET_KEY = "usernames:set";
 
@@ -463,6 +463,19 @@ const verifyOtpAndProcess = async (req, res, next) => {
             actionType: 'navigate',
             actionRoute: '/admin/creator-panel/all-creators',
           }).catch((err) => logger.error('Failed to send admin in-app notification:', err));
+
+          // Add the new creator to the Google Sheet roster (non-blocking).
+          appendCreatorToSheet({
+            creator_id: creator[0].creator_id,
+            full_name: `${firstName} ${lastName}`,
+            user_name: userName,
+            email: email.toLowerCase(),
+            phone_number: phoneNo,
+            niche: parsedNiche,
+            social_links: parsedSocialLinks,
+            registered_via: 'OTP',
+            created_at: creator[0].created_at,
+          }).catch((err) => logger.error('Failed to append creator to Google Sheet:', err.message));
         } catch (error) {
           await client.query("ROLLBACK");
           // Clean up Redis username if it was already added before the commit failed
