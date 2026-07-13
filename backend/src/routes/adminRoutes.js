@@ -6,7 +6,7 @@ const { requireRole, requirePermission } = require('../middleware/authMiddleware
 const upload = require('../../config/multer')
 const { getAllDisputes, resolveDispute, getDisputeById } = require('../controller/dispute/disputeController')
 const { getAllCreatorProfiles, getCreatorById, getFreelancerForAdmin, getFreeLancerByIdForAdmin, getFreelancerForSuggestion, getFreelancerForKYCApproval } = require('../controller/users/userProfileController')
-const { createAdmin, getAdminList, getMyAdminInfo, updateAdminPermissions, deleteAdmin, adminUpdateUserCredentials, adminUpdateCreatorEmail } = require('../controller/admin/adminContoller')
+const { createAdmin, getAdminList, getMyAdminInfo, updateAdminPermissions, deleteAdmin, adminUpdateUserCredentials, adminUpdateCreatorEmail, syncFreelancersToSheet } = require('../controller/admin/adminContoller')
 const router = expess.Router()
 
 
@@ -32,6 +32,9 @@ router.post('/addServices', upload.fields([
 
 
 router.get('/service-requests', getUserServiceRequestsToAdmin)
+
+// Backfill the Google Sheet with all existing freelancers (one-time / on-demand)
+router.post('/sync-freelancers-sheet', requireRole(['admin']), syncFreelancersToSheet)
 
 router.post('/add-niches', requireRole(['admin']), requirePermission('projects', 'create'), addNiches);
 

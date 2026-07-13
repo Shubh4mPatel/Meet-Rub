@@ -570,4 +570,49 @@ const adminUpdateUserCredentials = async (req, res, next) => {
     }
 };
 
-module.exports = { approveProfile, getAllFreelancers, getAllCreators, createAdmin, getAdminList, getMyAdminInfo, updateAdminPermissions, deleteAdmin, adminUpdateUserCredentials, adminUpdateCreatorEmail };
+// Backfill the Google Sheet with ALL current freelancers (overwrites the sheet).
+// Admin can trigger this once to import existing freelancers; new signups are
+// appended automatically by the registration flows.
+const { syncAllFreelancers, isConfigured } = require('../../services/googleSheetsService');
+
+const syncFreelancersToSheet = async (req, res, next) => {
+    try {
+        if (!isConfigured()) {
+            return next(new AppError('Google Sheets is not configured on the server.', 400));
+        }
+
+        const { rows } = await query(
+            `SELECT f.freelancer_id, f.freelancer_full_name, f.user_name, f.freelancer_email,
+                    f.phone_number, f.niche, f.pan_card_number, f.verification_status, f.created_at,
+                    u.auth_provider
+             FROM freelancer f
+             LEFT JOIN users u ON u.id = f.user_id
+             ORDER BY f.created_at ASC NULLS LAST`
+        );
+
+        const freelancers = rows.map((f) => ({
+            freelancer_id: f.freelancer_id,
+            full_name: f.freelancer_full_name,
+            user_name: f.user_name,
+            email: f.freelancer_email,
+            phone_number: f.phone_number,
+            niche: f.niche,
+            pan_card_number: f.pan_card_number,
+            verification_status: f.verification_status,
+            registered_via: f.auth_provider === 'google' ? 'Google' : 'OTP',
+            created_at: f.created_at,
+        }));
+
+        const count = await syncAllFreelancers(freelancers);
+        return res.status(200).json({
+            status: 'success',
+            message: `Synced ${count} freelancers to the Google Sheet`,
+            data: { count },
+        });
+    } catch (error) {
+        logger.error('Failed to sync freelancers to Google Sheet:', error);
+        return next(new AppError(error.message || 'Failed to sync freelancers to Google Sheet', 500));
+    }
+};
+
+module.exports = { approveProfile, getAllFreelancers, getAllCreators, createAdmin, getAdminList, getMyAdminInfo, updateAdminPermissions, deleteAdmin, adminUpdateUserCredentials, adminUpdateCreatorEmail, syncFreelancersToSheet };
