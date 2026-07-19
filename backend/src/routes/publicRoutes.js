@@ -6,6 +6,7 @@ const { getUploadUrls } = require("../controller/prisingedurl/UploadUrlControlle
 const { getHomePageServices } = require("../controller/services/serviceController");
 const { getFreelancerReviews } = require("../controller/users/freelancerReviewsController");
 const { getIndianStates } = require("../controller/public/statesController");
+const { getHomeContent } = require("../controller/home/homeContentController");
 
 // Public route for contact form submission
 router.post("/contact", sendContactEmailToAdmin);
@@ -20,5 +21,8 @@ router.get('/home-services', getHomePageServices);
 router.get('/freelancers/:id/reviews', getFreelancerReviews);
 
 router.get('/states', getIndianStates);
+
+// Public: dynamic home page content (How it works, Made with, Testimonials, CTA, FAQ)
+router.get('/home-content', getHomeContent);
 
 module.exports = router;
