@@ -3,8 +3,8 @@ const AppError = require("../../../utils/appError");
 const { logger } = require("../../../utils/logger");
 const { minioClient } = require("../../../config/minio");
 const { createPresignedUrl, getMediaType, optimizeVideoBuffer } = require("../../../utils/helper");
-const { sendAdminServiceRequestEmail, sendCreatorServiceRequestConfirmationEmail } = require("../../../utils/welcomeEmail");
-const { notifyAllAdmins } = require("../notification/notificationServicer");
+const { sendAdminServiceRequestEmail, sendCreatorServiceRequestConfirmationEmail, sendServiceRequestSuggestionsEmail } = require("../../../utils/welcomeEmail");
+const { notifyAllAdmins, sendNotification } = require("../notification/notificationServicer");
 // const { log } = require("node:console");
 
 const expirySeconds = 4 * 60 * 60; // 4 hours
@@ -1173,7 +1173,10 @@ const AssignFreelancerToRequest = async (req, res, next) => {
 
     // Check if service request exists
     const { rows: serviceRequest } = await query(
-      `SELECT request_id FROM service_requests WHERE request_id = $1`,
+      `SELECT sr.request_id, sr.desired_service, c.full_name AS creator_name, c.email AS creator_email, c.user_id AS creator_user_id
+       FROM service_requests sr
+       LEFT JOIN creators c ON sr.creator_id = c.creator_id
+       WHERE sr.request_id = $1`,
       [requestId]
     );
 
@@ -1214,6 +1217,27 @@ const AssignFreelancerToRequest = async (req, res, next) => {
     );
 
     logger.info(`Freelancers assigned to request ${requestId} successfully`);
+
+    if (serviceRequest[0].creator_email) {
+      sendServiceRequestSuggestionsEmail({
+        creatorUsername: serviceRequest[0].creator_name,
+        creatorEmail: serviceRequest[0].creator_email,
+        service: serviceRequest[0].desired_service,
+      }).catch((err) => logger.error('sendServiceRequestSuggestionsEmail failed:', err.message));
+    }
+
+    if (serviceRequest[0].creator_user_id) {
+      sendNotification({
+        recipientId: serviceRequest[0].creator_user_id,
+        senderId: req.user?.user_id || null,
+        eventType: 'service_request_suggestions',
+        title: 'Freelancers suggested for your request',
+        body: `Freelancers have been suggested for your service request for "${serviceRequest[0].desired_service}".`,
+        actionType: 'navigate',
+        actionRoute: '/creator/request-board',
+      }).catch((err) => logger.error('sendNotification (service_request_suggestions) failed:', err.message));
+    }
+
     return res.status(200).json({
       status: "success",
       message: "Freelancers assigned to service request successfully",

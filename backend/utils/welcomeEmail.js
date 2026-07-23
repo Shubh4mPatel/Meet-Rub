@@ -358,6 +358,29 @@ async function sendCreatorServiceRequestConfirmationEmail({ creatorUsername, cre
   await sendMail(creatorEmail, `Service request received — ${service}`, filled, null, 'creator_service_request_confirmation', null);
 }
 
+async function sendServiceRequestSuggestionsEmail({ creatorUsername, creatorEmail, service }) {
+  const html = fs.readFileSync(
+    path.join(TEMPLATES_DIR, 'creator/serviceRequestSuggestions.html'),
+    'utf8'
+  );
+
+  const filled = fillTemplate(html, {
+    creator_username: creatorUsername,
+    service_title: service,
+    suggested_time: new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date()),
+    requests_url: `${APP_URL}/creator/request-board`,
+    asset_base: ASSET_BASE,
+    help_url: HELP_URL,
+    privacy_url: PRIVACY_URL,
+  });
+
+  await sendMail(creatorEmail, `Freelancers suggested for your request — ${service}`, filled, null, 'creator_service_request_suggestions', null);
+}
+
 async function sendAdminServiceRequestEmail({ creatorUsername, creatorEmail, service, details, budget }) {
   const adminRes = await query("SELECT user_email FROM users WHERE user_role = 'admin'");
   if (adminRes.rows.length === 0) return;
@@ -425,6 +448,7 @@ module.exports = {
   sendAdminWithdrawalRequestEmail,
   sendAdminServiceRequestEmail,
   sendCreatorServiceRequestConfirmationEmail,
+  sendServiceRequestSuggestionsEmail,
   sendPasswordChangedEmail,
   sendContactInquiryEmail,
   sendAccountSuspendedEmail,
