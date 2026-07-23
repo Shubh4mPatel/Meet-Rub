@@ -17,9 +17,6 @@
   .highlight p{margin:5px 0;color:#1A1A2E;font-size:14px;}
   .highlight strong{color:#7C3AED;}
   .steps{margin:20px 0;}
-  .step{display:flex;align-items:flex-start;margin-bottom:12px;}
-  .step-num{min-width:26px;height:26px;background:#7C3AED;color:#fff;border-radius:50%;font-size:13px;font-weight:bold;display:inline-flex;align-items:center;justify-content:center;margin-right:12px;margin-top:1px;}
-  .step-text{font-size:14px;color:#374151;line-height:1.5;}
   .btn{display:inline-block;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;text-decoration:none;margin:6px 4px;}
   .btn-primary{background:#7C3AED;color:#ffffff;}
   .footer{background:#F8F7FF;padding:22px 32px;text-align:center;border-top:1px solid #E5E7EB;}
@@ -48,18 +45,26 @@
       <p><strong>Submitted at:</strong> {{request_time}}</p>
     </div>
     <div class="steps">
-      <div class="step">
-        <span class="step-num">1</span>
-        <span class="step-text"><strong>Request received</strong> — your requirements have been sent to the Meetrub team.</span>
-      </div>
-      <div class="step">
-        <span class="step-num">2</span>
-        <span class="step-text"><strong>Admin review</strong> — our team will match your needs with the right freelancers.</span>
-      </div>
-      <div class="step">
-        <span class="step-num">3</span>
-        <span class="step-text"><strong>Freelancer suggestions</strong> — you'll be notified once suitable freelancers are recommended.</span>
-      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;">
+        <tr style="margin-bottom:12px;">
+          <td width="36" valign="top" style="padding-bottom:12px;">
+            <table cellpadding="0" cellspacing="0" border="0"><tr><td width="28" height="28" align="center" valign="middle" style="background:#7C3AED;border-radius:50%;color:#ffffff;font-size:13px;font-weight:bold;font-family:Arial,sans-serif;width:28px;height:28px;line-height:28px;">1</td></tr></table>
+          </td>
+          <td valign="top" style="font-size:14px;color:#374151;line-height:1.5;padding-bottom:12px;padding-left:8px;"><strong>Request received</strong> — your requirements have been sent to the Meetrub team.</td>
+        </tr>
+        <tr>
+          <td width="36" valign="top" style="padding-bottom:12px;">
+            <table cellpadding="0" cellspacing="0" border="0"><tr><td width="28" height="28" align="center" valign="middle" style="background:#7C3AED;border-radius:50%;color:#ffffff;font-size:13px;font-weight:bold;font-family:Arial,sans-serif;width:28px;height:28px;line-height:28px;">2</td></tr></table>
+          </td>
+          <td valign="top" style="font-size:14px;color:#374151;line-height:1.5;padding-bottom:12px;padding-left:8px;"><strong>Admin review</strong> — our team will match your needs with the right freelancers.</td>
+        </tr>
+        <tr>
+          <td width="36" valign="top">
+            <table cellpadding="0" cellspacing="0" border="0"><tr><td width="28" height="28" align="center" valign="middle" style="background:#7C3AED;border-radius:50%;color:#ffffff;font-size:13px;font-weight:bold;font-family:Arial,sans-serif;width:28px;height:28px;line-height:28px;">3</td></tr></table>
+          </td>
+          <td valign="top" style="font-size:14px;color:#374151;line-height:1.5;padding-left:8px;"><strong>Freelancer suggestions</strong> — you'll be notified once suitable freelancers are recommended.</td>
+        </tr>
+      </table>
     </div>
     <p>You can track your request and any suggestions in your dashboard.</p>
     <a href="{{requests_url}}" class="btn btn-primary" style="display:inline-block;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;text-decoration:none;margin:6px 4px;background:#7C3AED;color:#ffffff;">View My Requests</a>
