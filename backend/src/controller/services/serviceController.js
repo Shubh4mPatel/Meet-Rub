@@ -738,7 +738,8 @@ const getUserServiceRequests = async (req, res, next) => {
           [request.request_id]
         );
 
-        if (suggestions.length === 0 || !suggestions[0].freelancer_id) {
+        if (suggestions.length === 0 || !suggestions[0].freelancer_id || suggestions[0].freelancer_id.length === 0) {
+          request.suggested_freelancers = [];
           request.suggested_freelancer_images = [];
           return request;
         }
@@ -747,36 +748,33 @@ const getUserServiceRequests = async (req, res, next) => {
         // Take only first 4 IDs to reduce load
         const limitedIds = freelancerIds.slice(0, 4);
 
-        // Get freelancer profile images (limited to 4)
+        // Get freelancer name + profile image (limited to 4)
         const { rows: freelancers } = await query(
-          `SELECT profile_image_url FROM freelancer WHERE freelancer_id = ANY($1::int[]) LIMIT 4`,
+          `SELECT freelancer_id, freelancer_full_name, profile_image_url FROM freelancer WHERE freelancer_id = ANY($1::int[]) LIMIT 4`,
           [limitedIds]
         );
 
-        // Generate presigned URLs for images and return only URLs
-        const imageUrls = await Promise.all(
+        // Presign the image when present; always return name so the UI can show
+        // an initials avatar for freelancers without a profile photo.
+        const suggested = await Promise.all(
           freelancers.map(async (freelancer) => {
+            let image = null;
             if (freelancer.profile_image_url) {
               try {
                 const parts = freelancer.profile_image_url.split("/");
-                const bucketName = parts[0];
-                const objectName = parts.slice(1).join("/");
-                return await createPresignedUrl(
-                  bucketName,
-                  objectName,
-                  expirySeconds
-                );
+                image = await createPresignedUrl(parts[0], parts.slice(1).join("/"), expirySeconds);
               } catch (error) {
                 logger.error(`Error generating signed URL for profile image:`, error);
-                return null;
+                image = null;
               }
             }
-            return null;
+            return { id: freelancer.freelancer_id, name: freelancer.freelancer_full_name, image };
           })
         );
 
-        // Filter out null values
-        request.suggested_freelancer_images = imageUrls.filter(url => url !== null);
+        request.suggested_freelancers = suggested;
+        // Keep the image-only array for backward compatibility.
+        request.suggested_freelancer_images = suggested.map((s) => s.image).filter(Boolean);
         return request;
       })
     );
