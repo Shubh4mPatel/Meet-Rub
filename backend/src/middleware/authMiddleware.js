@@ -60,8 +60,7 @@ WHERE u.id = $1`,
     const ACCESS_TOKEN_DURATION = 15 * 60 * 1000; // 15 minutes
     const isProduction = process.env.NODE_ENV === "production";
     const isHttps = isProduction ? true : false;
-    // sameSite "None" requires secure:true — use "Lax" in dev so cookies work over HTTP (Postman, localhost)
-    const sameSite = isProduction ? "strict" : "Lax";
+    const sameSite = "Lax";
 
     res.cookie("AccessToken", newAccessToken, {
       maxAge: ACCESS_TOKEN_DURATION,
