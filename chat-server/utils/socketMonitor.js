@@ -14,6 +14,7 @@
 //   - Redis sockmon:health                event-loop lag / memory / socket count every minute (24h)
 
 const crypto = require('crypto');
+const path = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
 const { monitorEventLoopDelay } = require('perf_hooks');
 const jwt = require('jsonwebtoken');
@@ -409,6 +410,13 @@ const PROBLEM_TYPES = new Set([
 
 const registerMonitorRoutes = (app, io) => {
   const BASE = '/socket/monitor';
+
+  // Dashboard page. Holds no data itself — it calls the protected endpoints below
+  // using the key entered on the page or the admin's login cookie.
+  app.get(BASE, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(path.join(__dirname, 'monitorDashboard.html'));
+  });
 
   // Called by the frontend when it can't connect (the socket itself is down, so this is plain HTTP)
   app.post(`${BASE}/client-report`, (req, res) => {

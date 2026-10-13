@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Chat Monitor</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7280; --border: #e3e6eb;
+    --accent: #2f6fde; --bad: #c62f2f; --bad-bg: #fdecec; --warn: #a15c00; --warn-bg: #fff4e0;
+    --ok: #1d7a46; --ok-bg: #e6f5ec; --info-bg: #eef3fd; --row-hover: #f2f5fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1a1e26; --text: #e6e9ef; --muted: #98a0ad; --border: #2a303b;
+      --accent: #6b9cf5; --bad: #f08080; --bad-bg: #3a1f22; --warn: #f0b860; --warn-bg: #3a2e1a;
+      --ok: #6fcf97; --ok-bg: #1c3326; --info-bg: #1e2a40; --row-hover: #222836;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+  input, select, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .spacer { flex: 1; }
+  .status { color: var(--muted); font-size: 12px; }
+  main { padding: 16px; max-width: 1400px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .card .label { color: var(--muted); font-size: 12px; }
+  .card .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .card.bad .value { color: var(--bad); } .card.warn .value { color: var(--warn); } .card.ok .value { color: var(--ok); }
+  nav { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
+  nav button { border-radius: 6px 6px 0 0; border-bottom: none; background: transparent; }
+  nav button.active { background: var(--panel); font-weight: 600; }
+  section { display: none; background: var(--panel); border: 1px solid var(--border); border-radius: 0 8px 8px 8px; padding: 12px; }
+  section.active { display: block; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; white-space: nowrap; position: sticky; top: 0; background: var(--panel); }
+  tr.clickable { cursor: pointer; } tr.clickable:hover { background: var(--row-hover); }
+  td.time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 12px; margin: 1px 3px 1px 0; white-space: nowrap; background: var(--info-bg); }
+  .pill.bad { background: var(--bad-bg); color: var(--bad); } .pill.warn { background: var(--warn-bg); color: var(--warn); } .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .detail { color: var(--muted); max-width: 640px; word-break: break-word; }
+  details pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--bg); padding: 8px; border-radius: 6px; margin: 6px 0 0; }
+  .empty { color: var(--muted); padding: 20px; text-align: center; }
+  .error { color: var(--bad); padding: 10px; }
+  .hint { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  @media (max-width: 640px) { main { padding: 10px; } header { padding: 8px 10px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Chat Monitor</h1>
+  <input id="key" type="password" placeholder="Monitor key (or log in as admin)" size="28" autocomplete="off">
+  <button id="refresh" class="primary">Refresh</button>
+  <label class="status"><input id="auto" type="checkbox"> auto-refresh 30s</label>
+  <span class="spacer"></span>
+  <span id="status" class="status"></span>
+</header>
+
+<main>
+  <div id="cards" class="cards"></div>
+
+  <nav>
+    <button data-tab="problems" class="active">Problem users</button>
+    <button data-tab="recent">Recent problems</button>
+    <button data-tab="user">User timeline</button>
+    <button data-tab="stats">Daily counts &amp; health</button>
+  </nav>
+
+  <section id="tab-problems" class="active">
+    <div class="toolbar">
+      <label>Last <select id="hours"><option value="1">1 hour</option><option value="6">6 hours</option><option value="24" selected>24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select></label>
+      <span id="buffer-note" class="status"></span>
+    </div>
+    <p class="hint">Click a user to open their full timeline. "anon:" rows had no session cookie at all.</p>
+    <div id="problems" class="table-wrap"></div>
+  </section>
+
+  <section id="tab-recent">
+    <div class="toolbar">
+      <label>Type <select id="recent-type"><option value="">All problems</option></select></label>
+      <label>User id <input id="recent-user" size="8" placeholder="any"></label>
+      <button id="recent-go">Apply</button>
+    </div>
+    <div id="recent" class="table-wrap"></div>
+  </section>
+
+  <section id="tab-user">
+    <div class="toolbar">
+      <label>User id (users.id) <input id="user-id" size="10"></label>
+      <button id="user-go" class="primary">Load timeline</button>
+      <label class="status"><input id="user-trail" type="checkbox"> include every socket event (in/out)</label>
+    </div>
+    <div id="user-summary"></div>
+    <div id="user" class="table-wrap"></div>
+  </section>
+
+  <section id="tab-stats">
+    <div id="health" class="table-wrap"></div>
+    <h3>Daily counts</h3>
+    <div id="daily" class="table-wrap"></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const BASE = location.pathname.replace(/\/+$/, '');
+  const $ = (id) => document.getElementById(id);
+  const PROBLEM_TYPES = ['auth_rejected', 'engine_error', 'server_error_emit', 'handler_error', 'handler_rejected', 'handler_threw', 'slow_handler',
+    'client_connect_error', 'client_reconnect_failed', 'client_connect_slow', 'client_chat_load_timeout', 'client_socket_error'];
+  const BAD = /error|rejected|threw|failed|timeout|shutdown|uncaught|unhandled|stall/;
+  const WARN = /slow|disconnect|not_connected|after_issues|upgrade_error|cors/;
+  const OK = /^(connected|upgraded|auth_refreshed|server_start|connection_setup_done)$/;
+
+  // Every value shown comes from user-controlled data (UA, messages) — build DOM with textContent only
+  const el = (tag, props = {}, ...children) => {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === 'class') node.className = v;
+      else if (k === 'onclick') node.addEventListener('click', v);
+      else if (v !== undefined && v !== null) node.setAttribute(k, v);
+    }
+    for (const c of children.flat()) if (c !== null && c !== undefined && c !== false) node.append(c instanceof Node ? c : String(c));
+    return node;
+  };
+  const tone = (type) => (BAD.test(type) ? 'bad' : WARN.test(type) ? 'warn' : OK.test(type) ? 'ok' : '');
+  const pill = (text, type = text) => el('span', { class: `pill ${tone(type)}` }, text);
+  const fmtTime = (t) => (t ? new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '');
+  const ago = (t) => {
+    if (!t) return '';
+    const s = Math.round((Date.now() - new Date(t)) / 1000);
+    return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`;
+  };
+  const shortUa = (ua = '') => {
+    const os = /iPhone|iPad/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac OS/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : '';
+    const br = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /FxiOS|Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '';
+    return [br, os].filter(Boolean).join(' / ') || (ua ? ua.slice(0, 40) : '');
+  };
+
+  // Human-readable one-liner for an event
+  const describe = (e) => {
+    const d = e.data ? (() => { try { return JSON.parse(e.data); } catch { return {}; } })() : {};
+    const parts = [];
+    if (e.event) parts.push(`event: ${e.event}`);
+    if (e.during) parts.push(`during: ${e.during}`);
+    if (e.reason) parts.push(`reason: ${e.reason}`);
+    if (e.message) parts.push(e.message.split('\n')[0]);
+    if (e.errorMessage) parts.push(`${e.errorName || 'error'}: ${e.errorMessage}`);
+    if (e.error?.message) parts.push(`${e.error.name}: ${e.error.message}`);
+    if (e.ms) parts.push(`${e.ms} ms`);
+    if (e.durationMs) parts.push(`connected for ${Math.round(e.durationMs / 1000)}s`);
+    if (e.type === 'auth_rejected' || e.type === 'engine_error') {
+      parts.push(`cookies: ${e.hasCookieHeader ? (e.cookieNames || []).join(', ') || 'none' : 'NO cookie header'}`);
+    }
+    if (d.message) parts.push(d.message);
+    if (d.code) parts.push(`code: ${d.code}`);
+    if (d.reason) parts.push(`reason: ${d.reason}`);
+    if (d.waitedMs) parts.push(`waited ${Math.round(d.waitedMs / 1000)}s`);
+    if (d.isConnected !== undefined) parts.push(`socket connected: ${d.isConnected}`);
+    if (d.willRetry === false) parts.push('client will NOT retry');
+    if (d.attempt) parts.push(`attempt ${d.attempt}`);
+    if (d.tookMs) parts.push(`took ${Math.round(d.tookMs / 1000)}s`);
+    if (e.online === false) parts.push('browser offline');
+    if (e.transport) parts.push(e.transport);
+    return parts.join(' · ');
+  };
+
+  const rawDetails = (e) => el('details', {}, el('summary', { class: 'status' }, 'raw'), el('pre', {}, JSON.stringify(e, null, 2)));
+
+  const table = (headers, rows, emptyText = 'Nothing here yet.') => {
+    if (!rows.length) return el('div', { class: 'empty' }, emptyText);
+    return el('table', {}, el('thead', {}, el('tr', {}, headers.map((h) => el('th', {}, h)))), el('tbody', {}, rows));
+  };
+
+  // ---------- API ----------
+  const keyInput = $('key');
+  try { keyInput.value = localStorage.getItem('chatMonitorKey') || ''; } catch {}
+  keyInput.addEventListener('change', () => { try { localStorage.setItem('chatMonitorKey', keyInput.value); } catch {} refreshAll(); });
+
+  const api = async (path) => {
+    const headers = keyInput.value ? { 'x-monitor-key': keyInput.value } : {};
+    const res = await fetch(`${BASE}${path}`, { headers, credentials: 'include', cache: 'no-store' });
+    if (res.status === 401) throw new Error('Access denied — enter the monitor key, or log in on the site as an admin.');
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+  };
+  const setStatus = (text) => { $('status').textContent = text; };
+  const showError = (target, err) => { $(target).replaceChildren(el('div', { class: 'error' }, err.message)); };
+
+  // ---------- Summary cards + stats tab ----------
+  const loadStats = async () => {
+    const s = await api('/stats?days=7');
+    const days = Object.keys(s.byDay);
+    const today = s.byDay[days[0]] || {};
+    const sum = (prefix) => Object.entries(today).filter(([k]) => k === prefix || k.startsWith(`${prefix}:`)).reduce((a, [, v]) => a + Number(v), 0);
+    const lastHealth = s.healthLastHour[0] || {};
+    const maxLag = Math.max(0, ...s.healthLastHour.map((h) => h.lagMaxMs || 0));
+    const card = (label, value, cls = '') => el('div', { class: `card ${cls}` }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+    $('cards').replaceChildren(
+      card('Sockets connected now', s.socketsOnThisInstance, 'ok'),
+      card('Connects today', sum('connected')),
+      card('Login rejections today', sum('auth_rejected'), sum('auth_rejected') ? 'bad' : ''),
+      card('Stuck chat loading today', sum('client_chat_load_timeout'), sum('client_chat_load_timeout') ? 'bad' : ''),
+      card('Client connect errors today', sum('client_connect_error'), sum('client_connect_error') ? 'warn' : ''),
+      card('Server handler errors today', sum('handler_error') + sum('handler_rejected') + sum('handler_threw') + sum('server_error_emit'), 'warn'),
+      card('Server restarts today', sum('server_start'), sum('server_start') > 1 ? 'bad' : ''),
+      card('Uptime', s.uptimeSec > 86400 ? `${Math.floor(s.uptimeSec / 86400)}d ${Math.floor((s.uptimeSec % 86400) / 3600)}h` : `${Math.floor(s.uptimeSec / 3600)}h ${Math.floor((s.uptimeSec % 3600) / 60)}m`),
+      card('Max event-loop lag (1h)', `${maxLag} ms`, maxLag > 1000 ? 'bad' : maxLag > 200 ? 'warn' : 'ok'),
+      card('Memory (RSS)', lastHealth.rssMb ? `${lastHealth.rssMb} MB` : '—'),
+    );
+
+    // Daily counts: rows = event type, columns = days
+    const keys = [...new Set(days.flatMap((d) => Object.keys(s.byDay[d])))].sort((a, b) => Number(today[b] || 0) - Number(today[a] || 0) || a.localeCompare(b));
+    $('daily').replaceChildren(table(['Event', ...days], keys.map((k) => el('tr', {}, el('td', {}, pill(k, k.split(':')[0])), days.map((d) => el('td', { class: 'num' }, s.byDay[d][k] || '')))), 'No events counted yet.'));
+
+    $('health').replaceChildren(
+      el('h3', {}, 'Server health (last hour, per minute)'),
+      table(['Time', 'Sockets', 'Lag p99 ms', 'Lag max ms', 'RSS MB', 'Heap MB', 'Redis'], s.healthLastHour.map((h) => el('tr', {},
+        el('td', { class: 'time' }, fmtTime(h.t)), el('td', { class: 'num' }, h.sockets), el('td', { class: 'num' }, h.lagP99Ms),
+        el('td', { class: 'num' }, el('span', { class: h.lagMaxMs > 1000 ? 'pill bad' : '' }, h.lagMaxMs)), el('td', { class: 'num' }, h.rssMb), el('td', { class: 'num' }, h.heapMb),
+        el('td', {}, h.redisReady ? 'ok' : pill('down', 'error')),
+      )), 'Health is recorded once a minute — check back shortly.'),
+    );
+  };
+
+  // ---------- Problem users ----------
+  const loadProblems = async () => {
+    const r = await api(`/problem-users?hours=${$('hours').value}`);
+    $('buffer-note').textContent = r.oldestEventInBuffer ? `buffer reaches back to ${fmtTime(r.oldestEventInBuffer)}` : '';
+    $('problems').replaceChildren(table(['User', 'Problems', 'Breakdown', 'Last seen', 'Browser'], r.users.map((u) => el('tr', {
+      class: u.userId ? 'clickable' : '',
+      onclick: u.userId ? () => openUser(u.userId) : undefined,
+    },
+      el('td', {}, u.who),
+      el('td', { class: 'num' }, u.total),
+      el('td', {}, Object.entries(u.byType).sort((a, b) => b[1] - a[1]).map(([k, n]) => pill(`${k} ×${n}`, k.split(':')[0]))),
+      el('td', { class: 'time' }, ago(u.lastAt)),
+      el('td', { class: 'detail' }, shortUa(u.lastUa)),
+    )), 'No problems in this window. 🎉'));
+  };
+
+  // ---------- Recent problems ----------
+  const typeSelect = $('recent-type');
+  PROBLEM_TYPES.concat(['server_start', 'server_shutdown', 'unhandled_rejection', 'uncaught_exception', 'cors_rejected', 'event_loop_stall', 'disconnected', 'connected'])
+    .forEach((t) => typeSelect.append(el('option', { value: t }, t)));
+
+  const loadRecent = async () => {
+    const type = typeSelect.value;
+    const user = $('recent-user').value.trim();
+    const q = new URLSearchParams({ limit: '200' });
+    if (type) q.set('type', type); else q.set('problemsOnly', '1');
+    if (user) q.set('userId', user);
+    const r = await api(`/recent?${q}`);
+    $('recent').replaceChildren(table(['Time', 'Type', 'User', 'What happened', 'Browser', ''], r.events.map((e) => el('tr', {},
+      el('td', { class: 'time' }, fmtTime(e.t)),
+      el('td', {}, pill(e.code ? `${e.type}:${e.code}` : e.type, e.type)),
+      el('td', {}, e.userId ? el('a', { href: '#', onclick: (ev) => { ev.preventDefault(); openUser(e.userId); } }, e.userId) : el('span', { class: 'status' }, e.cs ? 'anon' : '—')),
+      el('td', { class: 'detail' }, describe(e)),
+      el('td', { class: 'detail' }, shortUa(e.ua)),
+      el('td', {}, rawDetails(e)),
+    ))));
+  };
+
+  // ---------- User timeline ----------
+  const openUser = (id) => {
+    $('user-id').value = id;
+    switchTab('user');
+    loadUser();
+  };
+
+  const loadUser = async () => {
+    const id = $('user-id').value.trim();
+    if (!id) return;
+    const r = await api(`/user/${encodeURIComponent(id)}?limit=300`);
+    const showTrail = $('user-trail').checked;
+    const events = r.events.filter((e) => showTrail || (e.type !== 'in' && e.type !== 'out'));
+    $('user-summary').replaceChildren(el('p', {},
+      el('strong', {}, `User ${r.userId}`), ' — ', r.currentlyOnline ? pill('online now', 'connected') : pill('offline', 'disconnected'),
+      ' ', Object.entries(r.problems).map(([k, n]) => pill(`${k} ×${n}`, k.split(':')[0])),
+      el('span', { class: 'status' }, ` · ${r.events.length} events · ${r.sessions.length} browser tab(s)`),
+    ));
+    $('user').replaceChildren(table(['Time', 'Type', 'What happened', 'Browser / IP', ''], events.map((e) => el('tr', {},
+      el('td', { class: 'time' }, fmtTime(e.t)),
+      el('td', {}, pill(e.code ? `${e.type}:${e.code}` : e.type, e.type)),
+      el('td', { class: 'detail' }, describe(e)),
+      el('td', { class: 'detail' }, [shortUa(e.ua), e.ip].filter(Boolean).join(' · ')),
+      el('td', {}, rawDetails(e)),
+    )), 'No events recorded for this user (last 7 days).'));
+  };
+
+  // ---------- Tabs / refresh ----------
+  const loaders = { problems: loadProblems, recent: loadRecent, user: loadUser, stats: loadStats };
+  let activeTab = 'problems';
+  const switchTab = (name) => {
+    activeTab = name;
+    document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+    document.querySelectorAll('section').forEach((s) => s.classList.toggle('active', s.id === `tab-${name}`));
+  };
+  document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => { switchTab(b.dataset.tab); run(b.dataset.tab); }));
+
+  const run = async (name) => {
+    try { await loaders[name](); } catch (err) { showError(name === 'stats' ? 'daily' : name, err); }
+  };
+  const refreshAll = async () => {
+    setStatus('Loading…');
+    try {
+      await loadStats();
+      await run(activeTab);
+      setStatus(`Updated ${new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false })} IST`);
+    } catch (err) {
+      $('cards').replaceChildren(el('div', { class: 'error' }, err.message));
+      setStatus('');
+    }
+  };
+
+  $('refresh').addEventListener('click', refreshAll);
+  $('hours').addEventListener('change', () => run('problems'));
+  $('recent-go').addEventListener('click', () => run('recent'));
+  $('user-go').addEventListener('click', () => run('user'));
+  $('user-id').addEventListener('keydown', (e) => { if (e.key === 'Enter') run('user'); });
+  $('user-trail').addEventListener('change', () => run('user'));
+
+  let timer = null;
+  $('auto').addEventListener('change', (e) => {
+    clearInterval(timer);
+    if (e.target.checked) timer = setInterval(refreshAll, 30000);
+  });
+
+  refreshAll();
+})();
+</script>
+</body>
+</html>
