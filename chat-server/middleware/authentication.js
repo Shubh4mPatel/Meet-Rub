@@ -4,6 +4,16 @@ const cookie = require('cookie');
 const AppError = require('../utils/appError');
 const { query } = require('../config/dbConfig'); // Assuming you have a db module for querying
 const {logger} = require('../utils/logger'); // Assuming you have a logger utility
+const { recordAuth } = require('../utils/socketMonitor');
+
+// Rejection error that carries a machine-readable code to the client (connect_error.data.code)
+// and records the rejection in the socket monitor.
+const reject = (socket, code, message, statusCode, extra = {}) => {
+  recordAuth(socket, 'auth_rejected', { code, message, ...extra });
+  const err = new AppError(message, statusCode);
+  err.data = { code };
+  return err;
+};
 
 
 const socketAuth = (io) => {
@@ -34,7 +44,7 @@ const socketAuth = (io) => {
               const refreshToken = cookies.RefreshToken;
 
               if (!refreshToken) {
-                return next(new AppError('Refresh token required', 401));
+                return next(reject(socket, 'ACCESS_EXPIRED_NO_REFRESH', 'Refresh token required', 401));
               }
 
               // Verify refresh token
@@ -43,7 +53,7 @@ const socketAuth = (io) => {
               // Get user details
               const user = await query("SELECT * FROM users WHERE id = $1", [refreshDecoded.user_id]);
               if (user.rows.length === 0) {
-                return next(new AppError('User not found', 401));
+                return next(reject(socket, 'REFRESH_USER_NOT_FOUND', 'User not found', 401));
               }
 
               // Generate new access token
@@ -79,21 +89,31 @@ const socketAuth = (io) => {
               }
 
               socket.user = payload;
+              recordAuth(socket, 'auth_refreshed', { cookieSetOnHandshake: Boolean(req.res && !req.res.headersSent) }, 'info');
               return next();
             } catch (refreshError) {
-              return next(new AppError('Token refresh failed', 401));
+              return next(reject(socket, 'REFRESH_FAILED', 'Token refresh failed', 401, {
+                errorName: refreshError.name,
+                errorMessage: refreshError.message,
+              }));
             }
           } else {
-            return next(new AppError('Invalid token', 401));
+            return next(reject(socket, 'INVALID_TOKEN', 'Invalid token', 401, {
+              errorName: error.name,
+              errorMessage: error.message,
+            }));
           }
         }
       } else {
         logger.info('No access token found');
-        return next(new AppError('Authentication required', 401));
+        return next(reject(socket, 'NO_ACCESS_TOKEN', 'Authentication required', 401));
       }
     } catch (err) {
       console.error('Socket Auth Error:', err.message);
-      next(new AppError('Authentication error', 500));
+      next(reject(socket, 'AUTH_INTERNAL_ERROR', 'Authentication error', 500, {
+        errorName: err.name,
+        errorMessage: err.message,
+      }));
     }
   });
 };

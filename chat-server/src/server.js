@@ -11,6 +11,7 @@ const { startMasterWorker } = require('../consumers/worker');
 const { startNotificationSubscriber, stopNotificationSubscriber } = require('../consumers/notificationSubscriber');
 const { chatController } = require('../controller/chat');
 const AppError = require('../utils/appError');
+const { attachSocketMonitor, registerMonitorRoutes, record } = require('../utils/socketMonitor');
 const cors = require('cors');
 
 const app = express();
@@ -56,8 +57,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // Make io available to routes
 app.set('io', io);
+// Must run before chatController so it can trace the handlers chatController registers
+attachSocketMonitor(io);
 socketAuth(io);
 chatController(io);
+registerMonitorRoutes(app, io);
 
 
 
@@ -138,6 +142,7 @@ if (process.env.NODE_ENV !== 'development') {
 // Graceful shutdown
 const gracefulShutdown = (signal) => {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
+  record('server_shutdown', { signal, socketsDropped: io.engine.clientsCount }, { level: 'error', trail: false });
 
   // Close socket.io connections
   io.close(() => {
@@ -168,6 +173,7 @@ process.on('unhandledRejection', (err) => {
     message: err.message,
     stack: err.stack
   });
+  record('unhandled_rejection', { message: err?.message, stack: err?.stack?.slice(0, 1500) }, { level: 'error', trail: false });
   gracefulShutdown('UNHANDLED_REJECTION');
 });
 
@@ -177,5 +183,6 @@ process.on('uncaughtException', (err) => {
     message: err.message,
     stack: err.stack
   });
+  record('uncaught_exception', { message: err?.message, stack: err?.stack?.slice(0, 1500) }, { level: 'error', trail: false });
   gracefulShutdown('UNCAUGHT_EXCEPTION');
 });

@@ -1,5 +1,6 @@
 const chatModel = require("../model/chatmodel");
 const redis = require("../config/reddis");
+const { track } = require("../utils/socketMonitor");
 const { createPresignedUrl } = require("../utils/helper");
 const { sendOfferSentEmail, sendOfferReceivedEmail, sendHireRequestEmail, sendHireRequestReceivedEmail, sendHireAcceptedEmail, sendHireDeclinedEmail, sendNewMessageEmail } = require("../utils/offerEmails");
 const { sendDeadlineExtensionRequestEmail, sendDeadlineExtensionAcceptedEmail, sendDeadlineExtensionRejectedEmail, sendPackageRejectedEmail, sendPackageAcceptedEmail } = require("../utils/deliveryEmails");
@@ -1603,7 +1604,8 @@ const chatController = (io) => {
     });
 
     // Run async setup AFTER all handlers are registered
-    (async () => {
+    // track() records its duration and any console.error inside it against this user
+    track(socket, "connection_setup", async () => {
       try {
         // Resolve the user's best display name. The JWT's `name` is often the
         // raw user_name handle (or NULL for legacy accounts) — fall back to
@@ -1674,7 +1676,7 @@ const chatController = (io) => {
       } catch (error) {
         console.error("Error on connection setup:", error);
       }
-    })();
+    });
 
   });
 };

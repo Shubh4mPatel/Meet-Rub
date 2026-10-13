@@ -27,6 +27,8 @@ const socketConfig = {
     origin: function (origin, callback) {
       const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim());
       if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      // Lazy require: socketMonitor loads Redis, which this config file shouldn't do at import time
+      require('../utils/socketMonitor').record('cors_rejected', { origin, allowedOrigins }, { level: 'warn', trail: false });
       callback(new Error(`Origin ${origin} not allowed`));
     },
     credentials: true,
