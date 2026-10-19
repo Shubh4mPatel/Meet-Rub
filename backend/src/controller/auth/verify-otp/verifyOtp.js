@@ -11,6 +11,15 @@ const { sendWelcomeEmail, sendAdminNewUserEmail } = require("../../../../utils/w
 const { notifyAllAdmins } = require('../../notification/notificationServicer');
 const redisClient = require("../../../../config/reddis");
 const { INDIAN_STATES } = require("../../../utils/indianStates");
+const {
+  joiPhone,
+  joiPan,
+  joiPostalCode,
+  joiStreet,
+  joiCity,
+  normalizePan,
+  normalizePhone,
+} = require("../../../utils/freelancerValidators");
 const { appendFreelancerToSheet, appendCreatorToSheet } = require("../../../services/googleSheetsService");
 
 const USERNAMES_SET_KEY = "usernames:set";
@@ -36,35 +45,24 @@ const freelancerSchema = Joi.object({
   serviceOffered: Joi.string().optional().allow('', null), // JSON stringified array
   niche: Joi.string().required(), // JSON stringified array
   govId: Joi.string().optional().allow('', null),
-  phoneNumber: Joi.string()
-    .pattern(/^\+?[1-9]\d{1,14}$/)
-    .optional(),
+  // +91 followed by exactly 10 digits (Razorpay Routes requirement)
+  phoneNumber: Joi.string().custom(joiPhone).optional(),
   govIdType: Joi.string().optional().allow('', null),
-  panCardNumber: Joi.string()
-    .pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/)
-    .custom((value, helpers) => {
-      // 4th character must be 'P' for individuals (Razorpay requirement)
-      if (value.charAt(3) !== 'P') {
-        return helpers.error('any.invalid');
-      }
-      return value;
-    })
-    .required()
-    .messages({
-      'string.pattern.base': 'PAN must be in format: AAAPL1234C',
-      'any.invalid': 'Invalid PAN format for individual. The 4th character must be "P".'
-    }),
+  // 4th character must be 'P' for individuals (Razorpay requirement)
+  panCardNumber: Joi.string().custom(joiPan).required().messages({
+    'any.required': 'PAN is required'
+  }),
   // Address fields (required for Razorpay Routes onboarding)
-  streetAddress: Joi.string().min(10).max(255).required().messages({
-    'string.min': 'Street address must be at least 10 characters long',
+  streetAddress: Joi.string().custom(joiStreet).required().messages({
     'any.required': 'Street address is required'
   }),
-  city: Joi.string().min(2).max(100).required(),
+  city: Joi.string().custom(joiCity).required().messages({
+    'any.required': 'City is required'
+  }),
   state: Joi.string().valid(...INDIAN_STATES.map(s => s.name)).required().messages({
     'any.only': 'Please select a valid Indian state'
   }),
-  postalCode: Joi.string().pattern(/^\d{6}$/).required().messages({
-    'string.pattern.base': 'Postal code must be exactly 6 digits',
+  postalCode: Joi.string().custom(joiPostalCode).required().messages({
     'any.required': 'Postal code is required'
   }),
 });
@@ -212,10 +210,12 @@ const verifyOtpAndProcess = async (req, res, next) => {
           postalCode,
         } = req.body;
 
-        // Convert PAN to uppercase for validation
-        if (panCardNumber) {
-          panCardNumber = panCardNumber.toUpperCase().trim();
-        }
+        // Store validated values in their normalized form
+        if (panCardNumber) panCardNumber = normalizePan(panCardNumber);
+        if (phoneNumber) phoneNumber = normalizePhone(phoneNumber);
+        if (streetAddress) streetAddress = streetAddress.trim();
+        if (city) city = city.trim();
+        if (postalCode) postalCode = String(postalCode).trim();
 
         // Parse JSON strings from FormData
         const parsedServiceOffered = serviceOffered ? JSON.parse(serviceOffered) : [];

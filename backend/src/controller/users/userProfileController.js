@@ -9,6 +9,25 @@ const Joi = require("joi");
 const { sendMail } = require("../../../config/email");
 const { VALID_STATE_NAMES, INDIAN_STATES } = require("../../utils/indianStates");
 const linkedAccountService = require("../../razor-pay-services/linkedAccountService");
+const {
+  joiPhone,
+  joiPan,
+  joiPostalCode,
+  joiStreet,
+  joiCity,
+  isValidPhone,
+  isValidPan,
+  isValidPostalCode,
+  isValidStreet,
+  isValidCity,
+  normalizePhone,
+  normalizePan,
+  PHONE_MESSAGE,
+  PAN_MESSAGE,
+  POSTAL_CODE_MESSAGE,
+  STREET_MESSAGE,
+  CITY_MESSAGE,
+} = require("../../utils/freelancerValidators");
 const { sendContactInquiryEmail, sendAdminKYCSubmissionEmail } = require("../../../utils/welcomeEmail");
 
 const BUCKET_NAME = "meet-rub-assets";
@@ -284,20 +303,10 @@ const freelancerGovInfoSchema = Joi.object({
 
 const freelancerPanCardSchema = Joi.object({
   type: Joi.string().valid("panCard").required(),
-  pan_card_number: Joi.string()
-    .pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/)
-    .custom((value, helpers) => {
-      // 4th character must be 'P' for individuals (Razorpay requirement for business_type: 'individual')
-      if (value.charAt(3) !== 'P') {
-        return helpers.error('any.invalid');
-      }
-      return value;
-    })
-    .required()
-    .messages({
-      'string.pattern.base': 'PAN must be in format: AAAPL1234C (10 alphanumeric characters)',
-      'any.invalid': 'Invalid PAN format for individual. The 4th character must be "P".'
-    }),
+  // 4th character must be 'P' for individuals (Razorpay requirement for business_type: 'individual')
+  pan_card_number: Joi.string().custom(joiPan).required().messages({
+    'any.required': 'PAN is required'
+  }),
 });
 
 const freelancerBankDetailsSchema = Joi.object({
@@ -322,16 +331,16 @@ const freelancerBasicInfoSchema = Joi.object({
   freelancerFullName: Joi.string().required(),
   dateOfBirth: Joi.string().required(),
   about_me: Joi.string().optional().allow(""),
-  phoneNumber: Joi.string()
-    .pattern(/^\+?[1-9]\d{1,14}$/)
-    .required(),
+  // +91 followed by exactly 10 digits
+  phoneNumber: Joi.string().custom(joiPhone).required(),
   profileTitle: Joi.string().optional().allow(""),
-  street_address: Joi.string().optional().allow(""),
-  city: Joi.string().optional().allow(""),
+  // Address is optional here, but if any part is sent it must be valid (Razorpay Routes requirement)
+  street_address: Joi.string().custom(joiStreet).optional().allow(""),
+  city: Joi.string().custom(joiCity).optional().allow(""),
   state: Joi.string().valid(...INDIAN_STATES.map(s => s.name), "").optional().allow("").messages({
     'any.only': 'Please select a valid Indian state'
   }),
-  postal_code: Joi.string().optional().allow("")
+  postal_code: Joi.string().custom(joiPostalCode).optional().allow("")
 });
 
 const ProfileImageSchema = Joi.object({
@@ -824,12 +833,12 @@ const editProfile = async (req, res, next) => {
           return next(new AppError('Cannot update PAN card after Razorpay account is created. Contact admin to reset your Razorpay account first.', 403));
         }
 
-        const { pan_card_number } = req.body;
+        const pan_card_number = normalizePan(req.body.pan_card_number);
 
-        // Validate PAN format for individual (4th character must be 'P' for Razorpay Routes)
-        if (pan_card_number && pan_card_number.charAt(3) !== 'P') {
-          logger.warn("Invalid PAN format - 4th character must be P for individuals");
-          return next(new AppError("Invalid PAN format for individual. The 4th character must be 'P'.", 400));
+        // Validate full PAN format for individual (4th character must be 'P' for Razorpay Routes)
+        if (!isValidPan(pan_card_number)) {
+          logger.warn("Invalid PAN format");
+          return next(new AppError(PAN_MESSAGE, 400));
         }
 
         const panFile = Array.isArray(req.files)
@@ -988,23 +997,21 @@ const editProfile = async (req, res, next) => {
           first_name,
           last_name,
           dateOfBirth,
-          phoneNumber,
           profileTitle,
           about_me = '',
-          street_address = '',
-          city = '',
-          state = '',
-          postal_code = ''
         } = req.body;
 
-        // Razorpay validation: phone number must be exactly 10 digits (after stripping country code)
+        // Normalize validated values so they are stored in one consistent form
+        const phoneNumber = req.body.phoneNumber ? normalizePhone(req.body.phoneNumber) : req.body.phoneNumber;
+        const street_address = (req.body.street_address || '').trim();
+        const city = (req.body.city || '').trim();
+        const state = req.body.state || '';
+        const postal_code = String(req.body.postal_code || '').trim();
+
+        // Razorpay validation: phone must be +91 followed by exactly 10 digits
         if (phoneNumber) {
-          let phoneDigits = phoneNumber.replace(/\D/g, '');
-          if (phoneDigits.startsWith('91') && phoneDigits.length > 11) {
-            phoneDigits = phoneDigits.substring(2);
-          }
-          if (phoneDigits.length !== 10) {
-            return next(new AppError('Phone number must be exactly 10 digits', 400));
+          if (!isValidPhone(phoneNumber)) {
+            return next(new AppError(PHONE_MESSAGE, 400));
           }
 
           // Check if Razorpay linked account exists and prevent phone number change
@@ -1016,9 +1023,9 @@ const editProfile = async (req, res, next) => {
           // Only block if Razorpay account exists AND phone number is actually changing
           if (razorpayCheck[0]?.razorpay_linked_account_id) {
             const currentPhone = razorpayCheck[0].phone_number;
-            // Compare phone numbers (normalize both by removing non-digits)
-            const currentPhoneDigits = currentPhone ? currentPhone.replace(/\D/g, '') : '';
-            const newPhoneDigits = phoneNumber.replace(/\D/g, '');
+            // Compare the 10-digit number only, so a legacy value stored without +91 isn't seen as a change
+            const currentPhoneDigits = currentPhone ? currentPhone.replace(/\D/g, '').slice(-10) : '';
+            const newPhoneDigits = phoneNumber.replace(/\D/g, '').slice(-10);
 
             if (currentPhoneDigits !== newPhoneDigits) {
               return next(new AppError(
@@ -1055,20 +1062,20 @@ const editProfile = async (req, res, next) => {
           return next(new AppError('street_address, city, state, and postal_code are required', 400));
         }
 
-        // Razorpay validation: street address must be at least 10 characters (stakeholder requirement)
-        if (street_address.trim().length < 10) {
-          return next(new AppError('Street address must be at least 10 characters long', 400));
+        // Razorpay validation: street address 10-100 characters (stakeholder requirement)
+        if (!isValidStreet(street_address)) {
+          return next(new AppError(STREET_MESSAGE, 400));
         }
 
         // Razorpay validation: postal code must be exactly 6 digits
         const postalCodeStr = String(postal_code).trim();
-        if (!/^\d{6}$/.test(postalCodeStr)) {
-          return next(new AppError('Postal code must be exactly 6 digits', 400));
+        if (!isValidPostalCode(postalCodeStr)) {
+          return next(new AppError(POSTAL_CODE_MESSAGE, 400));
         }
 
-        // Razorpay validation: city (min 2, max 100 characters)
-        if (city.trim().length < 2 || city.trim().length > 100) {
-          return next(new AppError('City must be between 2 and 100 characters', 400));
+        // Razorpay validation: city 2-100 characters, letters only
+        if (!isValidCity(city)) {
+          return next(new AppError(CITY_MESSAGE, 400));
         }
 
         // Razorpay validation: state must be a valid Indian state name
