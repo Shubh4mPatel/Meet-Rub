@@ -2186,9 +2186,21 @@ const getWishlistFreelancers = async (req, res, next) => {
     logger.debug("Wishlist Query:", queryText);
     logger.debug("With Parameters:", queryParams);
 
-    const [results, countResult] = await Promise.all([
+    // Distinct services offered across the creator's whole wishlist (ignores
+    // other filters so the service tabs stay stable while filtering)
+    const availableServicesQuery = `
+      SELECT DISTINCT s.service_name
+      FROM freelancer f
+      INNER JOIN wishlist w ON f.freelancer_id = w.freelancer_id AND w.creator_id = $1
+      INNER JOIN services s ON f.freelancer_id = s.freelancer_id AND s.is_deleted = FALSE
+      WHERE f.verification_status = 'VERIFIED' AND f.is_active = true AND s.service_name IS NOT NULL
+      ORDER BY s.service_name
+    `;
+
+    const [results, countResult, availableServicesResult] = await Promise.all([
       query(queryText, queryParams),
       query(countQuery, countParams),
+      query(availableServicesQuery, [user.roleWiseId]),
     ]);
 
     const totalCount = parseInt(countResult.rows[0].count);
@@ -2265,6 +2277,7 @@ const getWishlistFreelancers = async (req, res, next) => {
       status: "success",
       data: {
         freelancers: freelancersWithSignedUrls,
+        availableServices: availableServicesResult.rows.map((row) => row.service_name),
         pagination: {
           currentPage: page,
           totalPages,

@@ -216,6 +216,8 @@ const getMyProjects = async (req, res, next) => {
     const tab = req.query.tab; // 'current' | 'past'
     const service = req.query.service;
     const search = req.query.search ? req.query.search.trim() : null;
+    const startDate = req.query.startDate?.trim() || null;
+    const endDate = req.query.endDate?.trim() || null;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
@@ -254,6 +256,20 @@ const getMyProjects = async (req, res, next) => {
       whereClauses.push(`(f.freelancer_full_name ILIKE $${paramIndex} OR c.full_name ILIKE $${paramIndex} OR s.service_name ILIKE $${paramIndex} OR p.id::text ILIKE $${paramIndex})`);
       paramIndex++;
       filterParams.push(`%${search}%`);
+    }
+
+    // Filter on delivery date (end_date). Full ISO timestamps (client's local day
+    // boundaries) are compared as-is; plain YYYY-MM-DD values cover the whole day.
+    if (startDate) {
+      whereClauses.push(`p.end_date >= $${paramIndex++}::timestamptz`);
+      filterParams.push(startDate);
+    }
+
+    if (endDate) {
+      whereClauses.push(endDate.includes('T')
+        ? `p.end_date <= $${paramIndex++}::timestamptz`
+        : `p.end_date < ($${paramIndex++}::date + INTERVAL '1 day')`);
+      filterParams.push(endDate);
     }
 
     const joins = `
