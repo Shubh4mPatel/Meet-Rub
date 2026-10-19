@@ -4,6 +4,16 @@ const { getLogger } = require('../../utils/logger');
 const logger = getLogger('linked-account-service');
 const { toStateCode } = require('../utils/indianStates');
 
+// First key of pg advisory locks taken during onboarding (second key is freelancer_id)
+const ONBOARDING_LOCK_NAMESPACE = 7301;
+
+// Tags failures returned by the Razorpay API so controllers can surface the reason as a 4xx
+const razorpayError = (message) => {
+    const err = new Error(message);
+    err.code = 'RAZORPAY_ERROR';
+    return err;
+};
+
 class LinkedAccountService {
     /**
      * Step 1: Create a Linked Account on Razorpay
@@ -58,7 +68,7 @@ class LinkedAccountService {
                 ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}${error.reason ? ` — reason: ${error.reason}` : ''}`
                 : err.message;
             logger.error(`[createLinkedAccount] Failed for freelancer_id=${freelancer?.freelancer_id}: ${errMsg}`);
-            throw new Error(`Linked account creation failed: ${errMsg}`);
+            throw razorpayError(`Linked account creation failed: ${errMsg}`);
         }
     }
 
@@ -106,7 +116,7 @@ class LinkedAccountService {
                 ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}${error.reason ? ` — reason: ${error.reason}` : ''}`
                 : err.message;
             logger.error(`[createStakeholder] Failed for account_id=${accountId}: ${errMsg}`);
-            throw new Error(`Stakeholder creation failed: ${errMsg}`);
+            throw razorpayError(`Stakeholder creation failed: ${errMsg}`);
         }
     }
 
@@ -132,7 +142,7 @@ class LinkedAccountService {
                 ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}${error.reason ? ` — reason: ${error.reason}` : ''}`
                 : err.message;
             logger.error(`[requestProductConfig] Failed for account_id=${accountId}: ${errMsg}`);
-            throw new Error(`Product config request failed: ${errMsg}`);
+            throw razorpayError(`Product config request failed: ${errMsg}`);
         }
     }
 
@@ -162,7 +172,7 @@ class LinkedAccountService {
                 ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}${error.reason ? ` — reason: ${error.reason}` : ''}`
                 : err.message;
             logger.error(`[updateProductConfig] Failed for account_id=${accountId}: ${errMsg}`);
-            throw new Error(`Product config update failed: ${errMsg}`);
+            throw razorpayError(`Product config update failed: ${errMsg}`);
         }
     }
 
@@ -184,7 +194,7 @@ class LinkedAccountService {
                 ? `[${error.code}] ${error.description}${error.field ? ` (field: ${error.field})` : ''}`
                 : err.message;
             logger.error(`[updateStakeholderPAN] Failed for account_id=${accountId}: ${errMsg}`);
-            throw new Error(`Stakeholder PAN update failed: ${errMsg}`);
+            throw razorpayError(`Stakeholder PAN update failed: ${errMsg}`);
         }
     }
 
@@ -199,7 +209,7 @@ class LinkedAccountService {
         } catch (err) {
             const errMsg = err.response?.data?.error?.description || err.message;
             logger.error(`[getLinkedAccountStatus] Failed for account_id=${accountId}: ${errMsg}`);
-            throw new Error(`Failed to fetch linked account status: ${errMsg}`);
+            throw razorpayError(`Failed to fetch linked account status: ${errMsg}`);
         }
     }
 
@@ -214,17 +224,44 @@ class LinkedAccountService {
         } catch (err) {
             const errMsg = err.response?.data?.error?.description || err.message;
             logger.error(`[getProductConfigStatus] Failed for account_id=${accountId}: ${errMsg}`);
-            throw new Error(`Failed to fetch product config status: ${errMsg}`);
+            throw razorpayError(`Failed to fetch product config status: ${errMsg}`);
         }
     }
 
     /**
      * Full onboarding orchestrator — creates Linked Account, Stakeholder,
      * requests product config, updates with bank details.
-     * All Razorpay API calls run first; DB is updated atomically in a single
-     * transaction at the end so partial state is never written.
+     * Holds a per-freelancer advisory lock so concurrent requests can't
+     * create duplicate Razorpay accounts.
      */
     async onboardFreelancer(freelancerId) {
+        const lockClient = await db.connect();
+        try {
+            await lockClient.query('BEGIN');
+            const { rows } = await lockClient.query(
+                'SELECT pg_try_advisory_xact_lock($1, $2) AS locked',
+                [ONBOARDING_LOCK_NAMESPACE, freelancerId]
+            );
+            if (!rows[0].locked) {
+                const err = new Error('Razorpay onboarding is already in progress for this freelancer. Please wait for it to finish.');
+                err.code = 'ONBOARDING_IN_PROGRESS';
+                throw err;
+            }
+            return await this.runOnboarding(freelancerId);
+        } finally {
+            // Nothing is written on this connection; ending the transaction just frees the lock
+            await lockClient.query('ROLLBACK').then(
+                () => lockClient.release(),
+                (err) => lockClient.release(err)
+            );
+        }
+    }
+
+    /**
+     * Onboarding steps. Each Razorpay ID is saved as soon as it is created,
+     * so a failure in a later step can't orphan it and a retry resumes from there.
+     */
+    async runOnboarding(freelancerId) {
         const { rows: freelancers } = await db.query(
             `SELECT * FROM freelancer WHERE freelancer_id = $1`,
             [freelancerId]
@@ -288,13 +325,10 @@ class LinkedAccountService {
             return { status: 'already_activated', accountId: freelancer.razorpay_linked_account_id };
         }
 
-        // --- Run all Razorpay API calls BEFORE touching the DB ---
-        // Track which IDs already exist (idempotency) vs which are newly created
+        // Existing IDs mean those steps already succeeded on an earlier run
         let accountId = freelancer.razorpay_linked_account_id;
         let stakeholderId = freelancer.razorpay_stakeholder_id;
         let productId = freelancer.razorpay_product_id;
-
-        const newIds = {}; // only fields that changed this run
 
         const saveError = async (step, message) => {
             await db.query(
@@ -303,18 +337,27 @@ class LinkedAccountService {
             );
         };
 
+        // Persist a Razorpay ID right after it is created — if this fails, the ID is in the logs for manual recovery
+        const saveId = async (sql, id) => {
+            try {
+                await db.query(sql, [id, freelancerId]);
+            } catch (dbErr) {
+                logger.error(`[onboardFreelancer] Razorpay created ${id} for freelancer ${freelancerId} but saving it failed: ${dbErr.message}`);
+                throw new Error(`Razorpay created ${id} but saving it to the database failed: ${dbErr.message}`);
+            }
+        };
+
         // Step 1: Create Linked Account (if not already created)
         if (!accountId) {
             try {
                 const account = await this.createLinkedAccount(freelancer);
                 accountId = account.id;
-                newIds.razorpay_linked_account_id = accountId;
-                newIds.razorpay_account_status_created = true;
                 logger.info(`[onboardFreelancer] Step 1 complete: account_id=${accountId}`);
             } catch (err) {
                 await saveError('create_account', err.message);
                 throw err;
             }
+            await saveId(`UPDATE freelancer SET razorpay_linked_account_id = $1, razorpay_account_status = 'created' WHERE freelancer_id = $2`, accountId);
         }
 
         // Step 2: Create Stakeholder (if not already created)
@@ -322,12 +365,12 @@ class LinkedAccountService {
             try {
                 const stakeholder = await this.createStakeholder(accountId, freelancer);
                 stakeholderId = stakeholder.id;
-                newIds.razorpay_stakeholder_id = stakeholderId;
                 logger.info(`[onboardFreelancer] Step 2 complete: stakeholder_id=${stakeholderId}`);
             } catch (err) {
                 await saveError('create_stakeholder', err.message);
                 throw err;
             }
+            await saveId(`UPDATE freelancer SET razorpay_stakeholder_id = $1 WHERE freelancer_id = $2`, stakeholderId);
         }
 
         // Step 3: Request Product Configuration (if not already requested)
@@ -335,12 +378,12 @@ class LinkedAccountService {
             try {
                 const product = await this.requestProductConfig(accountId);
                 productId = product.id;
-                newIds.razorpay_product_id = productId;
                 logger.info(`[onboardFreelancer] Step 3 complete: product_id=${productId}`);
             } catch (err) {
                 await saveError('request_product_config', err.message);
                 throw err;
             }
+            await saveId(`UPDATE freelancer SET razorpay_product_id = $1 WHERE freelancer_id = $2`, productId);
         }
 
         // Step 4: Update Product Config with bank details (always run to get latest status)
@@ -348,6 +391,15 @@ class LinkedAccountService {
         try {
             productConfig = await this.updateProductConfig(accountId, productId, freelancer);
         } catch (err) {
+            // Once submitted, Razorpay locks the activation form while it reviews — retrying can't succeed
+            if (/locked for editing/i.test(err.message)) {
+                const message = 'This linked account is already submitted and under review by Razorpay, so it cannot be updated or resubmitted. Please wait for Razorpay to finish the review and check the account status.';
+                logger.warn(`[onboardFreelancer] Step 4 blocked: activation form locked by Razorpay for account_id=${accountId}`);
+                await saveError('update_product_config', message);
+                const lockedErr = new Error(message);
+                lockedErr.code = 'RAZORPAY_FORM_LOCKED';
+                throw lockedErr;
+            }
             await saveError('update_product_config', err.message);
             throw err;
         }
@@ -372,46 +424,12 @@ class LinkedAccountService {
         } else if (activationStatus === 'under_review') {
             accountStatus = 'pending';
         }
-        newIds.razorpay_account_status = accountStatus;
         logger.info(`[onboardFreelancer] Step 4 complete: activation_status=${activationStatus}`);
 
-        // --- All Razorpay calls succeeded — commit all new IDs atomically ---
-        const client = await db.connect();
-        try {
-            await client.query('BEGIN');
-
-            if (newIds.razorpay_linked_account_id) {
-                await client.query(
-                    `UPDATE freelancer SET razorpay_linked_account_id = $1, razorpay_account_status = 'created' WHERE freelancer_id = $2`,
-                    [newIds.razorpay_linked_account_id, freelancerId]
-                );
-            }
-            if (newIds.razorpay_stakeholder_id) {
-                await client.query(
-                    `UPDATE freelancer SET razorpay_stakeholder_id = $1 WHERE freelancer_id = $2`,
-                    [newIds.razorpay_stakeholder_id, freelancerId]
-                );
-            }
-            if (newIds.razorpay_product_id) {
-                await client.query(
-                    `UPDATE freelancer SET razorpay_product_id = $1 WHERE freelancer_id = $2`,
-                    [newIds.razorpay_product_id, freelancerId]
-                );
-            }
-            await client.query(
-                `UPDATE freelancer SET razorpay_account_status = $1, razorpay_onboarding_error = NULL, razorpay_onboarding_error_step = NULL, razorpay_onboarding_error_at = NULL WHERE freelancer_id = $2`,
-                [accountStatus, freelancerId]
-            );
-
-            await client.query('COMMIT');
-            logger.info(`[onboardFreelancer] DB transaction committed for freelancer ${freelancerId}, status=${accountStatus}`);
-        } catch (dbErr) {
-            await client.query('ROLLBACK');
-            logger.error(`[onboardFreelancer] DB transaction rolled back for freelancer ${freelancerId}: ${dbErr.message}`);
-            throw new Error(`Onboarding Razorpay steps succeeded but DB update failed: ${dbErr.message}`);
-        } finally {
-            client.release();
-        }
+        await db.query(
+            `UPDATE freelancer SET razorpay_account_status = $1, razorpay_onboarding_error = NULL, razorpay_onboarding_error_step = NULL, razorpay_onboarding_error_at = NULL WHERE freelancer_id = $2`,
+            [accountStatus, freelancerId]
+        );
 
         logger.info(`[onboardFreelancer] Freelancer ${freelancerId} onboarding complete: status=${accountStatus}`);
 

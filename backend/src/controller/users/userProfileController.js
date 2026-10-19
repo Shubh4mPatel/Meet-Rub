@@ -456,8 +456,6 @@ const editProfile = async (req, res, next) => {
           email,
         } = req.body;
         const nicheArray = Array.isArray(niche) ? niche : null;
-        // Start transaction
-        await query("BEGIN");
         try {
           const { rows } = await query(
             `UPDATE creators
@@ -479,13 +477,9 @@ const editProfile = async (req, res, next) => {
           );
 
           if (!rows[0]) {
-            await query("ROLLBACK");
             logger.warn("Creator not found for update");
             return next(new AppError("Creator profile not found", 404));
           }
-
-          // Commit transaction
-          await query("COMMIT");
           logger.info("Creator basic info updated successfully");
           return res.status(200).json({
             status: "success",
@@ -493,7 +487,6 @@ const editProfile = async (req, res, next) => {
             data: { first_name: rows[0].first_name, last_name: rows[0].last_name, full_name: rows[0].full_name, phone_number: rows[0].phone_number, social_platform_type: rows[0].social_platform_type, social_links: rows[0].social_links, niche: rows[0].niche, email: rows[0].email, about_me: rows[0].about_me, joined_at: rows[0].created_at },
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
@@ -535,9 +528,6 @@ const editProfile = async (req, res, next) => {
         const folder = "creator/creator-profile-image";
         const objectName = `${folder}/${fileName}`;
         const profile_url = `${BUCKET_NAME}/${objectName}`;
-
-        // Start transaction
-        await query("BEGIN");
         try {
           await minioClient.putObject(
             BUCKET_NAME,
@@ -558,9 +548,6 @@ const editProfile = async (req, res, next) => {
             objectName,
             expirySeconds
           );
-
-          // Commit transaction
-          await query("COMMIT");
           logger.info("Profile image updated successfully");
           return res.status(200).json({
             status: "success",
@@ -570,7 +557,6 @@ const editProfile = async (req, res, next) => {
             },
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
@@ -583,8 +569,6 @@ const editProfile = async (req, res, next) => {
           bank_branch_name,
           bank_account_holder_name,
         } = req.body;
-
-        await query("BEGIN");
         try {
           const { rows } = await query(
             `UPDATE creators SET bank_account_no=$1, bank_name=$2, bank_ifsc_code=$3, bank_branch_name=$4, bank_account_holder_name=$5, updated_at=CURRENT_TIMESTAMP
@@ -594,11 +578,8 @@ const editProfile = async (req, res, next) => {
           );
 
           if (!rows[0]) {
-            await query("ROLLBACK");
             return next(new AppError("Creator profile not found", 404));
           }
-
-          await query("COMMIT");
           logger.info("Creator bank details updated successfully");
           return res.status(200).json({
             status: "success",
@@ -606,7 +587,6 @@ const editProfile = async (req, res, next) => {
             data: rows[0],
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
@@ -623,7 +603,7 @@ const editProfile = async (req, res, next) => {
 
     // ✅ FREELANCER ROLE HANDLING
     if (role === "freelancer") {
-      const { rows: freelancerExistsResult } = await query(`SELECT verification_status FROM freelancer WHERE user_id=$1`, [user.user_id]);
+      const { rows: freelancerExistsResult } = await query(`SELECT verification_status, razorpay_linked_account_id, razorpay_account_status FROM freelancer WHERE user_id=$1`, [user.user_id]);
       if (freelancerExistsResult.length === 0) {
         logger.warn("Freelancer not verified or does not exist");
 
@@ -693,9 +673,6 @@ const editProfile = async (req, res, next) => {
             403
           ));
         }
-
-        // Start transaction
-        await query("BEGIN");
         try {
           const { rows } = await query(
             "UPDATE freelancer SET bank_account_no=$1, bank_name=$2, bank_ifsc_code=$3, bank_branch_name=$4, bank_account_holder_name = $5, razorpay_account_id = NULL WHERE user_id=$6 RETURNING bank_account_no, bank_name, bank_ifsc_code, bank_branch_name, bank_account_holder_name",
@@ -708,9 +685,6 @@ const editProfile = async (req, res, next) => {
               user.user_id,
             ]
           );
-
-          // Commit transaction
-          await query("COMMIT");
           logger.info("Bank details updated successfully");
           return res.status(200).json({
             status: "success",
@@ -718,12 +692,16 @@ const editProfile = async (req, res, next) => {
             data: rows[0],
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
       if (type === "govtId") {
         logger.info("Updating Freelancer Govt ID");
+
+        // Verified documents are locked — changing them would keep VERIFIED without a fresh review
+        if (freelancerExistsResult[0].verification_status === 'VERIFIED') {
+          return next(new AppError('Your KYC is already verified, so your Government ID cannot be changed. Please contact support.', 403));
+        }
 
         // Parse userData JSON string
         let gov_id_type, gov_id_number;
@@ -792,9 +770,6 @@ const editProfile = async (req, res, next) => {
           const parts = stored.split("/");
           return createPresignedUrl(parts[0], parts.slice(1).join("/"), expirySeconds);
         };
-
-        // Start transaction
-        await query("BEGIN");
         try {
           const uploads = [];
           if (frontFile) uploads.push(minioClient.putObject(BUCKET_NAME, frontObjectName, frontFile.buffer, frontFile.size, { "Content-Type": frontFile.mimetype }));
@@ -815,9 +790,6 @@ const editProfile = async (req, res, next) => {
             presignStored(gov_id_front_image),
             presignStored(gov_id_back_image),
           ]);
-
-          // Commit transaction
-          await query("COMMIT");
           logger.info("Govt ID updated successfully");
           sendAdminKYCSubmissionEmail({
             freelancerUsername: user.name || user.user_email,
@@ -834,12 +806,23 @@ const editProfile = async (req, res, next) => {
             },
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
       if (type === "panCard") {
         logger.info("Updating Freelancer PAN Card");
+
+        // Verified documents are locked — changing them would keep VERIFIED without a fresh review
+        if (freelancerExistsResult[0].verification_status === 'VERIFIED') {
+          return next(new AppError('Your KYC is already verified, so your PAN card cannot be changed. Please contact support.', 403));
+        }
+
+        // PAN is sent to Razorpay as the stakeholder's KYC — keep it in sync with the linked account.
+        // Still editable during needs_clarification so admin can resubmit the corrected PAN.
+        if (freelancerExistsResult[0].razorpay_linked_account_id
+          && freelancerExistsResult[0].razorpay_account_status !== 'needs_clarification') {
+          return next(new AppError('Cannot update PAN card after Razorpay account is created. Contact admin to reset your Razorpay account first.', 403));
+        }
 
         const { pan_card_number } = req.body;
 
@@ -885,8 +868,6 @@ const editProfile = async (req, res, next) => {
           const parts = stored.split("/");
           return createPresignedUrl(parts[0], parts.slice(1).join("/"), expirySeconds);
         };
-
-        await query("BEGIN");
         try {
           if (panFile) {
             await minioClient.putObject(
@@ -908,8 +889,6 @@ const editProfile = async (req, res, next) => {
           );
 
           const signedUrl = await presignStoredPan(panCardImageUrl);
-
-          await query("COMMIT");
           logger.info("PAN card updated successfully");
           sendAdminKYCSubmissionEmail({
             freelancerUsername: user.name || user.user_email,
@@ -925,7 +904,6 @@ const editProfile = async (req, res, next) => {
             },
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
@@ -967,9 +945,6 @@ const editProfile = async (req, res, next) => {
         const folder = "freelancer/freelancer-profile-image";
         const objectName = `${folder}/${fileName}`;
         const profile_url = `${BUCKET_NAME}/${objectName}`;
-
-        // Start transaction
-        await query("BEGIN");
         try {
           await minioClient.putObject(
             BUCKET_NAME,
@@ -990,9 +965,6 @@ const editProfile = async (req, res, next) => {
             objectName,
             expirySeconds
           );
-
-          // Commit transaction
-          await query("COMMIT");
           logger.info("Profile image updated successfully");
           return res.status(200).json({
             status: "success",
@@ -1002,7 +974,6 @@ const editProfile = async (req, res, next) => {
             },
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
@@ -1057,18 +1028,12 @@ const editProfile = async (req, res, next) => {
             }
           }
         }
-
-        // Start transaction
-        await query("BEGIN");
         try {
           const { rows } = await query(
             `UPDATE freelancer SET freelancer_full_name=$1, date_of_birth=$2, phone_number=$3, profile_title=$4, first_name=$5, last_name=$6, freelancer_email=$7, about_me=$8, street_address=$10, city=$11, state=$12, postal_code=$13 WHERE user_id=$9
              RETURNING freelancer_full_name, first_name, last_name, freelancer_email, date_of_birth, phone_number, profile_title, about_me, created_at, street_address, city, state, postal_code`,
             [freelancerFullName, dateOfBirth, phoneNumber, profileTitle, first_name, last_name, email, about_me, user.user_id, street_address, city, state, postal_code]
           );
-
-          // Commit transaction
-          await query("COMMIT");
           logger.info("Freelancer basic info updated successfully");
           return res.status(200).json({
             status: "success",
@@ -1076,7 +1041,6 @@ const editProfile = async (req, res, next) => {
             data: { full_name: rows[0].freelancer_full_name, first_name: rows[0].first_name, last_name: rows[0].last_name, email: rows[0].freelancer_email, date_of_birth: rows[0].date_of_birth, phone_number: rows[0].phone_number, profile_title: rows[0].profile_title, about_me: rows[0].about_me, joined_at: rows[0].created_at, street_address: rows[0].street_address, city: rows[0].city, state: rows[0].state, postal_code: rows[0].postal_code },
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
@@ -1124,9 +1088,6 @@ const editProfile = async (req, res, next) => {
             403
           ));
         }
-
-        // Start transaction
-        await query("BEGIN");
         try {
           const { rowCount } = await query(
             `UPDATE freelancer
@@ -1140,12 +1101,8 @@ const editProfile = async (req, res, next) => {
           );
 
           if (rowCount === 0) {
-            await query("ROLLBACK");
             return next(new AppError('Freelancer not found', 404));
           }
-
-          // Commit transaction
-          await query("COMMIT");
           logger.info("Freelancer address updated successfully");
           return res.status(200).json({
             status: 'success',
@@ -1158,7 +1115,6 @@ const editProfile = async (req, res, next) => {
             }
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
@@ -1188,8 +1144,6 @@ const editProfile = async (req, res, next) => {
         if (average_retention !== undefined && (isNaN(Number(average_retention)) || Number(average_retention) < 0 || Number(average_retention) > 100)) {
           return next(new AppError('average_retention must be a number between 0 and 100', 400));
         }
-
-        await query("BEGIN");
         try {
           const { rows, rowCount } = await query(
             `UPDATE freelancer
@@ -1210,11 +1164,8 @@ const editProfile = async (req, res, next) => {
           );
 
           if (rowCount === 0) {
-            await query("ROLLBACK");
             return next(new AppError('Freelancer not found', 404));
           }
-
-          await query("COMMIT");
           logger.info("Freelancer performance stats updated successfully");
           return res.status(200).json({
             status: 'success',
@@ -1227,7 +1178,6 @@ const editProfile = async (req, res, next) => {
             }
           });
         } catch (error) {
-          await query("ROLLBACK");
           throw error;
         }
       }
@@ -2966,7 +2916,7 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
           ELSE false
         END as has_pan
       FROM freelancer f
-      WHERE f.verification_status != 'VERIFIED' ${whereClause}
+      WHERE f.verification_status NOT IN ('VERIFIED', 'SUSPENDED') ${whereClause}
       GROUP BY f.freelancer_id, f.freelancer_full_name, f.freelancer_email, f.created_at, f.gov_id_number,
                f.verification_status, f.razorpay_account_status, f.razorpay_linked_account_id,
                f.razorpay_onboarding_error, f.razorpay_onboarding_error_step, f.razorpay_onboarding_error_at,
@@ -2982,7 +2932,7 @@ const getFreelancerForKYCApproval = async (req, res, next) => {
     const countQueryText = `
       SELECT COUNT(DISTINCT f.freelancer_id) as total
       FROM freelancer f
-      WHERE f.verification_status != 'VERIFIED' ${whereClause}
+      WHERE f.verification_status NOT IN ('VERIFIED', 'SUSPENDED') ${whereClause}
     `;
     const { rows: countResult } = await query(countQueryText, queryParams);
 

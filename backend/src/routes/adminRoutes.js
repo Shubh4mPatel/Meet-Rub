@@ -11,7 +11,7 @@ const { updateHomeContent, uploadHomeImage } = require('../controller/home/homeC
 const router = expess.Router()
 
 
-router.post('/userApproval', approveProfile)
+router.post('/userApproval', requirePermission('user_management', 'approve'), approveProfile)
 
 router.post('/create-admin', requireRole(['admin']), requirePermission('admin_management', 'create'), createAdmin)
 router.get('/admins/userInfo', getMyAdminInfo)

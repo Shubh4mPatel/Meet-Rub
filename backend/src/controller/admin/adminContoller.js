@@ -3,6 +3,7 @@ const { query } = require('../../../config/dbConfig')
 const AppError = require('../../../utils/appError');
 const { logger } = require('../../../utils/logger');
 const { PERMISSIONS } = require('../../../config/permissions');
+const { approveFreelancerKYC } = require('../razor-pay-controllers/adminController');
 
 const createAdmin = async (req, res, next) => {
     try {
@@ -74,12 +75,21 @@ const approveProfile = async (req, res, next) => {
     try {
         const { userEmail } = req.body;
         const adminUser = req.user
-        await query(
-            `UPDATE freelancer
-   SET verification_status = 'VERIFIED'
-   WHERE freelancer_email = $1`,
+
+        if (!userEmail) {
+            return next(new AppError('userEmail is required', 400));
+        }
+
+        const { rows } = await query(
+            'SELECT freelancer_id FROM freelancer WHERE freelancer_email = $1',
             [userEmail]
         );
+        if (rows.length === 0) {
+            return next(new AppError('Freelancer not found', 404));
+        }
+
+        // Same checks as the KYC approve endpoint (not suspended, Razorpay account activated)
+        await approveFreelancerKYC(rows[0].freelancer_id);
         logger.info(`user ${userEmail} approved by admin ${adminUser.name}`)
 
         return res.status(200).json({
@@ -89,6 +99,7 @@ const approveProfile = async (req, res, next) => {
 
     } catch (error) {
         logger.error(error)
+        if (error instanceof AppError) return next(error);
         return next(new AppError(`failed to update user approval`, 500))
     }
 }

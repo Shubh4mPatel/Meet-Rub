@@ -486,6 +486,40 @@ const updateCommission = async (req, res, next) => {
   }
 }
 
+// Shared KYC approval checks — used by approveKYCByAdmin and the legacy /userApproval route.
+// Throws AppError for any state that must not become VERIFIED.
+const approveFreelancerKYC = async (freelancerId) => {
+  const { rows: freelancers } = await query(
+    'SELECT freelancer_id, user_id, verification_status, razorpay_account_status FROM freelancer WHERE freelancer_id = $1',
+    [freelancerId]
+  );
+
+  if (freelancers.length === 0) {
+    throw new AppError('Freelancer not found', 404);
+  }
+
+  const freelancer = freelancers[0];
+
+  if (freelancer.verification_status === 'VERIFIED') {
+    throw new AppError('Freelancer KYC is already verified', 400);
+  }
+
+  // Approving would silently lift the suspension — that must go through revoke
+  if (freelancer.verification_status === 'SUSPENDED') {
+    throw new AppError('Freelancer is suspended. Revoke the suspension instead of approving KYC.', 400);
+  }
+
+  // Razorpay linked account must be activated before platform KYC approval
+  if (freelancer.razorpay_account_status !== 'activated') {
+    throw new AppError('Razorpay linked account must be activated first. Create and verify the linked account on Razorpay before approving platform KYC.', 400);
+  }
+
+  await query(
+    'UPDATE freelancer SET verification_status = $1, reason_for_rejection = $2 WHERE freelancer_id = $3',
+    ['VERIFIED', '', freelancerId]
+  );
+};
+
 const approveKYCByAdmin = async (req, res, next) => {
   try {
     const { freelancer_id } = req.params;
@@ -494,34 +528,7 @@ const approveKYCByAdmin = async (req, res, next) => {
       return next(new AppError('Freelancer ID is required', 400));
     }
 
-    // Check if freelancer exists
-    const queryResult = await query(
-      'SELECT freelancer_id, user_id, verification_status, razorpay_account_status FROM freelancer WHERE freelancer_id = $1',
-      [freelancer_id]
-    );
-
-    const freelancers = queryResult.rows || [];
-
-    if (freelancers.length === 0) {
-      return next(new AppError('Freelancer not found', 404));
-    }
-
-    const freelancer = freelancers[0];
-
-    if (freelancer.verification_status === 'VERIFIED') {
-      return next(new AppError('Freelancer KYC is already verified', 400));
-    }
-
-    // Razorpay linked account must be activated before platform KYC approval
-    if (freelancer.razorpay_account_status !== 'activated') {
-      return next(new AppError('Razorpay linked account must be activated first. Create and verify the linked account on Razorpay before approving platform KYC.', 400));
-    }
-
-    // Update verification_status in freelancer table
-    await query(
-      'UPDATE freelancer SET verification_status = $1, reason_for_rejection = $2 WHERE freelancer_id = $3',
-      ['VERIFIED', '', freelancer_id]
-    );
+    await approveFreelancerKYC(freelancer_id);
 
     res.json({
       message: 'KYC approved successfully',
@@ -531,6 +538,7 @@ const approveKYCByAdmin = async (req, res, next) => {
   }
   catch (error) {
     console.error('Approve KYC error:', error);
+    if (error instanceof AppError) return next(error);
     return next(new AppError('Failed to approve KYC', 500));
   }
 }
@@ -563,6 +571,11 @@ const rejectKYCByAdmin = async (req, res, next) => {
 
     if (freelancer.verification_status === 'REJECTED') {
       return next(new AppError('Freelancer KYC is already rejected', 400));
+    }
+
+    // Rejecting would silently lift the suspension
+    if (freelancer.verification_status === 'SUSPENDED') {
+      return next(new AppError('Freelancer is suspended. Revoke the suspension before changing KYC status.', 400));
     }
 
     // Update verification_status and reason_for_rejection in freelancer table
@@ -636,9 +649,10 @@ const suspendFreelancerByAdmin = async (req, res, next) => {
       return next(new AppError('Freelancer is already suspended', 400));
     }
 
-    // Update verification_status and reason_for_suspension in freelancer table
+    // Remember the current status so revoking restores it instead of assuming VERIFIED
+    // (SET expressions read the pre-update row, so this stores the old verification_status)
     await query(
-      'UPDATE freelancer SET verification_status = $1, reason_for_suspension = $2 WHERE freelancer_id = $3',
+      'UPDATE freelancer SET verification_status = $1, reason_for_suspension = $2, status_before_suspension = verification_status WHERE freelancer_id = $3',
       ['SUSPENDED', reason_for_suspension, freelancer_id]
     );
 
@@ -1077,9 +1091,16 @@ const revokeFreelancerSuspension = async (req, res, next) => {
       return next(new AppError('Freelancer is not suspended', 400));
     }
 
-    await query(
-      'UPDATE freelancer SET verification_status = $1, reason_for_suspension = NULL WHERE freelancer_id = $2',
-      ['VERIFIED', freelancer_id]
+    // Restore the pre-suspension status. Suspensions made before that column existed have no
+    // record, so they fall back to PENDING and need a fresh KYC approval rather than auto-VERIFIED.
+    const { rows: restored } = await query(
+      `UPDATE freelancer
+       SET verification_status = COALESCE(status_before_suspension, 'PENDING'),
+           reason_for_suspension = NULL,
+           status_before_suspension = NULL
+       WHERE freelancer_id = $1
+       RETURNING verification_status`,
+      [freelancer_id]
     );
 
     // Send account restored email (non-blocking)
@@ -1091,7 +1112,7 @@ const revokeFreelancerSuspension = async (req, res, next) => {
     res.json({
       message: 'Freelancer suspension revoked successfully',
       freelancer_id,
-      verification_status: 'VERIFIED'
+      verification_status: restored[0].verification_status
     });
   } catch (error) {
     console.error('Revoke Freelancer suspension error:', error);
@@ -1184,6 +1205,16 @@ const createFreelancerLinkedAccount = async (req, res, next) => {
   } catch (error) {
     console.error('createFreelancerLinkedAccount error:', error);
 
+    // Razorpay has locked the activation form for review — retrying won't help
+    if (error.code === 'RAZORPAY_FORM_LOCKED' || error.code === 'ONBOARDING_IN_PROGRESS') {
+      return next(new AppError(error.message, 409));
+    }
+
+    // Razorpay rejected the request — 4xx so the reason isn't masked in production
+    if (error.code === 'RAZORPAY_ERROR') {
+      return next(new AppError(error.message, 422));
+    }
+
     // Validation errors thrown by linkedAccountService before hitting Razorpay
     if (
       error.message?.startsWith('Onboarding failed') ||
@@ -1218,6 +1249,9 @@ const getFreelancerLinkedAccountStatus = async (req, res, next) => {
     console.error('getFreelancerLinkedAccountStatus error:', error);
     if (error.message.includes('not found') || error.message.includes('no linked account')) {
       return next(new AppError(error.message, 404));
+    }
+    if (error.code === 'RAZORPAY_ERROR') {
+      return next(new AppError(error.message, 422));
     }
     return next(new AppError('Failed to get linked account status', 500));
   }
@@ -1352,6 +1386,9 @@ const resubmitToRazorpay = async (req, res, next) => {
     });
   } catch (error) {
     logger.error('resubmitToRazorpay error:', error);
+    if (error.code === 'RAZORPAY_ERROR') {
+      return next(new AppError(error.message, 422));
+    }
     return next(new AppError(error.message || 'Failed to resubmit to Razorpay', 500));
   }
 };
@@ -1364,6 +1401,7 @@ module.exports = {
   getPayoutDetails,
   getPlatformStats,
   updateCommission,
+  approveFreelancerKYC,
   approveKYCByAdmin,
   rejectKYCByAdmin,
   suspendFreelancerByAdmin,
