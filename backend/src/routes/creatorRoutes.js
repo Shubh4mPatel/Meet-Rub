@@ -33,7 +33,7 @@ router.get('/all-freelancers',authenticateUser, requireRole(['creator']), getAll
 
 router.get('/get-freelancer-by-id/:freelancer_id', authenticateUser, requireRole(['creator']),getFreelancerByIdForCreator)
 
-router.get('/get-freelancer-by-user-id/:freelancer_id', authenticateUser, requireRole(['creator']), getFreeLancerByUserId);
+router.get('/get-freelancer-by-user-id/:freelancer_id', authenticateUser, requireRole(['creator', 'admin']), getFreeLancerByUserId);
 
 router.post('/dispute-raise', authenticateUser, requireRole(['creator']), raiseDispute);
 

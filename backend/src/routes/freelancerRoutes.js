@@ -111,7 +111,7 @@ router.post('/dispute-raise', authenticateUser, requireRole(['freelancer']), rai
 
 router.get('/disputes', authenticateUser, requireRole(['freelancer']), getDisputes);
 
-router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(['freelancer']), getCreatorByUserId);
+router.get('/get-creator-by-user-id/:creator_id', authenticateUser, requireRole(['freelancer', 'admin']), getCreatorByUserId);
 
 router.get('/get-creator-by-creator-id/:creator_id', authenticateUser, requireRole(['freelancer']), getCreatorByCreatorId);
 
